@@ -1,0 +1,22 @@
+# Mill
+out/
+.bsp/
+
+# IDEs and editors
+.metals/
+.bloop/
+.vscode/
+.idea/
+*.iml
+.scala-build/
+
+# Quint / Apalache
+_apalache-out/
+_quint-out/
+
+# Python
+__pycache__/
+.pytest_cache/
+
+# OS
+.DS_Store

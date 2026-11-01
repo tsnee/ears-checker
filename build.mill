@@ -1,0 +1,81 @@
+//| mill-version: 1.3.1
+//| mill-jvm-version: 27
+//| mill-jvm-index-version: 0.0.5
+package build
+
+import mill.*
+import mill.scalalib.*
+import mill.scalalib.scalafmt.ScalafmtModule
+
+/** WartRemover 3.6.3's Unsafe set without `Any`, which ZIO's `ZIO[Any, E, A]` environment trips. */
+val zioSafeWarts = Seq(
+  "AsInstanceOf",
+  "DefaultArguments",
+  "EitherProjectionPartial",
+  "IsInstanceOf",
+  "IterableOps",
+  "NonUnitStatements",
+  "Null",
+  "OptionPartial",
+  "Product",
+  "Return",
+  "Serializable",
+  "StringPlusAny",
+  "Throw",
+  "TripleQuestionMark",
+  "TryPartial",
+  "Var"
+)
+
+/** The full Unsafe set, for code with no ZIO in it. */
+val pureWarts = zioSafeWarts :+ "Any"
+
+def wartOptions(warts: Seq[String]): Seq[String] =
+  warts.map(w => s"-P:wartremover:traverser:org.wartremover.warts.$w")
+
+/** Shared settings: Scala 3.10, warnings as errors, strict equality, explicit nulls, and
+  * WartRemover warts as errors.
+  */
+trait Base extends ScalaModule with ScalafmtModule {
+  def scalaVersion = "3.10.0"
+
+  def warts: Seq[String] = zioSafeWarts
+
+  def scalacOptions = Seq(
+    "-deprecation",
+    "-feature",
+    "-unchecked",
+    "-source:future",
+    "-Wunused:all",
+    "-Wvalue-discard",
+    "-Wnonunit-statement",
+    "-Wsafe-init",
+    "-Wimplausible-patterns",
+    "-Wrecurse-with-default",
+    "-Winfer-union",
+    "-Wshadow:all",
+    "-Werror",
+    "-Yexplicit-nulls",
+    "-Ycheck-all-patmat",
+    "-language:strictEquality"
+  ) ++ wartOptions(warts)
+
+  def scalacPluginMvnDeps = Seq(mvn"org.wartremover:::wartremover:3.6.3")
+}
+
+/** Pure domain: relations, findings, mutation operators. No IO here. */
+object core extends Base {
+  override def warts = pureWarts
+
+  object test extends ScalaTests with TestModule.ZioTest {
+    // zio-test specs are ZIO values, so drop the Any wart that `core` itself keeps.
+    def scalacOptions = Task {
+      super.scalacOptions().filterNot(wartOptions(Seq("Any")).contains)
+    }
+
+    def mvnDeps = Seq(
+      mvn"dev.zio::zio-test:2.1.27",
+      mvn"dev.zio::zio-test-sbt:2.1.27"
+    )
+  }
+}
