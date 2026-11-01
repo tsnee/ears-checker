@@ -7,8 +7,8 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/claude-openspec-hook",
-            "timeout": 60,
-            "statusMessage": "Validating OpenSpec (strict)"
+            "timeout": 300,
+            "statusMessage": "Checking OpenSpec (strict validation and EARS)"
           }
         ]
       }

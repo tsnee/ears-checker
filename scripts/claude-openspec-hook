@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
-# Claude Code PostToolUse hook: after a Write or Edit under openspec/, run the strict OpenSpec
-# check. Exit code 2 sends the report back to Claude so it fixes the problem in the same turn.
+# Claude Code PostToolUse hook: after a Write or Edit under openspec/, run the OpenSpec check
+# (strict validation and EARS). Exit code 2 sends the report back to Claude so it fixes the
+# problem in the same turn.
 
 file=$(jq -r '.tool_input.file_path // empty')
 case "$file" in
@@ -9,6 +10,6 @@ case "$file" in
 esac
 
 if ! report=$("$CLAUDE_PROJECT_DIR/scripts/check-openspec" 2>&1); then
-  printf 'OpenSpec strict validation failed after editing %s:\n%s\n' "$file" "$report" >&2
+  printf 'OpenSpec check (strict validation and EARS) failed after editing %s:\n%s\n' "$file" "$report" >&2
   exit 2
 fi

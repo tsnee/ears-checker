@@ -4,6 +4,7 @@
 package build
 
 import mill.*
+import mill.scalajslib.*
 import mill.scalalib.*
 import mill.scalalib.scalafmt.ScalafmtModule
 
@@ -63,19 +64,63 @@ trait Base extends ScalaModule with ScalafmtModule {
   def scalacPluginMvnDeps = Seq(mvn"org.wartremover:::wartremover:3.6.3")
 }
 
+/** zio-test suites, on the JVM or Scala.js. Specs are ZIO values, so the Any wart is dropped. */
+trait ZioSpecs extends ScalaModule with ScalafmtModule with TestModule.ZioTest {
+  def scalacOptions = Task {
+    super.scalacOptions().filterNot(wartOptions(Seq("Any")).contains)
+  }
+
+  def mvnDeps = Seq(
+    mvn"dev.zio::zio-test::2.1.27",
+    mvn"dev.zio::zio-test-sbt::2.1.27"
+  )
+}
+
 /** Pure domain: relations, findings, mutation operators. No IO here. */
 object core extends Base {
   override def warts = pureWarts
 
-  object test extends ScalaTests with TestModule.ZioTest {
-    // zio-test specs are ZIO values, so drop the Any wart that `core` itself keeps.
-    def scalacOptions = Task {
-      super.scalacOptions().filterNot(wartOptions(Seq("Any")).contains)
+  object test extends ScalaTests with ZioSpecs
+}
+
+/** EARS requirement classifier: pure, no ZIO, portable to Scala.js. */
+object ears extends Base {
+  override def warts = pureWarts
+
+  def mvnDeps = Seq(mvn"org.typelevel::cats-parse::1.1.0")
+
+  object test extends ScalaTests with ZioSpecs
+
+  /** The same library and tests built with Scala.js and run on Node, to keep `ears` portable. */
+  object js extends Base with ScalaJSModule {
+    def scalaJSVersion = "1.22.0"
+    override def warts = pureWarts
+    def sources = ears.sources
+    def mvnDeps = ears.mvnDeps
+
+    object test extends ScalaJSTests with ZioSpecs {
+      def sources = ears.test.sources
     }
+  }
+
+  /** Command-line checker over plain text, Markdown, and OpenSpec JSON. */
+  object cli extends Base {
+    def moduleDeps = Seq(ears)
+    def mainClass = Some("io.github.tsnee.ears.cli.Main")
 
     def mvnDeps = Seq(
-      mvn"dev.zio::zio-test:2.1.27",
-      mvn"dev.zio::zio-test-sbt:2.1.27"
+      mvn"dev.zio::zio:2.1.27",
+      mvn"com.monovore::decline:2.6.2",
+      mvn"dev.zio::zio-json:1.1.1",
+      mvn"org.commonmark:commonmark:0.31.0"
     )
+
+    object test extends ScalaTests with ZioSpecs {
+      // Tests run in a sandbox directory; this lets them find the repo's OpenSpec files.
+      def forkEnv = Task {
+        super.forkEnv() ++
+          Map("OPENSPEC_DIR" -> (mill.api.BuildCtx.workspaceRoot / "openspec").toString)
+      }
+    }
   }
 }

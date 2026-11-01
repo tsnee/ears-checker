@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
-# Strict OpenSpec validation for every change and spec. Warnings count as failures.
+# The repository's OpenSpec gate: strict validation (warnings count as failures), then EARS
+# checking of every requirement in every active change and every spec.
 # Shared by the Claude Code hook and the git pre-commit hook.
 set -e
 
@@ -7,3 +8,34 @@ cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
 openspec validate --all --strict --no-interactive
 openspec validate --archived --strict --no-interactive
+
+# Get the checker's jar. Mill rebuilds it only when code under ears/ changed since the last run.
+# Mill runs on its own (not in a pipeline) so a failed build stops the script with Mill's errors
+# instead of every check failing on an empty jar path.
+if ! built=$(./mill --ticker false show ears.cli.assembly); then
+  echo "check-openspec: building the EARS checker failed (see the Mill output above)" >&2
+  exit 1
+fi
+jar=$(printf '%s' "$built" | jq -r 'sub("^ref:v[0-9]+:[0-9a-f]+:"; "")')
+if [ -z "$jar" ] || [ ! -f "$jar" ]; then
+  echo "check-openspec: Mill printed no usable assembly path: $built" >&2
+  exit 1
+fi
+
+ears_check() {
+  # Scala 3's runtime uses sun.misc.Unsafe, which JDK 27 warns about on every start.
+  java --sun-misc-unsafe-memory-access=allow -jar "$jar" --format openspec
+}
+
+status=0
+for change in $(openspec list --json | jq -r '.changes[].name'); do
+  openspec show "$change" --type change --json --deltas-only | ears_check || status=1
+done
+for spec in $(openspec list --specs --json | jq -r '.specs[].id'); do
+  openspec show "$spec" --type spec --json | ears_check || status=1
+done
+
+if [ "$status" -eq 0 ]; then
+  echo "EARS: every requirement passes."
+fi
+exit "$status"
