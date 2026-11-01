@@ -23,6 +23,33 @@ context: |
 #     tasks:
 #       - Break tasks into chunks of max 2 hours
 
+rules:
+  specs:
+    - >-
+      Write every requirement statement in strict EARS form, using exactly one of these
+      templates, with SHALL in uppercase (OpenSpec's validator requires it):
+      Ubiquitous "The <system> SHALL <response>.";
+      Event-driven "When <trigger>, the <system> SHALL <response>.";
+      State-driven "While <precondition>, the <system> SHALL <response>.";
+      Unwanted behavior "If <trigger>, then the <system> SHALL <response>.";
+      Optional feature "Where <feature is included>, the <system> SHALL <response>.";
+      Complex: "While <precondition>, when <trigger>, the <system> SHALL <response>."
+      (keyword order Where, While, When/If).
+    - >-
+      One requirement states one response: exactly one SHALL per statement, no "and"-joined
+      responses, no MUST, no SHOULD or MAY, and no other modal verbs. Split compound
+      requirements into separate ones.
+    - >-
+      Name the system consistently (one noun phrase per capability), and write triggers and
+      preconditions as observable conditions, not implementation steps.
+    - >-
+      Scenarios (WHEN/THEN) illustrate a requirement with concrete values; they never add
+      behavior the EARS statement doesn't already require.
+  proposal:
+    - >-
+      Any requirement-like sentence in a proposal is a summary; the normative EARS statements
+      live in the spec deltas.
+
 # Per-operation guidance (optional)
 # Add advisory guidance for how apply and archive work should be conducted.
 # This is separate from artifact rules above.

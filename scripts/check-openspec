@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# Strict OpenSpec validation for every change and spec. Warnings count as failures.
+# Shared by the Claude Code hook and the git pre-commit hook.
+set -e
+
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+
+openspec validate --all --strict --no-interactive
+openspec validate --archived --strict --no-interactive
