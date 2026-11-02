@@ -2,7 +2,7 @@
 
 ## Why
 
-This repository was extracted from `spec-mutation-lab` with
+This repository was extracted from the one it was built in with
 `git filter-repo`, keeping the EARS checker's code, specs, archived
 changes, and build and tool files with their history. The files came
 over as they were, so the build still describes the old repository:
@@ -10,7 +10,7 @@ over as they were, so the build still describes the old repository:
 along, nothing is set up for publishing, and `openspec/config.yaml`'s
 context describes the other project. There is no README or license.
 
-`spec-mutation-lab` now depends on this checker as a published
+A downstream project now depends on this checker as a published
 artifact. Until 0.1.0 is on Maven Central, it runs
 `io.github.tsnee:ears-checker-cli_3:0.1.0-SNAPSHOT` from
 `~/.ivy2/local`, so this repository has to publish that locally.
@@ -26,7 +26,7 @@ artifact. Until 0.1.0 is on Maven Central, it runs
 - **New files.** `README.md`, `LICENSE` (CC0 1.0), and
   `docs/worklog.md`.
 - **Local publish.** `./mill __.publishLocal` puts the three artifacts
-  in `~/.ivy2/local`, where `spec-mutation-lab` finds the CLI.
+  in `~/.ivy2/local`, where the downstream project finds the CLI.
 
 No behavior changes: the specs, code, and tests are as extracted, and
 must pass as they are.

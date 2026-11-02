@@ -5,7 +5,7 @@ Scala 3 classifier library for the JVM and Scala.js, and the `ears-check` comman
 plain text, Markdown, and OpenSpec JSON. CC0-licensed; unreleased (0.1.0 will be the first
 release, with an unstable API).
 
-This repository was extracted from `spec-mutation-lab` with its history. Its first OpenSpec
+This repository was extracted, with its history, from the one it was built in. Its first OpenSpec
 change, `bootstrap-ears-checker` (archived), made it build, test, check its own specs, and
 publish locally on its own.
 
@@ -24,9 +24,8 @@ publish locally on its own.
   `scripts/claude-openspec-hook`) runs it after any edit under `openspec/` and reports failures
   back to Claude, including each EARS finding and its fix.
 - At the end of each working session, add a dated line to `docs/worklog.md`.
-- Another repository (`spec-mutation-lab`) runs this checker at a pinned version from
-  `~/.ivy2/local` until 0.1.0 is on Maven Central. After a change that should reach it, run
-  `./mill __.publishLocal`.
+- A downstream project runs this checker at a pinned version from `~/.ivy2/local` until 0.1.0
+  is on Maven Central. After a change that should reach it, run `./mill __.publishLocal`.
 
 ## Build and test
 

@@ -31,10 +31,10 @@ the `ears` tree: `ears`, `ears.js` (Scala.js 1.22.0, same sources),
 
 **Goals:**
 - The repository builds, tests, and checks its own specs with
-  nothing from `spec-mutation-lab`.
+  nothing from the repository it was extracted from.
 - `cs launch io.github.tsnee:ears-checker-cli_3:0.1.0-SNAPSHOT`
-  works after `publishLocal`: that is the contract with
-  `spec-mutation-lab`.
+  works after `publishLocal`: that is the contract with the
+  downstream project.
 
 **Non-Goals:**
 - Publishing anywhere but `~/.ivy2/local`, signing, CI, binaries,
