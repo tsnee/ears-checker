@@ -1,5 +1,6 @@
 package io.github.tsnee.ears.cli
 
+import cats.data.NonEmptyList
 import io.github.tsnee.ears.Profile
 import zio.test.*
 
@@ -13,6 +14,17 @@ object CheckerSuite extends ZIOSpecDefault:
   ): Settings = Settings(file, format, profile, output)
 
   private val plain = settings(None, None, None, None)
+
+  private def file(name: String, output: Option[OutputFormat]): Settings =
+    settings(Some(name), None, None, output)
+
+  /** The outcome of checking several inputs, each given as its settings and its content. */
+  private def combined(first: (Settings, String), rest: (Settings, String)*): Outcome =
+    Checker.outcome(
+      NonEmptyList(first, rest.toList).traverse { (settings, content) =>
+        Checker.candidates(settings, content).map(settings -> _)
+      }
+    )
 
   private def lines(text: String): List[String] = text.linesIterator.filter(_.nonEmpty).toList
 
@@ -139,4 +151,45 @@ object CheckerSuite extends ZIOSpecDefault:
         Left("Cannot read missing.txt: no such file")
       )
       assertTrue(outcome.exitCode == 2, outcome.stderr.contains("missing.txt"))
+    ,
+    suite("several inputs")(
+      test("every input is checked: JSON counts the requirements of both"):
+        val outcome = combined(
+          file("a.txt", Some(OutputFormat.Json)) -> "The scheduler shall list upcoming events.",
+          file("b.txt", Some(OutputFormat.Json)) -> "The scheduler shall hide past events."
+        )
+        assertTrue(
+          outcome.exitCode == 0,
+          lines(outcome.stdout).size == 1,
+          outcome.stdout.contains("\"checked\":2")
+        )
+      ,
+      test("findings follow input order, not file names"):
+        val outcome = combined(
+          file("b.txt", None) -> "The scheduler lists upcoming events.",
+          file("a.txt", None) -> "The scheduler hides past events."
+        )
+        assertTrue(
+          outcome.exitCode == 1,
+          lines(outcome.stdout).map(_.takeWhile(_ != ':')) == List("b.txt", "a.txt")
+        )
+      ,
+      test("each input is classified under its own default profile"):
+        val outcome = combined(
+          file("notes.txt", None) -> "The scheduler shall list upcoming events.",
+          file("reminders.json", None) -> cleanSpec
+        )
+        assertTrue(outcome.exitCode == 0, outcome.stdout.isEmpty)
+      ,
+      test("an input that can't be read or parsed: status 2, its cause, and no findings"):
+        val outcome = Checker.outcome(Left("Cannot read missing.txt: no such file"))
+        assertTrue(
+          outcome.exitCode == 2,
+          outcome.stderr.contains("missing.txt"),
+          outcome.stdout.isEmpty
+        )
+      ,
+      test("candidates reports malformed JSON as an error"):
+        assertTrue(Checker.candidates(file("change.json", None), "{not json").isLeft)
+    )
   )

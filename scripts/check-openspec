@@ -24,16 +24,46 @@ fi
 
 ears_check() {
   # Scala 3's runtime uses sun.misc.Unsafe, which JDK 27 warns about on every start.
-  java --sun-misc-unsafe-memory-access=allow -jar "$jar" --format openspec
+  java --sun-misc-unsafe-memory-access=allow -jar "$jar" --format openspec "$@"
+}
+
+# Save every active change and every spec as OpenSpec JSON, then check them all in one checker
+# run (one JVM start). The positional parameters collect the files in order: changes, then specs.
+# A file that `openspec show` failed to write is left out, since the checker stops at the first
+# input it can't parse and would hide every other finding.
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# `openspec show` reports its errors as JSON on standard output, which went into the file.
+show_failed() {
+  echo "check-openspec: openspec show $1 failed, so its requirements were not EARS-checked:" >&2
+  cat "$2" >&2
 }
 
 status=0
+set --
 for change in $(openspec list --json | jq -r '.changes[].name'); do
-  openspec show "$change" --type change --json --deltas-only | ears_check || status=1
+  file="$tmp/change-$change.json"
+  if openspec show "$change" --type change --json --deltas-only > "$file"; then
+    set -- "$@" "$file"
+  else
+    show_failed "change $change" "$file"
+    status=1
+  fi
 done
 for spec in $(openspec list --specs --json | jq -r '.specs[].id'); do
-  openspec show "$spec" --type spec --json | ears_check || status=1
+  file="$tmp/spec-$spec.json"
+  if openspec show "$spec" --type spec --json > "$file"; then
+    set -- "$@" "$file"
+  else
+    show_failed "spec $spec" "$file"
+    status=1
+  fi
 done
+# With no files the checker would wait on standard input.
+if [ "$#" -gt 0 ]; then
+  ears_check "$@" || status=1
+fi
 
 if [ "$status" -eq 0 ]; then
   echo "EARS: every requirement passes."

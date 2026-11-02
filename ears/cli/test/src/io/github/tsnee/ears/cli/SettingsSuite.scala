@@ -1,5 +1,6 @@
 package io.github.tsnee.ears.cli
 
+import cats.data.NonEmptyList
 import io.github.tsnee.ears.Profile
 import zio.test.*
 
@@ -12,23 +13,40 @@ object SettingsSuite extends ZIOSpecDefault:
       test("format option and file argument"):
         assertTrue(
           Settings.parse(List("--format", "markdown", "reqs.txt")) ==
-            Right(Settings(Some("reqs.txt"), Some(InputFormat.Markdown), None, None))
+            Right(
+              NonEmptyList.one(Settings(Some("reqs.txt"), Some(InputFormat.Markdown), None, None))
+            )
         )
       ,
       test("profile option without a file"):
         assertTrue(
           Settings.parse(List("--profile", "openspec")) ==
-            Right(Settings(None, None, Some(Profile.OpenSpec), None))
+            Right(NonEmptyList.one(Settings(None, None, Some(Profile.OpenSpec), None)))
         )
       ,
       test("output option"):
         assertTrue(
           Settings.parse(List("--output", "json")) ==
-            Right(Settings(None, None, None, Some(OutputFormat.Json)))
+            Right(NonEmptyList.one(Settings(None, None, None, Some(OutputFormat.Json))))
         )
       ,
       test("an unknown format is rejected"):
         assertTrue(Settings.parse(List("--format", "yaml")).isLeft)
+      ,
+      test("several files: one settings per file, in order, each with the shared options"):
+        val json = Some(OutputFormat.Json)
+        assertTrue(
+          Settings.parse(List("--output", "json", "notes.md", "change.json")) ==
+            Right(
+              NonEmptyList.of(
+                Settings(Some("notes.md"), None, None, json),
+                Settings(Some("change.json"), None, None, json)
+              )
+            )
+        )
+      ,
+      test("no file: one settings for standard input"):
+        assertTrue(Settings.parse(Nil) == Right(NonEmptyList.one(Settings(None, None, None, None))))
     ),
     suite("input format")(
       test("Markdown is inferred from a file name ending in .md"):

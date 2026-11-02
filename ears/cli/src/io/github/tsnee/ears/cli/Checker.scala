@@ -1,5 +1,6 @@
 package io.github.tsnee.ears.cli
 
+import cats.data.NonEmptyList
 import io.github.tsnee.ears.Diagnostic
 import io.github.tsnee.ears.Profile
 import io.github.tsnee.ears.Requirement
@@ -7,7 +8,7 @@ import zio.json.*
 import zio.json.ast.Json
 
 /** What the program prints and its exit status: 0 when every requirement passes, 1 when any fails,
-  * 2 when the input can't be read or parsed.
+  * 2 when an input can't be read or parsed.
   */
 final case class Outcome(exitCode: Int, stdout: String, stderr: String) derives CanEqual
 
@@ -24,17 +25,28 @@ object Checker:
 
   /** The outcome of checking `input`, which is the input text or why it couldn't be read. */
   def outcome(settings: Settings, input: Either[String, String]): Outcome =
-    input.flatMap(candidates(settings, _)) match
-      case Left(message) => Outcome(2, "", s"$message\n")
-      case Right(found)  =>
-        val findings = found.flatMap(findingsFor(settings.profile, _))
-        Outcome(
-          if findings.isEmpty then 0 else 1,
-          report(settings.output, found.size, findings),
-          ""
-        )
+    outcome(
+      input.flatMap(candidates(settings, _)).map(found => NonEmptyList.one(settings -> found))
+    )
 
-  private def candidates(settings: Settings, content: String): Either[String, List[Candidate]] =
+  /** The outcome of checking every input's candidates, each under its own settings' profile, or of
+    * the first input that couldn't be read or parsed. The output format is the first input's: it
+    * comes from options shared by every input.
+    */
+  def outcome(found: Either[String, NonEmptyList[(Settings, List[Candidate])]]): Outcome =
+    found match
+      case Left(message) => Outcome(2, "", s"$message\n")
+      case Right(inputs) =>
+        val findings = inputs.toList.flatMap { (settings, candidates) =>
+          candidates.flatMap(findingsFor(settings.profile, _))
+        }
+        val checked = inputs.toList.map((_, candidates) => candidates.size).sum
+        val output = inputs.head match
+          case (settings, _) => settings.output
+        Outcome(if findings.isEmpty then 0 else 1, report(output, checked, findings), "")
+
+  /** The requirements in one input's content, or why the content can't be parsed. */
+  def candidates(settings: Settings, content: String): Either[String, List[Candidate]] =
     settings.inputFormat match
       case InputFormat.PlainText    => Right(Candidate.fromPlainText(settings.sourceName, content))
       case InputFormat.Markdown     => Right(Candidate.fromMarkdown(settings.sourceName, content))

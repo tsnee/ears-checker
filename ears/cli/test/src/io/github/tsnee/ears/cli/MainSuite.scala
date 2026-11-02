@@ -70,6 +70,58 @@ object MainSuite extends ZIOSpecDefault:
         assertTrue(outcome.exitCode == 2, outcome.stderr.contains("Usage"))
       }
     ,
+    test("several files: each format and default profile come from the file's own name"):
+      for
+        markdown <- tempFile(".md", "- The scheduler shall list upcoming events.\n")
+        json <- tempFile(
+          ".json",
+          """{"id": "reminders", "requirements": [
+            |  {"name": "Upcoming", "text": "The scheduler shall list upcoming events."}
+            |]}""".stripMargin
+        )
+        outcome <- run(markdown.toString, json.toString)
+      yield assertTrue(
+        outcome.exitCode == 1,
+        Predef.augmentString(outcome.stdout).linesIterator.toList.map(_.takeWhile(_ != '/')) ==
+          List("reminders"),
+        outcome.stdout.contains("wrong-case")
+      )
+    ,
+    test("two missing files: the message names only the first"):
+      run("missing.txt", "absent.txt").map { outcome =>
+        assertTrue(
+          outcome.exitCode == 2,
+          outcome.stderr.contains("missing.txt"),
+          !outcome.stderr.contains("absent.txt")
+        )
+      }
+    ,
+    test("a failing file before a missing one: status 2 and nothing on standard output"):
+      for
+        path <- tempFile(".txt", "The scheduler lists upcoming events.\n")
+        outcome <- run(path.toString, "missing.txt")
+      yield assertTrue(outcome.exitCode == 2, outcome.stdout.isEmpty)
+    ,
+    test("a missing file before a failing one: status 2 and nothing on standard output"):
+      for
+        path <- tempFile(".txt", "The scheduler lists upcoming events.\n")
+        outcome <- run("missing.txt", path.toString)
+      yield assertTrue(
+        outcome.exitCode == 2,
+        outcome.stderr.contains("missing.txt"),
+        outcome.stdout.isEmpty
+      )
+    ,
+    test("an unparsable file before a missing one: the message is about the unparsable file"):
+      for
+        path <- tempFile(".json", "{not json")
+        outcome <- run(path.toString, "absent.txt")
+      yield assertTrue(
+        outcome.exitCode == 2,
+        outcome.stderr.nonEmpty,
+        !outcome.stderr.contains("absent.txt")
+      )
+    ,
     test("--help: exit status 0 and the usage text on standard output"):
       run("--help").map { outcome =>
         assertTrue(

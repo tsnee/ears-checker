@@ -1,5 +1,6 @@
 package io.github.tsnee.ears.cli
 
+import cats.data.NonEmptyList
 import cats.data.Validated
 import cats.data.ValidatedNel
 import cats.syntax.all.*
@@ -13,7 +14,9 @@ enum InputFormat derives CanEqual:
 enum OutputFormat derives CanEqual:
   case Text, Json
 
-/** Command-line settings as given. Unset options are resolved by the extensions below. */
+/** Command-line settings for one input as given. Unset options are resolved by the extensions
+  * below.
+  */
 final case class Settings(
     file: Option[String],
     formatOption: Option[InputFormat],
@@ -27,11 +30,14 @@ final case class Usage(text: String, requested: Boolean) derives CanEqual
 
 object Settings:
 
-  /** Settings from command-line arguments, or the usage text when help was requested or the
-    * arguments don't parse. decline reports both as `Help`; only the invalid case carries errors.
+  /** One settings per file argument, in order, each with the shared options; or one settings with
+    * no file, for standard input. The usage text instead when help was requested or the arguments
+    * don't parse: decline reports both as `Help`, and only the invalid case carries errors.
     */
-  def parse(arguments: List[String]): Either[Usage, Settings] =
+  def parse(arguments: List[String]): Either[Usage, NonEmptyList[Settings]] =
     command.parse(arguments, Map.empty).left.map(help => Usage(help.toString, help.errors.isEmpty))
+
+  given CanEqual[NonEmptyList[Settings], NonEmptyList[Settings]] = CanEqual.derived
 
   extension (settings: Settings)
 
@@ -94,8 +100,12 @@ object Settings:
     .mapValidated(choice("output", Map("text" -> OutputFormat.Text, "json" -> OutputFormat.Json)))
     .orNone
 
-  private val fileOpt = Opts.argument[String]("file").orNone
+  /** Every file argument, or a single `None` for standard input. */
+  private val filesOpt: Opts[NonEmptyList[Option[String]]] =
+    Opts.arguments[String]("file").map(_.map(Option(_))).withDefault(NonEmptyList.one(None))
 
   private val command = Command("ears-check", "Check requirements against the EARS templates.")(
-    (fileOpt, formatOpt, profileOpt, outputOpt).mapN(Settings.apply)
+    (filesOpt, formatOpt, profileOpt, outputOpt).mapN { (files, format, profile, output) =>
+      files.map(Settings(_, format, profile, output))
+    }
   )
