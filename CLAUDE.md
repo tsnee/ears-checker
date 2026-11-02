@@ -6,9 +6,8 @@ plain text, Markdown, and OpenSpec JSON. CC0-licensed; unreleased (0.1.0 will be
 release, with an unstable API).
 
 This repository was extracted from `spec-mutation-lab` with its history. Its first OpenSpec
-change, `bootstrap-ears-checker`, makes it build, test, check its own specs, and publish locally
-on its own. If that change is still under `openspec/changes/`, start there:
-`/opsx:apply bootstrap-ears-checker`.
+change, `bootstrap-ears-checker` (archived), made it build, test, check its own specs, and
+publish locally on its own.
 
 ## Workflow
 

@@ -48,9 +48,9 @@ the `ears` tree: `ears`, `ears.js` (Scala.js 1.22.0, same sources),
 ```scala
 trait Published extends PublishModule {
   def publishVersion = "0.1.0-SNAPSHOT"
+  def pomDescription: String
   def pomSettings = PomSettings(
-    description = "Checks requirements "
-      + "against the EARS templates",
+    description = pomDescription,
     organization = "io.github.tsnee",
     url = "https://github.com/tsnee/"
       + "ears-checker",
@@ -66,7 +66,11 @@ trait Published extends PublishModule {
 `ears` and `ears.js` mix it in with `artifactName` `ears-checker`
 (Mill adds `_3`, and `_sjs1_3` for Scala.js); `ears.cli` with
 `ears-checker-cli`. Test modules don't, so `__.publishLocal` skips
-them. If Mill 1.3.1's API differs in a detail (for example the
+them. Each published module sets its own `pomDescription`, so the
+library and the CLI read differently on Maven Central; `ears.js`
+takes its name and description from `ears`, as it already does its
+sources and dependencies, so the two can't drift apart. (Added after
+the code review.) If Mill 1.3.1's API differs in a detail (for example the
 license constant's name), follow Mill's docs and keep the
 coordinates.
 
@@ -82,6 +86,15 @@ are checked by the code they describe.
 Creative Commons
 (https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt),
 unmodified.
+
+### 4. Compile for Java 17
+
+`Base` passes `-release:17`. Scala 3.10's standard library is Java
+17 bytecode, so no user can run the artifacts on an older JVM
+anyway. Without the flag the class files already said 17, but the
+code was checked against the build's JDK 27 API, so a newer call
+would compile and then fail at runtime on JDK 17. (Added after the
+code review.)
 
 ## Risks / Trade-offs
 
