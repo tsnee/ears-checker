@@ -14,7 +14,7 @@ Claude reads results with `gh` (read-only) and never pushes.
 
 ## 2. Runs on GitHub
 
-- [ ] 2.1 After the user pushes branch `add-github-actions-ci` and opens a pull request into `main`, read the run with `gh run list` and `gh run view --log`; verify every step succeeds, the job ran on an Ubuntu runner, and the log's "GITHUB_TOKEN Permissions" lists only `Contents: read`
+- [x] 2.1 After the user pushes branch `add-github-actions-ci` and opens a pull request into `main`, read the run with `gh run list` and `gh run view --log`; verify every step succeeds, the job ran on an Ubuntu runner, and the log's "GITHUB_TOKEN Permissions" lists only `Contents: read` and the `Metadata: read` GitHub always grants
 - [ ] 2.2 Ask the user to push one more commit to the pull request (any small fix from review, or an empty commit); verify the new run restores the Coursier and Mill caches (`cache-hit-coursier` and `cache-hit-mill` true in the log) and is faster than the first
 - [ ] 2.3 Failure check on a throwaway branch: the user pushes `ci-failure-check` (from the pull request branch, with one line in `ears/cli/src/io/github/tsnee/ears/cli/Main.scala` indented by three spaces) and opens a draft pull request; verify the run fails at the format step and no later step runs, then the user closes the pull request and deletes the branch
 - [ ] 2.4 After the user merges the pull request, read the run for the push to `main`; verify it succeeds and that it wasn't cancelled by a later push
