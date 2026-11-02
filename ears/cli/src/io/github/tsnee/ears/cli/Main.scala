@@ -13,7 +13,7 @@ import zio.*
   */
 object Main extends ZIOAppDefault:
 
-  def run: ZIO[ZIOAppArgs, Nothing, Unit] =
+   def run: ZIO[ZIOAppArgs, Nothing, Unit] =
     for
       arguments <- getArgs
       outcome <- program(arguments.toList, readStdin)
