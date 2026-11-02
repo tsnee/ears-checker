@@ -6,6 +6,7 @@ package build
 import mill.*
 import mill.scalajslib.*
 import mill.scalalib.*
+import mill.scalalib.publish.*
 import mill.scalalib.scalafmt.ScalafmtModule
 
 /** WartRemover 3.6.3's Unsafe set without `Any`, which ZIO's `ZIO[Any, E, A]` environment trips. */
@@ -34,8 +35,8 @@ val pureWarts = zioSafeWarts :+ "Any"
 def wartOptions(warts: Seq[String]): Seq[String] =
   warts.map(w => s"-P:wartremover:traverser:org.wartremover.warts.$w")
 
-/** Shared settings: Scala 3.10, warnings as errors, strict equality, explicit nulls, and
-  * WartRemover warts as errors.
+/** Shared settings: Scala 3.10 targeting Java 17, warnings as errors, strict equality, explicit
+  * nulls, and WartRemover warts as errors.
   */
 trait Base extends ScalaModule with ScalafmtModule {
   def scalaVersion = "3.10.0"
@@ -46,6 +47,8 @@ trait Base extends ScalaModule with ScalafmtModule {
     "-deprecation",
     "-feature",
     "-unchecked",
+    // Scala 3.10's standard library needs Java 17, so compile against that API, not the JDK's.
+    "-release:17",
     "-source:future",
     "-Wunused:all",
     "-Wvalue-discard",
@@ -76,25 +79,39 @@ trait ZioSpecs extends ScalaModule with ScalafmtModule with TestModule.ZioTest {
   )
 }
 
-/** What a spec reading and a finding mean, and the golden reference. No IO here. */
-object semantics extends Base {
-  override def warts = pureWarts
+/** Maven coordinates and POM metadata shared by every published module. */
+trait Published extends PublishModule {
+  def publishVersion = "0.1.0-SNAPSHOT"
 
-  object test extends ScalaTests with ZioSpecs
+  /** The POM's one-line description of this artifact. */
+  def pomDescription: String
+
+  def pomSettings = PomSettings(
+    description = pomDescription,
+    organization = "io.github.tsnee",
+    url = "https://github.com/tsnee/ears-checker",
+    licenses = Seq(License.`CC0-1.0`),
+    versionControl = VersionControl.github("tsnee", "ears-checker"),
+    developers = Seq(Developer("tsnee", "Tom Snee", "https://github.com/tsnee"))
+  )
 }
 
 /** EARS requirement classifier: pure, no ZIO, portable to Scala.js. */
-object ears extends Base {
+object ears extends Base with Published {
   override def warts = pureWarts
+  def artifactName = "ears-checker"
+  def pomDescription = "Classifies requirement sentences against the EARS templates"
 
   def mvnDeps = Seq(mvn"org.typelevel::cats-parse::1.1.0")
 
   object test extends ScalaTests with ZioSpecs
 
   /** The same library and tests built with Scala.js and run on Node, to keep `ears` portable. */
-  object js extends Base with ScalaJSModule {
+  object js extends Base with ScalaJSModule with Published {
     def scalaJSVersion = "1.22.0"
     override def warts = pureWarts
+    def artifactName = ears.artifactName()
+    def pomDescription = ears.pomDescription
     def sources = ears.sources
     def mvnDeps = ears.mvnDeps
 
@@ -104,7 +121,9 @@ object ears extends Base {
   }
 
   /** Command-line checker over plain text, Markdown, and OpenSpec JSON. */
-  object cli extends Base {
+  object cli extends Base with Published {
+    def artifactName = "ears-checker-cli"
+    def pomDescription = "EARS checker for plain text, Markdown, and OpenSpec JSON"
     def moduleDeps = Seq(ears)
     def mainClass = Some("io.github.tsnee.ears.cli.Main")
 
