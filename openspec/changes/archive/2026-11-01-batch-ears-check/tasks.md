@@ -28,7 +28,7 @@ Existing tests stay unchanged except the expected values of the three
 ## 5. Integration checks and docs
 
 - [x] 5.1 Run `./mill __.test`, `./mill __.checkFormat` and `scripts/check-openspec`; verify all pass with no warnings
-- [x] 5.2 Update `docs/status.md` (drop the one-JVM-per-input limitation and the batching item; packaging is next) and add a dated line to `docs/worklog.md`; verify by reading both with `mq`
+- [x] 5.2 Add a dated line to `docs/worklog.md`; verify by reading it with `mq`
 
 ## Workflow follow-up
 

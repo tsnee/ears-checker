@@ -55,7 +55,7 @@ that must succeed with no warnings.
 
 - [x] 10.1 Extend `scripts/check-openspec` to build the assembly once and run the CLI with `--format openspec` on every active change and every spec; verify it passes on the repo, including this change
 - [x] 10.2 In a temporary copy of `openspec/`, add a change whose requirement reads "The scheduler MUST list upcoming events." and confirm the script fails with a weak-modal finding, and that `scripts/claude-openspec-hook` exits 2 with that finding in its message
-- [x] 10.3 Update the Workflow section of `CLAUDE.md` to say the hook enforces EARS, add a dated line to `docs/worklog.md`, and update `docs/status.md`; verify `./mill __.test` and `scripts/check-openspec` both succeed
+- [x] 10.3 Update the Workflow section of `CLAUDE.md` to say the hook enforces EARS and add a dated line to `docs/worklog.md`; verify `./mill __.test` and `scripts/check-openspec` both succeed
 
 ## Workflow follow-up
 

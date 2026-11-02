@@ -11,7 +11,8 @@ schema: spec-driven
 
 context: |
   Scala 3.10 with Mill, strongly typed functional style; pure core, effects at the edges.
-  Formal layer is Quint, checked with Apalache. See CLAUDE.md and docs/handoff.md.
+  A pure EARS classifier library for the JVM and Scala.js, plus the ears-check command line (ZIO).
+  Examples and test fixtures use generic domains. See CLAUDE.md.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

@@ -11,7 +11,7 @@ needed for the build to pass, stop and ask first.
 
 ## 2. Repository files
 
-- [ ] 2.1 Replace `openspec/config.yaml`'s `context` with `yq`, describing this checker (Scala 3.10, Mill, JVM and Scala.js library plus ZIO CLI, generic example domains); verify `scripts/check-openspec` passes
+- [x] 2.1 Replace `openspec/config.yaml`'s `context` with `yq`, describing this checker (Scala 3.10, Mill, JVM and Scala.js library plus ZIO CLI, generic example domains); verify `scripts/check-openspec` passes
 - [ ] 2.2 Write `README.md` (what EARS is, the library and the `ears-check` command line with an example, unreleased status, CC0); verify by reading it with `mq`
 - [ ] 2.3 Download the CC0 1.0 legal code (design Decision 3) to `LICENSE`; verify it starts with "Creative Commons Legal Code" and "CC0 1.0 Universal"
 - [ ] 2.4 Start `docs/worklog.md` with a dated line for the extraction and one for this bootstrap; verify by reading it

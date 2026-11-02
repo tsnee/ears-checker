@@ -5,7 +5,7 @@
 This repo now requires every requirement to be strict EARS, but nothing checks that: OpenSpec's
 strict validation only requires an uppercase SHALL or MUST somewhere in the statement. No mature
 EARS checker exists (the ones found are regex style packs or abandoned), and spec-mutation-lab will need
-an EARS parser anyway for its clarified-PRD output. Building it as a standalone library plus CLI
+an EARS parser anyway. Building it as a standalone library plus CLI
 gives this repo enforcement now and gives a candidate open-source tool later.
 
 ## What Changes
@@ -14,7 +14,7 @@ gives this repo enforcement now and gives a candidate open-source tool later.
   of the six EARS templates and returns a syntax tree (template, clauses, system name, response,
   with source spans), or returns diagnostics with spans and suggested fixes. Two profiles:
   classic EARS (lowercase "shall") and OpenSpec (uppercase "SHALL"). It has no dependency on
-  `core` or on ZIO, so it can move to its own repository unchanged. A Scala.js build of the
+  ZIO, so it can move to its own repository unchanged. A Scala.js build of the
   same sources runs the same tests on Node, so the library stays portable; it isn't packaged.
 - New Mill module `ears.cli`: a command-line checker that reads plain text (one requirement per
   line), Markdown, or OpenSpec's `show --json` output for a change or a spec; prints findings as
@@ -50,4 +50,3 @@ None. There are no existing specs.
   a command-line argument library, and a Markdown parser. Choices and versions are in the design.
 - `scripts/check-openspec` gains an EARS step; the hook and `CLAUDE.md` workflow notes stay valid
   but `CLAUDE.md` gains the new modules in its layout section.
-- No change to `core`.

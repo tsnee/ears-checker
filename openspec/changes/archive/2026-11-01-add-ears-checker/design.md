@@ -4,7 +4,7 @@
 
 See proposal.md for motivation and the specs for required behavior. Relevant current state:
 
-- `build.mill` has one module, `core`, built on a shared `Base` trait: Scala 3.10.0, JDK 27,
+- `build.mill` has a shared `Base` trait: Scala 3.10.0, JDK 27,
   `-Werror`, explicit nulls, strict equality, and WartRemover warts as errors. Pure modules get
   every Unsafe wart (`pureWarts`); ZIO code and zio-test specs drop the `Any` wart.
 - Tests are zio-test only. Libraries are chosen on merit, with ZIO as the effect system.
@@ -40,8 +40,7 @@ See proposal.md for motivation and the specs for required behavior. Relevant cur
 ### Modules
 
 - `ears` (directory `ears/`, package `io.github.tsnee.ears`): the library. Depends only on the
-  parser library. Uses `pureWarts`. Its test module uses zio-test and drops the `Any` wart, like
-  `core.test`.
+  parser library. Uses `pureWarts`. Its test module uses zio-test and drops the `Any` wart.
 - `ears.cli` (directory `ears/cli/`, package `io.github.tsnee.ears.cli`): depends on `ears`, ZIO,
   and the CLI libraries below. Uses `zioSafeWarts`.
 - Package roots sit under `io.github.tsnee` with a project segment in between, never directly
@@ -52,7 +51,7 @@ See proposal.md for motivation and the specs for required behavior. Relevant cur
   on Node. It exists only to keep the library portable: any JVM-only API fails this build.
   Nothing is packaged or published from it in this change. Library tests therefore can't read
   files; tests that need files live in `ears.cli.test`.
-- None of these depends on `core`, so they can move to their own repository unchanged.
+- They depend on nothing else in the build, so they can move to their own repository unchanged.
 
 ### Parser library: cats-parse 1.1.0
 
