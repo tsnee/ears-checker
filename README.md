@@ -86,6 +86,8 @@ sentence.
 
 `./mill __.test` runs every test on the JVM and, for the library, on Node.
 `./mill __.publishLocal` publishes 0.1.0-SNAPSHOT to `~/.ivy2/local`.
+GitHub Actions checks formatting, compiles, runs every test, and checks the OpenSpec specs on
+each push to `main` and each pull request.
 
 ## License
 
