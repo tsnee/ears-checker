@@ -5,3 +5,7 @@
 - 2026-11-02: bootstrap-ears-checker: dropped the leftover module from the build, made the three
   modules publishable as 0.1.0-SNAPSHOT under CC0 1.0, rewrote the OpenSpec context, added the
   README, LICENSE, and this log, and published locally to `~/.ivy2/local`.
+- 2026-11-02: restore-openspec-check-spec: restored the OpenSpec gate's six requirements from the
+  archived changes, confirmed each against the script and hook in a scratch copy, and corrected
+  one scenario whose "should" example strict validation rejects before EARS checking runs.
+  Planned add-github-actions-ci.

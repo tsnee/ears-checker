@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # The repository's OpenSpec gate: strict validation (warnings count as failures), then EARS
 # checking of every requirement in every active change and every spec.
-# Shared by the Claude Code hook and the git pre-commit hook.
+# Run by the Claude Code hook (scripts/claude-openspec-hook).
 set -e
 
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"

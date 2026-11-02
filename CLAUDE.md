@@ -84,7 +84,8 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
   - `ears.js` — the same sources and tests built with Scala.js and run on Node
   - `ears/cli/` — the `ears-check` command (ZIO, decline, zio-json, commonmark-java), package
     `io.github.tsnee.ears.cli`; `OwnSpecsSuite` checks this repository's own specs
-- `openspec/` — specs `ears-classifier` and `ears-cli`, and the archived changes that built them
+- `openspec/` — specs `ears-classifier`, `ears-cli`, and `openspec-check` (the OpenSpec gate:
+  `scripts/check-openspec` and its hook), and the archived changes that built them
 - `scripts/` — `check-openspec` and the Claude Code hook that runs it
 - `docs/worklog.md` — dated work log
 
