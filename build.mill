@@ -76,8 +76,8 @@ trait ZioSpecs extends ScalaModule with ScalafmtModule with TestModule.ZioTest {
   )
 }
 
-/** Pure domain: relations, findings, mutation operators. No IO here. */
-object core extends Base {
+/** What a spec reading and a finding mean, and the golden reference. No IO here. */
+object semantics extends Base {
   override def warts = pureWarts
 
   object test extends ScalaTests with ZioSpecs
