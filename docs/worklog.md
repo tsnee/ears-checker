@@ -12,3 +12,7 @@
 - 2026-11-02: add-github-actions-ci: added the CI workflow (format, compile, test, and the OpenSpec
   check on Linux, with SHA-pinned published actions and a read-only token) and weekly grouped
   Dependabot updates for the pins; linted it with actionlint and checked each pin against its tag.
+  Confirmed on GitHub: pull request and push runs, cache hits, and a format failure that stops
+  the run; archived it and synced the continuous-integration spec.
+- 2026-11-02: Reworded the files that named the repository this one was extracted from; the
+  history is unchanged.

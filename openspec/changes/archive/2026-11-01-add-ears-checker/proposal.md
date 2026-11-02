@@ -4,8 +4,8 @@
 
 This repo now requires every requirement to be strict EARS, but nothing checks that: OpenSpec's
 strict validation only requires an uppercase SHALL or MUST somewhere in the statement. No mature
-EARS checker exists (the ones found are regex style packs or abandoned), and spec-mutation-lab will need
-an EARS parser anyway. Building it as a standalone library plus CLI
+EARS checker exists (the ones found are regex style packs or abandoned), and other planned work will
+need an EARS parser anyway. Building it as a standalone library plus CLI
 gives this repo enforcement now and gives a candidate open-source tool later.
 
 ## What Changes

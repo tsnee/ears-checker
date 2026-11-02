@@ -24,9 +24,9 @@ needed for the build to pass, stop and ask first.
 ## 4. Wrap-up
 
 - [x] 4.1 Run `scripts/check-openspec` and `./mill __.test` once more; verify both pass
-- [x] 4.2 Audit the whole history and working tree with the terms in `~/.claude/ears-checker-audit-patterns.txt` (kept outside the repository on purpose): `git log --all -p` and `git log --all --format=%B` piped to `grep -i -E -f <that file>`, and `grep -r -i -E -f <that file> --exclude-dir=.git --exclude-dir=out .`; verify all three print nothing
+- [x] 4.2 Audit the whole history and working tree against a term list: `git log --all -p` and `git log --all --format=%B` piped to `grep -i -E -f <the list>`, and `grep -r -i -E -f <the list> --exclude-dir=.git --exclude-dir=out .`; verify all three print nothing
 
 ## Workflow follow-up
 
 - Commit the implementation, verify, archive (no spec sync: `skip_specs`), commit the archive, and push `main`.
-- Tell the user, so the `spec-mutation-lab` session can switch its check to the published checker.
+- Tell the user, so the downstream project can switch its check to the published checker.
