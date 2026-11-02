@@ -9,3 +9,6 @@
   archived changes, confirmed each against the script and hook in a scratch copy, and corrected
   one scenario whose "should" example strict validation rejects before EARS checking runs.
   Planned add-github-actions-ci.
+- 2026-11-02: add-github-actions-ci: added the CI workflow (format, compile, test, and the OpenSpec
+  check on Linux, with SHA-pinned published actions and a read-only token) and weekly grouped
+  Dependabot updates for the pins; linted it with actionlint and checked each pin against its tag.

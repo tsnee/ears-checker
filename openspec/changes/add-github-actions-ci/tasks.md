@@ -7,10 +7,10 @@ Claude reads results with `gh` (read-only) and never pushes.
 
 ## 1. Workflow files
 
-- [ ] 1.1 Write `.github/workflows/ci.yml` as in design Decisions 1–6 (triggers, PR-only cancelling, `permissions: contents: read`, `persist-credentials: false`, 30-minute timeout, Temurin 27, Node 26, `coursier/cache-action`, OpenSpec CLI 1.14.1, then `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`, `scripts/check-openspec`); verify `yq` parses it and `actionlint .github/workflows/ci.yml` reports nothing (the user installs `actionlint` with `brew install actionlint`; if it is missing, stop and ask)
-- [ ] 1.2 Check the pins: every `uses:` in `ci.yml` is a 40-character SHA with its release in a comment, and each SHA equals `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha` for that tag; verify with `yq` listing the `uses:` values next to the `gh` results
-- [ ] 1.3 Write `.github/dependabot.yml`: the `github-actions` ecosystem, directory `/`, weekly, with every update in one group; verify `yq` parses it
-- [ ] 1.4 Update `CLAUDE.md`: add `.github/` to Layout, say under Build and test that CI runs the same four commands on pushes to `main` and pull requests, and drop GitHub Actions CI from Likely next steps; add one line on CI to the README's Building section; verify by reading both with `mq`
+- [x] 1.1 Write `.github/workflows/ci.yml` as in design Decisions 1–6 (triggers, PR-only cancelling, `permissions: contents: read`, `persist-credentials: false`, 30-minute timeout, Temurin 27, Node 26, `coursier/cache-action`, OpenSpec CLI 1.14.1, then `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`, `scripts/check-openspec`); verify `yq` parses it and `actionlint .github/workflows/ci.yml` reports nothing (the user installs `actionlint` with `brew install actionlint`; if it is missing, stop and ask)
+- [x] 1.2 Check the pins: every `uses:` in `ci.yml` is a 40-character SHA with its release in a comment, and each SHA equals `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha` for that tag; verify with `yq` listing the `uses:` values next to the `gh` results
+- [x] 1.3 Write `.github/dependabot.yml`: the `github-actions` ecosystem, directory `/`, weekly, with every update in one group; verify `yq` parses it
+- [x] 1.4 Update `CLAUDE.md`: add `.github/` to Layout, say under Build and test that CI runs the same four commands on pushes to `main` and pull requests, and drop GitHub Actions CI from Likely next steps; add one line on CI to the README's Building section; verify by reading both with `mq`
 
 ## 2. Runs on GitHub
 
@@ -21,8 +21,8 @@ Claude reads results with `gh` (read-only) and never pushes.
 
 ## 3. Wrap-up
 
-- [ ] 3.1 Run `./mill __.test` and `scripts/check-openspec` locally; verify both pass and `git status` shows no change outside `.github/`, `CLAUDE.md`, `README.md`, `docs/worklog.md`, and this change
-- [ ] 3.2 Add a dated line to `docs/worklog.md`; verify by reading it with `mq`
+- [x] 3.1 Run `./mill __.test` and `scripts/check-openspec` locally; verify both pass and `git status` shows no change outside `.github/`, `CLAUDE.md`, `README.md`, `docs/worklog.md`, and this change
+- [x] 3.2 Add a dated line to `docs/worklog.md`; verify by reading it with `mq`
 
 ## Workflow follow-up
 

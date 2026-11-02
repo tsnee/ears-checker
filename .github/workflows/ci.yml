@@ -1,0 +1,56 @@
+# Format, compile, test, and the OpenSpec check, on every push to main and every pull request.
+# Publishes nothing; release publishing belongs to the packaging changes.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# A newer commit on a pull request cancels its older run; every commit on main keeps its own run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # For scripts/check-openspec, which runs the CLI jar with a JVM flag that needs JDK 23 or
+      # newer. Mill fetches its own JDK 27 for the build.
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "27"
+
+      # ears.js tests run on Node.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+
+      # Dependencies, Mill's JDK, and the Mill launcher.
+      - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
+
+      - name: Install the OpenSpec CLI
+        run: npm install -g @fission-ai/openspec@1.14.1
+
+      - name: Check formatting
+        run: ./mill __.checkFormat
+
+      - name: Compile
+        run: ./mill __.compile
+
+      - name: Test
+        run: ./mill __.test
+
+      - name: Check OpenSpec
+        run: scripts/check-openspec

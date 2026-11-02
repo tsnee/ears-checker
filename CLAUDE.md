@@ -40,6 +40,10 @@ publish locally on its own.
 
 Run `./mill __.test` before calling any change done. Warnings are errors.
 
+CI (`.github/workflows/ci.yml`) runs the same four checks on every push to `main` and every pull
+request: `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`, and
+`scripts/check-openspec`. It publishes nothing.
+
 ## Code style
 
 Strongly typed functional Scala 3, written for a reader who knows Haskell and PureScript well.
@@ -87,11 +91,12 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
 - `openspec/` — specs `ears-classifier`, `ears-cli`, and `openspec-check` (the OpenSpec gate:
   `scripts/check-openspec` and its hook), and the archived changes that built them
 - `scripts/` — `check-openspec` and the Claude Code hook that runs it
+- `.github/` — the CI workflow and Dependabot's weekly updates to its action pins
 - `docs/worklog.md` — dated work log
 
 ## Likely next steps
 
-Packaging, each as its own OpenSpec change: GitHub Actions CI; Maven Central libraries (JVM and
-Scala.js); the CLI as a Coursier app and GraalVM binaries; an npm package; Scala Native once
-Markdown input no longer needs commonmark-java. Also deferred from the first code review: choose
-the checker's JVM flag by JDK version (`--sun-misc-unsafe-memory-access` needs JDK 23 or newer).
+Packaging, each as its own OpenSpec change: Maven Central libraries (JVM and Scala.js); the CLI
+as a Coursier app and GraalVM binaries; an npm package; Scala Native once Markdown input no longer
+needs commonmark-java. Also deferred from the first code review: choose the checker's JVM flag by
+JDK version (`--sun-misc-unsafe-memory-access` needs JDK 23 or newer).
