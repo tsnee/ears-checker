@@ -26,12 +26,14 @@ A complex requirement combines clauses in the order Where, While, then When or I
 `ears-check [--format <string>] [--profile <string>] [--output <string>] [<file>...]`
 
 The checker isn't packaged yet. Build it from this repository and define `ears-check` as an
-alias for the jar. The `--sun-misc-unsafe-memory-access` flag needs JDK 23 or newer; on an
-older JDK, leave it out.
+alias for the jar. It runs on JDK 17 or newer. On JDK 23 and newer,
+`--sun-misc-unsafe-memory-access=allow` stops the JVM's warnings about the Scala runtime's use of
+`sun.misc.Unsafe`; older JDKs don't know that flag, and `-XX:+IgnoreUnrecognizedVMOptions` makes
+them skip it, so the same alias works on any of them.
 
 ```sh
 ./mill ears.cli.assembly
-alias ears-check="java --sun-misc-unsafe-memory-access=allow -jar $PWD/out/ears/cli/assembly.dest/out.jar"
+alias ears-check="java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow -jar $PWD/out/ears/cli/assembly.dest/out.jar"
 ```
 
 It reads each file, or standard input when none is given, and reports every requirement that

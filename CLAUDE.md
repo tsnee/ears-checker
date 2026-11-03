@@ -31,8 +31,9 @@ publish locally on its own.
 
 - `./mill __.compile`, `./mill __.test` (JVM and Scala.js), `./mill ears.cli.test`
 - `./mill __.reformat` formats with scalafmt; `./mill __.checkFormat` checks it
-- `./mill ears.cli.assembly` builds the runnable jar; run it with
-  `java --sun-misc-unsafe-memory-access=allow -jar <jar> [options] [FILE...]`
+- `./mill ears.cli.assembly` builds the runnable jar. Run it on any JDK from 17 with
+  `java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow -jar <jar> …`:
+  the flag silences JDK 23+'s `sun.misc.Unsafe` warnings, and older JDKs skip it
 - Mill 1.3.1 (pinned in the `build.mill` header), Scala 3.10.0, JDK 27 (Mill fetches it; the
   header pins JVM index 0.0.5 because Mill 1.3.1's default index predates JDK 27)
 - `ears.js` tests run on Node.
@@ -41,7 +42,8 @@ Run `./mill __.test` before calling any change done. Warnings are errors.
 
 CI (`.github/workflows/ci.yml`) runs the same four checks on every push to `main` and every pull
 request: `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`, and
-`scripts/check-openspec`. It publishes nothing.
+`scripts/check-openspec`. A second job, `check-jdk17`, runs `scripts/check-openspec` again with
+JDK 17 starting the jar. It publishes nothing.
 
 ## Code style
 
@@ -98,5 +100,4 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
 
 Packaging, each as its own OpenSpec change: Maven Central libraries (JVM and Scala.js); the CLI
 as a Coursier app and GraalVM binaries; an npm package; Scala Native once Markdown input no longer
-needs commonmark-java. Also deferred from the first code review: choose the checker's JVM flag by
-JDK version (`--sun-misc-unsafe-memory-access` needs JDK 23 or newer).
+needs commonmark-java.

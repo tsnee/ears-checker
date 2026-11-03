@@ -16,3 +16,9 @@
   the run; archived it and synced the continuous-integration spec.
 - 2026-11-02: Reworded the files that named the repository this one was extracted from; the
   history is unchanged.
+- 2026-11-02: Made the repository public, protected `main`, set up the `release` environment, and
+  bumped the OpenSpec CLI to 1.16.0. Planned choose-jvm-flag-by-jdk.
+- 2026-11-03: choose-jvm-flag-by-jdk: the OpenSpec check starts the checker with
+  `-XX:+IgnoreUnrecognizedVMOptions` before the JDK 23 flag, so it runs on JDK 17 (confirmed
+  failing before, passing after) and stays quiet on JDK 27; added the `check-jdk17` CI job and
+  updated the README alias and CLAUDE.md.
