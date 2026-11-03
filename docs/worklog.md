@@ -22,3 +22,7 @@
   `-XX:+IgnoreUnrecognizedVMOptions` before the JDK 23 flag, so it runs on JDK 17 (confirmed
   failing before, passing after) and stays quiet on JDK 27; added the `check-jdk17` CI job and
   updated the README alias and CLAUDE.md.
+- 2026-11-03: publish-to-maven-central (before release): version from the tag, Scala.js source
+  references mapped to GitHub, the release workflow (verify, then an approval-gated upload for
+  review), and the `v*` tag ruleset; inspected the 0.1.0 POMs and jars and rehearsed signing and
+  bundling locally with a throwaway key.

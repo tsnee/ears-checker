@@ -136,6 +136,25 @@ admins (the owner). The `release` environment already refuses other
 refs; the ruleset stops anyone else from creating a release tag at
 all.
 
+### 7. Scala.js source references point at GitHub
+
+Scala.js IR (`.sjsir`) records each source file's URI for source
+maps, and by default that's the absolute `file:` path of the build
+machine (found in task 2.2: 62 of `ears.js`'s IR files named
+`/Users/…/ears-checker/…`). `ears.js` adds
+`-scalajs-mapSourceURI:<repository root>-><target>`, with the target
+taken from `publishVersion`:
+
+- a release: `https://raw.githubusercontent.com/tsnee/ears-checker/v<version>/`,
+  so a browser's source maps load the released sources;
+- a snapshot: no target, which makes the references relative
+  (`ears/src/…`).
+
+The user chose this (2026-11-03) over relative paths in releases too
+(no machine paths, but source maps can't fetch anything) and leaving
+the CI runner's `/home/runner/…` paths in place. Checked locally:
+neither build has a `file:` reference left.
+
 ## Risks / Trade-offs
 
 - [The wrong thing is published] → `verify` must pass, then two

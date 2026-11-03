@@ -78,6 +78,20 @@ The release workflow SHALL upload with each module its jar, POM, sources jar, do
 - **WHEN** a release run uploads version `0.1.0`
 - **THEN** the Central Portal's validation of the deployment reports no missing file, signature, or POM field
 
+### Requirement: Scala.js source references
+The release workflow SHALL publish Scala.js IR whose source file references point to the tagged sources on GitHub.
+
+#### Scenario: Source reference in a released IR file
+- **WHEN** release `0.1.0` is published
+- **THEN** every source file reference in `ears-checker_sjs1_3`'s `.sjsir` files starts with `https://raw.githubusercontent.com/tsnee/ears-checker/v0.1.0/`, and none is a `file:` path
+
+### Requirement: Relative source references outside releases
+While no release version is set, the build SHALL give Scala.js IR source file references relative to the repository root.
+
+#### Scenario: Local build
+- **WHEN** `./mill ears.js.jar` runs on a developer machine
+- **THEN** the `.sjsir` files reference sources such as `ears/src/io/github/tsnee/ears/Classifier.scala`, with no absolute path
+
 ### Requirement: Signed with the release key
 The release workflow SHALL sign every uploaded file with the release key whose public key is on public keyservers.
 
