@@ -81,7 +81,9 @@ copied job settings). `coursier/cache-action` keys on the job name,
 so this job gets its own cache; its fallback key restores `check`'s.
 
 The job name becomes a second required status check on `main`, set
-with `gh` after its first run so GitHub knows the check name.
+with `gh` after its first run on the pull request (so GitHub knows the
+check name) and before the merge, so the archive on the branch
+records it done.
 
 Alternative: a matrix over `java-version: [17, 27]` for the whole
 job. That would run the format check, compile, and tests twice for no

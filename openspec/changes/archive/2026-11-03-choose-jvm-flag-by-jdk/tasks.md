@@ -14,9 +14,9 @@ the user's shell; Claude opens pull requests and reads runs with `gh`.
 ## 2. CI on JDK 17
 
 - [x] 2.1 Add the `check-jdk17` job to `.github/workflows/ci.yml` as in design Decision 3 (Temurin 17, the same pins and OpenSpec CLI version as `check`, 30-minute timeout, `persist-credentials: false`), and correct the comment on `check`'s JDK step; verify `yq` lists both jobs and `actionlint` reports nothing
-- [ ] 2.2 After the user pushes branch `choose-jvm-flag-by-jdk` and Claude opens a pull request, read the run with `gh`; verify both jobs succeed and `check-jdk17`'s setup-java step installed Java 17
-- [ ] 2.3 Failure check: the user pushes branch `ci-jdk17-failure-check` (from the pull request branch, with `-XX:+IgnoreUnrecognizedVMOptions` removed from the script) and Claude opens a draft pull request; verify `check-jdk17` fails at "Check OpenSpec" with `Unrecognized option` in its log while `check` succeeds; then Claude closes the pull request and deletes the branch
-- [ ] 2.4 After the pull request merges, add `check-jdk17` to `main`'s required status checks with `gh api`; verify the branch protection lists both `check` and `check-jdk17`
+- [x] 2.2 After the user pushes branch `choose-jvm-flag-by-jdk` and Claude opens a pull request, read the run with `gh`; verify both jobs succeed and `check-jdk17`'s setup-java step installed Java 17
+- [x] 2.3 Failure check: the user pushes branch `ci-jdk17-failure-check` (from the pull request branch, with `-XX:+IgnoreUnrecognizedVMOptions` removed from the script) and Claude opens a draft pull request; verify `check-jdk17` fails at "Check OpenSpec" with `Unrecognized option` in its log while `check` succeeds; then Claude closes the pull request and deletes the branch
+- [x] 2.4 Once `check-jdk17` has run on the pull request, and before it merges, add `check-jdk17` to `main`'s required status checks with `gh api`; verify the branch protection lists both `check` and `check-jdk17`
 
 ## 3. Docs
 
