@@ -23,8 +23,11 @@ if [ -z "$jar" ] || [ ! -f "$jar" ]; then
 fi
 
 ears_check() {
-  # Scala 3's runtime uses sun.misc.Unsafe, which JDK 27 warns about on every start.
-  java --sun-misc-unsafe-memory-access=allow -jar "$jar" --format openspec "$@"
+  # Scala 3's runtime uses sun.misc.Unsafe, which JDK 23 and newer warn about on every start
+  # unless --sun-misc-unsafe-memory-access=allow. JDK 17 through 22 don't know that flag and
+  # won't start with it, so -XX:+IgnoreUnrecognizedVMOptions makes them skip it.
+  java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow \
+    -jar "$jar" --format openspec "$@"
 }
 
 # Save every active change and every spec as OpenSpec JSON, then check them all in one checker
