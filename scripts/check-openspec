@@ -26,7 +26,7 @@ ears_check() {
   # Scala 3's runtime uses sun.misc.Unsafe, which JDK 23 and newer warn about on every start
   # unless --sun-misc-unsafe-memory-access=allow. JDK 17 through 22 don't know that flag and
   # won't start with it, so -XX:+IgnoreUnrecognizedVMOptions makes them skip it.
-  java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow \
+  java --sun-misc-unsafe-memory-access=allow \
     -jar "$jar" --format openspec "$@"
 }
 
