@@ -41,7 +41,7 @@ jobs:
       - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
 
       - name: Install the OpenSpec CLI
-        run: npm install -g @fission-ai/openspec@1.14.1
+        run: npm install -g @fission-ai/openspec@1.16.0
 
       - name: Check formatting
         run: ./mill __.checkFormat
