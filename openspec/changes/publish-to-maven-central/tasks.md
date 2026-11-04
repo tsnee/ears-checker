@@ -10,7 +10,7 @@ the secrets. Nothing in groups 1–4 writes a non-SNAPSHOT version to
 
 ## 1. Version from the tag
 
-- [x] 1.1 Change `Published.publishVersion` in `build.mill` to design Decision 1's `Task.Input`; verify `./mill show ears.publishVersion` (and for `ears.js` and `ears.cli`) prints `0.1.0-SNAPSHOT` without `EARS_RELEASE_VERSION` and `0.1.0` with `EARS_RELEASE_VERSION=0.1.0`, and that `./mill __.compile` and `./mill __.checkFormat` pass
+- [x] 1.1 Change `Published.publishVersion` in `build.mill` to design Decision 1's `Task.Input`; verify `./mill show ears.publishVersion` (and for `ears.js` and `ears.cli`) prints `0.1.0-SNAPSHOT` without `EARS_RELEASE_VERSION` or with it empty, `0.1.0` with `EARS_RELEASE_VERSION=0.1.0`, and fails for `0.1.0-rc1`, `v0.1.0`, and `1.2`, and that `./mill __.compile` and `./mill __.checkFormat` pass
 
 ## 2. Artifact inspection (nothing uploaded)
 
@@ -21,7 +21,7 @@ the secrets. Nothing in groups 1–4 writes a non-SNAPSHOT version to
 
 ## 3. Release workflow and repository settings
 
-- [x] 3.1 Write `.github/workflows/release.yml` as in design Decisions 2–5 (tag filter, `verify` then `publish` with `environment: release`, `--shouldRelease false`, no caches, the same SHA pins as `ci.yml`, `contents: read`, `persist-credentials: false`, the tag passed to shells only through `env:`); verify `yq` parses it, `actionlint` reports nothing, every `uses:` equals a pin in `ci.yml`, and no `run:` contains `${{`
+- [x] 3.1 Write `.github/workflows/release.yml` as in design Decisions 2–5 (tag filter, `tag` and `checks` (calling `ci.yml`) then `publish` with `environment: release`, building before the secrets are set, `--shouldRelease false`, no caches in `publish`, the same SHA pins as `ci.yml`, `contents: read`, `persist-credentials: false`, the tag passed to shells only through `env:`); verify `yq` parses it, `actionlint` reports nothing, every `uses:` equals a pin in `ci.yml`, no `run:` contains `${{`, and a local dry run of the two publish steps with a throwaway key compiles nothing in the upload step
 - [x] 3.2 Create the `v*` tag ruleset (design Decision 6) with `gh api`; verify `gh api repos/tsnee/ears-checker/rulesets` lists it, active, targeting tags `refs/tags/v*`, with creation, update, and deletion rules and admins as the only bypass
 - [x] 3.3 Update the README (Maven and Mill dependency lines and `cs launch` for `0.1.0`, marked "after 0.1.0 is published", above the build-from-source steps) and CLAUDE.md (a short "Releasing" section: merge, tag, approve, review in the Portal, publish); verify by reading both with `mq`
 - [x] 3.4 Run `./mill __.test` and `scripts/check-openspec`; verify both pass and `git status` shows no change outside `build.mill`, `.github/`, `README.md`, `CLAUDE.md`, `docs/worklog.md`, and this change; add a dated line to `docs/worklog.md`
@@ -33,7 +33,7 @@ the secrets. Nothing in groups 1–4 writes a non-SNAPSHOT version to
 
 ## 5. First release (after the pull request merges)
 
-- [ ] 5.1 The owner pushes tag `v0.1.0` on the merge commit; verify a release run starts, `verify` passes, and `publish` waits for approval with no step run
+- [ ] 5.1 The owner pushes tag `v0.1.0` on the merge commit; verify a release run starts, `tag` and `checks` (both `check` and `check-jdk17`) pass, and `publish` waits for approval with no step run
 - [ ] 5.2 Rehearsal: the owner approves; verify the log shows a `USER_MANAGED` upload of version `0.1.0` that passed validation, and the owner sees the deployment in the Portal with all three modules' files and signatures; the owner drops it
 - [ ] 5.3 The owner reruns the `publish` job and approves; verify the upload passes validation again; the owner reviews and clicks Publish
 - [ ] 5.4 Check from outside once Central shows 0.1.0 (up to about 30 minutes): with an empty Coursier cache in the scratchpad, `cs fetch` resolves all three artifacts at `0.1.0` from Maven Central, `cs launch` runs the CLI on Temurin 17 and JDK 27, and one downloaded `.asc` verifies against the key fetched from `keyserver.ubuntu.com` in a throwaway gpg home

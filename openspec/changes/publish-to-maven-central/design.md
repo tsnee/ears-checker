@@ -63,9 +63,12 @@ app, npm, snapshots on Central).
 
 ```scala
 trait Published extends PublishModule {
-  /** The release workflow sets EARS_RELEASE_VERSION from the tag; every other build is a snapshot. */
   def publishVersion = Task.Input {
-    Task.env.getOrElse("EARS_RELEASE_VERSION", "0.1.0-SNAPSHOT")
+    Task.env.get("EARS_RELEASE_VERSION").filter(_.nonEmpty) match {
+      case None => "0.1.0-SNAPSHOT"
+      case Some(v) if v.matches("""\d+\.\d+\.\d+""") => v
+      case Some(v) => Task.fail(s"EARS_RELEASE_VERSION must be <major>.<minor>.<patch>, not '$v'")
+    }
   }
   …
 }
@@ -77,25 +80,55 @@ variable from the tag after checking it matches
 `v<major>.<minor>.<patch>`. The user chose this over editing
 `build.mill` for each release (2026-11-03).
 
-### 2. Two jobs: check, then publish
+The build also rejects anything but `<major>.<minor>.<patch>` and
+treats an empty value as unset (code review finding 6, 2026-11-03):
+a stray `export EARS_RELEASE_VERSION=…` followed by
+`./mill __.publishLocal` would otherwise put a release version into
+`~/.ivy2/local`, which the downstream project reads before Central.
+
+### 2. Check, then publish; build before the secrets
 
 ```text
 on: push: tags: ['v[0-9]+.[0-9]+.[0-9]+']
 
-verify  (no environment, no secrets)
-  checkout (full history) -> tag format and "on main" checks
-  -> setup-java 27, setup-node 26 -> OpenSpec CLI
-  -> checkFormat, compile, test, scripts/check-openspec
-
-publish (needs: verify; environment: release)
+tag     (no secrets): checkout (full history) -> tag format and "on main" checks
+checks  (no secrets; needs: tag): uses ./.github/workflows/ci.yml
+          -> its check and check-jdk17 jobs, exactly as on main
+publish (needs: tag, checks; environment: release)
   checkout -> set EARS_RELEASE_VERSION from the tag
+  -> ./mill __.publishArtifacts                       (no secrets)
   -> ./mill mill.javalib.SonatypeCentralPublishModule/publishAll --shouldRelease false
+                                                      (secrets; signs and uploads only)
 ```
 
-The approval prompt appears only after `verify` passes, so the owner
-approves a release that is known to be green, and the secrets exist
-only in `publish`. `publish` rebuilds from the same commit instead of
-passing jars between jobs, which avoids trusting an artifact store.
+The approval prompt appears only after `tag` and `checks` pass, so
+the owner approves a release that is known to be green, and the
+secrets exist only in `publish`'s last step.
+
+Changes from code review (2026-11-03, accepted by the owner):
+
+- `checks` calls `ci.yml` (which gained a `workflow_call` trigger)
+  instead of copying its steps, so the release reruns exactly what CI
+  runs, JDK 17 job included, and the two can't drift (findings 3, 4).
+  The release workflow's concurrency group is `maven-central-<ref>`:
+  `ci.yml`'s group evaluates to `Release-<ref>` when called from here,
+  and GitHub compares group names case-insensitively, so
+  `release-<ref>` would have deadlocked.
+- The build runs in its own step before the secrets are set, so
+  compiler plugins, dependencies, and scaladoc never run beside the
+  signing key; `publishAll` then reuses the built artifacts (finding
+  1). Checked with a local dry run: the second step compiled nothing.
+
+Kept as designed, with the owner's agreement:
+
+- `publish` rebuilds from the same commit instead of downloading the
+  jars `checks` tested (finding 2): the same commit, pinned
+  dependencies, and compiler build the same artifacts, and passing
+  jars between jobs would mean trusting an artifact store.
+- "On main" is ancestry, not "at the head of main" (finding 5): only
+  the owner can push `v*` tags, `checks` reruns every check on the
+  tagged commit, and the owner sees the version and files in the
+  Portal before publishing.
 
 "On main" is `git merge-base --is-ancestor "$GITHUB_SHA" origin/main`
 after a full-history checkout. The tag name reaches shell steps only
@@ -114,12 +147,13 @@ rehearsal: inspect the deployment, then **Drop** it; rerun the
 `publish` job (approving again) for the real upload, then **Publish**.
 A dropped deployment doesn't use up the version.
 
-### 4. No caches in the release workflow
+### 4. No caches where the secrets are
 
-Releases are rare, so the extra minutes don't matter (and runs are
-free on a public repository). Not restoring caches means a release
-build can't pick up anything a cache holds that `main`'s CI didn't
-also verify.
+`publish` restores no cache: the job that holds the secrets builds
+everything from a clean checkout, so it can't pick up anything a
+cache holds. `checks` uses `ci.yml`'s Coursier and Mill caches as CI
+does; a tag run can only restore caches saved on the tag itself or on
+`main`, never a pull request's, and `checks` holds no secrets.
 
 ### 5. Same rules as CI
 
@@ -155,9 +189,14 @@ The user chose this (2026-11-03) over relative paths in releases too
 the CI runner's `/home/runner/…` paths in place. Checked locally:
 neither build has a `file:` reference left.
 
+Kept as designed (code review finding 7): the URL is built from the
+version, not the tag, but after Decision 1's validation only the
+release workflow sets a version, and only as the tag without its `v`,
+so the URL always names the tag being released.
+
 ## Risks / Trade-offs
 
-- [The wrong thing is published] → `verify` must pass, then two
+- [The wrong thing is published] → `tag` and `checks` must pass, then two
   owner actions; the Portal shows every file before Publish; and the
   rehearsal exercises the whole path once with nothing kept.
 - [A secret leaks through a log] → GitHub masks secret values; Mill

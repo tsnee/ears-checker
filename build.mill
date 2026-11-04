@@ -84,9 +84,16 @@ trait Published extends PublishModule {
 
   /** The release workflow sets EARS_RELEASE_VERSION from the tag; every other build is a snapshot.
     * An input, so the environment is read on every run and a cached version can't carry over.
+    * Anything but <major>.<minor>.<patch> fails, so a stray value can't publish a release version
+    * (to ~/.ivy2/local, say); an empty value counts as unset.
     */
   def publishVersion = Task.Input {
-    Task.env.getOrElse("EARS_RELEASE_VERSION", "0.1.0-SNAPSHOT")
+    Task.env.get("EARS_RELEASE_VERSION").filter(_.nonEmpty) match {
+      case None => "0.1.0-SNAPSHOT"
+      case Some(v) if v.matches("""\d+\.\d+\.\d+""") => v
+      case Some(v) =>
+        Task.fail(s"EARS_RELEASE_VERSION must be <major>.<minor>.<patch>, not '$v'")
+    }
   }
 
   /** The POM's one-line description of this artifact. */
