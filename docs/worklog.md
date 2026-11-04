@@ -30,3 +30,5 @@
   real upload published; checked from outside (fetch from Central with an empty cache, the CLI on
   JDK 17 and 27, a signature against the keyserver key, Scala.js source references at the tag);
   archived publish-to-maven-central and synced its `release-publishing` spec.
+- 2026-11-03: the downstream project moved to 0.1.0 from Maven Central; dropped CLAUDE.md's
+  `publishLocal` note and the README's "after 0.1.0 is published" wording.
