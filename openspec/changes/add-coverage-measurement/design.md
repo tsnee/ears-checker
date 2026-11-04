@@ -43,7 +43,7 @@ Loaded in the build header with
 `//| mvnDeps: ["com.lihaoyi::mill-contrib-scoverage:$MILL_VERSION"]`,
 so its version always matches Mill's. `ears` and `ears.cli` mix in
 `ScoverageModule` with `scoverageVersion = "2.5.2"` (the current
-release, checked on Maven Central when implementing), and their `test`
+release on Maven Central, checked 2026-11-04), and their `test`
 modules mix in `ScoverageTests`.
 
 Alternatives: Scala 3's own `-coverage-out` option with a hand-written
@@ -100,10 +100,12 @@ chose the seam).
 
 In `check`, after `Test`:
 
-1. **Report coverage** (`if: ${{ !cancelled() && steps.test.outcome == 'success' }}`):
-   `./mill ears.scoverage.consoleReport + ears.cli.scoverage.consoleReport`,
-   with its output appended to `$GITHUB_STEP_SUMMARY` inside a code
-   block, one heading per module.
+1. **Report coverage**: `./mill <module>.scoverage.consoleReport` for
+   each module in turn (run together, the two reports interleave), with
+   its two percentage lines appended to `$GITHUB_STEP_SUMMARY` in a code
+   block under a heading per module. Mill logs task output to standard
+   error, so the step reads `2>&1`. It needs no `if:`: like every step,
+   it runs only when `Test` passed.
 2. **Check coverage**:
    `./mill ears.scoverage.validateCoverageMinimums + ears.cli.scoverage.validateCoverageMinimums`.
 
@@ -125,6 +127,12 @@ actions" requirement covers setup and caching steps, not this.
   in task 4.2; if it grows by more than a minute, revisit.
 - [Strict compiler options reject instrumented code] → The 2026-11-03
   run compiled with them; task 1.2 confirms on the real build.
+- [Stale local measurements] → The plugin's data directory
+  (`out/<module>/scoverage/data.dest`) is persistent, and each test run
+  adds measurement files beside the last run's (seen in task 1.3).
+  CI starts from a clean checkout, so its numbers are exact; locally,
+  `./mill clean ears.scoverage ears.cli.scoverage` before measuring
+  gives the same.
 - [A minimum blocks an unrelated change] → Lowering a minimum is a
   one-line change in `build.mill`, visible in review.
 

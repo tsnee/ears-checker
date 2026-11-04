@@ -110,10 +110,13 @@ sentence.
 
 ## Building
 
-`./mill __.test` runs every test on the JVM and, for the library, on Node.
+`./mill __.test` runs every test on the JVM and, for the library, on Node, and measures test
+coverage on the JVM; `./mill ears.scoverage.htmlReport` and `./mill ears.cli.scoverage.htmlReport`
+write reports under `out/`.
 `./mill __.publishLocal` publishes 0.1.0-SNAPSHOT to `~/.ivy2/local`.
-GitHub Actions checks formatting, compiles, runs every test, and checks the OpenSpec specs on
-each push to `main` and each pull request.
+GitHub Actions checks formatting, compiles, runs every test, checks each module's coverage
+against its minimum in `build.mill`, and checks the OpenSpec specs on each push to `main` and each
+pull request.
 
 ## License
 

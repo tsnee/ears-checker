@@ -53,6 +53,24 @@ jobs:
       - name: Test
         run: ./mill __.test
 
+      # Each module's percentages on the run's summary page, from Mill's own report (it logs to
+      # standard error). Before the check, so the summary is written even when the check fails.
+      - name: Report coverage
+        run: |
+          for module in ears ears.cli; do
+            {
+              echo "### Coverage of \`$module\`"
+              echo '```'
+              ./mill --ticker false "$module.scoverage.consoleReport" 2>&1 |
+                grep -E '^(Statement|Branch) coverage'
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      # The minimums are statementCoverageMin and branchCoverageMin in build.mill.
+      - name: Check coverage
+        run: ./mill ears.scoverage.validateCoverageMinimums + ears.cli.scoverage.validateCoverageMinimums
+
       - name: Check OpenSpec
         run: scripts/check-openspec
 

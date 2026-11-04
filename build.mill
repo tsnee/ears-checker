@@ -1,9 +1,11 @@
 //| mill-version: 1.3.1
 //| mill-jvm-version: 27
 //| mill-jvm-index-version: 0.0.5
+//| mvnDeps: ["com.lihaoyi::mill-contrib-scoverage:$MILL_VERSION"]
 package build
 
 import mill.*
+import mill.contrib.scoverage.ScoverageModule
 import mill.scalajslib.*
 import mill.scalalib.*
 import mill.scalalib.publish.*
@@ -79,6 +81,14 @@ trait ZioSpecs extends ScalaModule with ScalafmtModule with TestModule.ZioTest {
   )
 }
 
+/** Statement and branch coverage, measured whenever a `ScoverageTests` module's tests run. They run
+  * against an instrumented copy of the module (`<module>.scoverage`); the module's own jars, and
+  * so every published artifact, come from the ordinary classes.
+  */
+trait Covered extends ScoverageModule {
+  def scoverageVersion = "2.5.2"
+}
+
 /** Maven coordinates and POM metadata shared by every published module. */
 trait Published extends PublishModule {
 
@@ -110,14 +120,17 @@ trait Published extends PublishModule {
 }
 
 /** EARS requirement classifier: pure, no ZIO, portable to Scala.js. */
-object ears extends Base with Published {
+object ears extends Base with Published with Covered {
   override def warts = pureWarts
   def artifactName = "ears-checker"
   def pomDescription = "Classifies requirement sentences against the EARS templates"
 
   def mvnDeps = Seq(mvn"org.typelevel::cats-parse::1.1.0")
 
-  object test extends ScalaTests with ZioSpecs
+  def statementCoverageMin = Some(95.0)
+  def branchCoverageMin = Some(90.0)
+
+  object test extends ScoverageTests with ZioSpecs
 
   /** The same library and tests built with Scala.js and run on Node, to keep `ears` portable. */
   object js extends Base with ScalaJSModule with Published {
@@ -147,7 +160,7 @@ object ears extends Base with Published {
   }
 
   /** Command-line checker over plain text, Markdown, and OpenSpec JSON. */
-  object cli extends Base with Published {
+  object cli extends Base with Published with Covered {
     def artifactName = "ears-checker-cli"
     def pomDescription = "EARS checker for plain text, Markdown, and OpenSpec JSON"
     def moduleDeps = Seq(ears)
@@ -160,7 +173,10 @@ object ears extends Base with Published {
       mvn"org.commonmark:commonmark:0.31.0"
     )
 
-    object test extends ScalaTests with ZioSpecs {
+    def statementCoverageMin = Some(96.0)
+    def branchCoverageMin = Some(95.0)
+
+    object test extends ScoverageTests with ZioSpecs {
       // Tests run in a sandbox directory; this lets them find the repo's OpenSpec files.
       def forkEnv = Task {
         super.forkEnv() ++

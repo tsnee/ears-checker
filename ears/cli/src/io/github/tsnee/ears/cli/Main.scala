@@ -1,5 +1,6 @@
 package io.github.tsnee.ears.cli
 
+import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -14,13 +15,15 @@ import zio.*
 object Main extends ZIOAppDefault:
 
   def run: ZIO[ZIOAppArgs, Nothing, Unit] =
+    getArgs.flatMap(arguments => cli(arguments.toList, readAll(java.lang.System.in))).flatMap(exit)
+
+  /** Runs the checker and writes its outcome to the console; the caller exits with the code. */
+  def cli(arguments: List[String], stdin: Task[String]): UIO[ExitCode] =
     for
-      arguments <- getArgs
-      outcome <- program(arguments.toList, readStdin)
+      outcome <- program(arguments, stdin)
       _ <- Console.print(outcome.stdout).orDie
       _ <- Console.printError(outcome.stderr).orDie
-      _ <- exit(ExitCode(outcome.exitCode))
-    yield ()
+    yield ExitCode(outcome.exitCode)
 
   /** Everything but the console: `stdin` supplies standard input when no file is given. */
   def program(arguments: List[String], stdin: Task[String]): UIO[Outcome] =
@@ -52,5 +55,6 @@ object Main extends ZIOAppDefault:
     case _: java.nio.file.NoSuchFileException => "no such file"
     case other                                => Option(other.getMessage).getOrElse(other.toString)
 
-  private val readStdin: Task[String] =
-    ZIO.attemptBlocking(new String(java.lang.System.in.readAllBytes(), StandardCharsets.UTF_8))
+  /** Reads a whole stream as UTF-8. */
+  def readAll(in: InputStream): Task[String] =
+    ZIO.attemptBlocking(new String(in.readAllBytes(), StandardCharsets.UTF_8))

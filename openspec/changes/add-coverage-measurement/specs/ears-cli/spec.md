@@ -29,8 +29,8 @@ If an input cannot be read or parsed in its format, then the EARS checker SHALL 
 - **THEN** it writes a message naming "missing.txt" to standard error
 
 #### Scenario: Unreadable standard input
-- **WHEN** the checker is given no file and reading standard input fails with the error "stream closed"
-- **THEN** it writes a message naming standard input and "stream closed" to standard error
+- **WHEN** the checker is given no file and reading standard input fails with the error "Stream closed"
+- **THEN** it writes a message naming standard input and "Stream closed" to standard error
 
 #### Scenario: Directory given as a file
 - **WHEN** the checker is given "notes", which is a directory
