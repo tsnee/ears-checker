@@ -69,31 +69,37 @@ calls in tests, which the project's rules say to avoid.
 - `argumentsDetail(arguments): String` — the arguments as a JSON array,
   so `"my notes.md"` and `my notes.md` log differently (finding 5).
 
-`Main` wires it (revised after the code review, findings 3 and 9):
+`Main` wires it (revised after the code review, findings 3, 4, and 9):
 
-- One `ZLogger`, `Main.logger`, installed by `bootstrap` after
-  `Runtime.removeDefaultLoggers`. It reads its minimum level, its writer,
-  and a `java.time.Clock` from three `FiberRef`s, and adds a `cause`
-  detail (`Cause.prettyPrint`) when an entry has one (finding 4).
-- The `FiberRef`s default to warnings, `System.err.println`, and the
-  system clock, so a defect logged outside a run (while starting or
-  exiting) still reaches standard error in this format.
-- `cliLogging(arguments, stdin, writeLog)` sets them for the run with
-  `FiberRef.locally`: the level from `--verbose`, `writeLog`, and
-  ZIO's `Clock.javaClock`, so a test's `TestClock` sets the
-  timestamps. `cli(arguments, stdin)` is `cliLogging` with
-  `System.err.println`, so `cli`'s existing tests keep their calls.
-  Tests don't run `bootstrap`, so they install `Main.logger` with
-  `ZIO.withLogger` where they look at log lines.
-- ZIO keeps its logger set in a `private[zio]` `FiberRef`, so a run
-  can't replace the logger; one logger configured per fiber avoids
-  both a second logger and duplicate lines.
+- `logger(minimum, writeLog, clock): ZLogger[String, Unit]` writes
+  each entry at `minimum` or above as `Logging.line(...)` to
+  `writeLog`, stamped by `clock`, with a `cause` detail
+  (`Cause.prettyPrint`) when the entry has one. Everything it uses is a
+  parameter. `loggerFor(arguments, writeLog, clock)` picks `minimum`
+  from `--verbose`.
+- `bootstrap` (`bootstrapWith(System.err.println)`) removes ZIO's
+  default logger and installs `loggerFor` built from `ZIOAppArgs` and
+  ZIO's `Clock.javaClock`. It is the application's only logger, and it
+  covers starting and exiting too, so a defect ZIO reports outside the
+  run still reaches standard error in this format (finding 3).
+- `cli(arguments, stdin)` is the console wiring only, as before this
+  change; it logs to whatever logger is installed. Tests don't run
+  `bootstrap`, so they install `loggerFor(…, fakeWriter, clock)` with
+  `ZIO.withLogger`, the clock coming from `Clock.javaClock` so
+  `TestClock` sets the timestamps; one test builds `bootstrapWith` from
+  `ZIOAppArgs` to check the level it chooses.
 - Details go on entries as ZIO log annotations
   (`ZIO.logAnnotate`), so the line shows them as `key=value`.
 
-The level comes from the parsed arguments, so it can't be chosen in
-`bootstrap`, which runs before the arguments are parsed. A parse
-failure logs at error, which passes either level.
+The arguments are parsed in `bootstrap` for the level and again in
+`program` for the run (finding 8); parsing is pure. A parse failure
+logs at error, which passes either level.
+
+A first revision configured one logger through three `FiberRef`s made
+with ZIO's `Unsafe` API and set per run with `locally`. The owner found
+that uneasy: the logger's behavior depended on ambient fiber state
+rather than its parameters, and the `FiberRef`s were made outside an
+effect. Building the logger in `bootstrap` needs neither.
 
 Alternative: zio-logging's console logger with a format string. It
 would add a library for what `Logging.line` does in a few lines, and
@@ -133,7 +139,7 @@ already returns its parse error as a value, which `program` logs with
   without `--verbose`, `--verbose` after the files, and `parse`
   unchanged with `--verbose` present.
 - `MainSuite` (new cases only): `--verbose` changes neither the exit
-  code nor the console output (through `cliLogging` and `TestConsole`;
+  code nor the console output (through `cli` and `TestConsole`;
   finding 6); with the logger's writer faked, a default run of a
   passing input writes nothing, a directory writes one line, and an
   entry with a cause writes it.

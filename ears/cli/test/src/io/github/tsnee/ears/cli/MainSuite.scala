@@ -27,11 +27,21 @@ object MainSuite extends ZIOSpecDefault:
 
   private def run(arguments: String*): UIO[Outcome] = Main.program(arguments.toList, noStdin)
 
-  /** The log lines a run writes, through a fake writer instead of standard error. */
+  /** Runs `cli` with the logger the application would build for these arguments, writing to
+    * `writeLog` instead of standard error.
+    */
+  private def withRunLogger(arguments: List[String], writeLog: String => Unit)(
+      effect: UIO[ExitCode]
+  ): UIO[ExitCode] =
+    Clock.javaClock.flatMap(clock =>
+      ZIO.withLogger(Main.loggerFor(arguments, writeLog, clock))(effect)
+    )
+
+  /** The log lines a run writes. */
   private def logged(arguments: List[String], stdin: Task[String]): UIO[List[String]] =
     for
       lines <- ZIO.succeed(LinkedBlockingQueue[String]())
-      _ <- ZIO.withLogger(Main.logger)(Main.cliLogging(arguments, stdin, line => lines.put(line)))
+      _ <- withRunLogger(arguments, line => lines.put(line))(Main.cli(arguments, stdin))
     yield lines.asScala.toList
 
   /** A closed stream: every read fails with the JDK's `IOException("Stream closed")`. */
@@ -191,9 +201,7 @@ object MainSuite extends ZIOSpecDefault:
           for
             outBefore <- TestConsole.output
             errBefore <- TestConsole.outputErr
-            code <- ZIO.withLogger(Main.logger)(
-              Main.cliLogging(arguments, ZIO.succeed(input), _ => ())
-            )
+            code <- withRunLogger(arguments, _ => ())(Main.cli(arguments, ZIO.succeed(input)))
             out <- TestConsole.output
             err <- TestConsole.outputErr
           yield (
@@ -229,13 +237,27 @@ object MainSuite extends ZIOSpecDefault:
           lines <- logged(List(directory.toString), noStdin)
         yield assertTrue(lines.size == 1)
       ,
+      test("the application's logger takes its level from the command line"):
+        def entries(arguments: String*) =
+          for
+            lines <- ZIO.succeed(LinkedBlockingQueue[String]())
+            _ <- ZIO.scoped(
+              (ZLayer.succeed(ZIOAppArgs(Chunk.fromIterable(arguments))) >>>
+                Main.bootstrapWith(line => lines.put(line))).build *>
+                ZIO.logDebug("Starting") *> ZIO.logError("Stopping")
+            )
+          yield lines.asScala.toList.size
+        for
+          quiet <- entries("notes.txt")
+          verbose <- entries("--verbose", "notes.txt")
+        yield assertTrue(quiet == 1, verbose == 2)
+      ,
       test("an entry's cause is written with it"):
         for
           lines <- ZIO.succeed(LinkedBlockingQueue[String]())
-          _ <- ZIO.withLogger(Main.logger)(
-            Main.logging(verbose = false, line => lines.put(line))(
-              ZIO.logErrorCause("Unexpected", Cause.fail("disk full"))
-            )
+          clock <- Clock.javaClock
+          _ <- ZIO.withLogger(Main.logger(LogLevel.Warning, line => lines.put(line), clock))(
+            ZIO.logErrorCause("Unexpected", Cause.fail("disk full"))
           )
           written = lines.asScala.toList
         yield assertTrue(written.size == 1, written.exists(_.contains("cause=")))

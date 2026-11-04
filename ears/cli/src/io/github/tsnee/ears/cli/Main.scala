@@ -15,19 +15,52 @@ import zio.*
   */
 object Main extends ZIOAppDefault:
 
-  // What `logger` does with an entry, set per run by cliLogging. Outside a run (a defect while
-  // starting or exiting, say) it writes warnings and errors to standard error with the system clock.
-  private val minimumLevel: FiberRef[LogLevel] =
-    Unsafe.unsafe(unsafe => FiberRef.unsafe.make(LogLevel.Warning)(using unsafe))
-  private val logWriter: FiberRef[String => Unit] =
-    Unsafe.unsafe(unsafe => FiberRef.unsafe.make(writeStandardError)(using unsafe))
-  private val logClock: FiberRef[java.time.Clock] =
-    Unsafe.unsafe(unsafe => FiberRef.unsafe.make(java.time.Clock.systemUTC())(using unsafe))
+  // The application's only logger, replacing ZIO's own format: built once, before the run, from
+  // the command line (for the level) and ZIO's Clock, so it also covers starting and exiting.
+  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = bootstrapWith(writeStandardError)
 
-  /** The program's only logger: each entry at the fiber's minimum level or above, as one line (see
-    * `Logging.line`), with its cause when it has one.
+  /** `bootstrap`, with each log line given to `writeLog`. */
+  def bootstrapWith(writeLog: String => Unit): ZLayer[ZIOAppArgs, Nothing, Unit] =
+    Runtime.removeDefaultLoggers ++ ZLayer
+      .fromZIO(
+        for
+          arguments <- ZIOAppArgs.getArgs
+          clock <- Clock.javaClock
+        yield loggerFor(arguments.toList, writeLog, clock)
+      )
+      .flatMap(built => Runtime.addLogger(built.get))
+
+  def run: ZIO[ZIOAppArgs, Nothing, Unit] =
+    getArgs.flatMap(arguments => cli(arguments.toList, readAll(java.lang.System.in))).flatMap(exit)
+
+  /** Runs the checker and writes its outcome to the console; the caller exits with the code. Log
+    * entries go to whatever logger is installed (`bootstrap`'s, when run as the application).
     */
-  val logger: ZLogger[String, Unit] = new ZLogger[String, Unit]:
+  def cli(arguments: List[String], stdin: Task[String]): UIO[ExitCode] =
+    for
+      outcome <- program(arguments, stdin)
+      _ <- Console.print(outcome.stdout).orDie
+      _ <- Console.printError(outcome.stderr).orDie
+    yield ExitCode(outcome.exitCode)
+
+  /** The logger for a run with these arguments: warnings and up, or every level with `--verbose`.
+    */
+  def loggerFor(
+      arguments: List[String],
+      writeLog: String => Unit,
+      clock: java.time.Clock
+  ): ZLogger[String, Unit] =
+    val verbose = Settings.parseInvocation(arguments).exists(_.verbose)
+    logger(Logging.minimumLevel(verbose), writeLog, clock)
+
+  /** Each entry at `minimum` or above as one line (see `Logging.line`), with its cause when it has
+    * one, given to `writeLog`, stamped by `clock`.
+    */
+  def logger(
+      minimum: LogLevel,
+      writeLog: String => Unit,
+      clock: java.time.Clock
+  ): ZLogger[String, Unit] = new ZLogger[String, Unit]:
     def apply(
         trace: Trace,
         fiberId: FiberId,
@@ -38,52 +71,9 @@ object Main extends ZIOAppDefault:
         spans: List[LogSpan],
         annotations: Map[String, String]
     ): Unit =
-      if logLevel >= context.getOrDefault(minimumLevel) then
+      if logLevel >= minimum then
         val details = annotations ++ Option.when(!cause.isEmpty)("cause" -> cause.prettyPrint)
-        val timestamp = context.getOrDefault(logClock).instant()
-        context.getOrDefault(logWriter)(Logging.line(timestamp, logLevel, message(), details))
-
-  // ZIO's own logger writes in its own format; this program's replaces it.
-  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] =
-    Runtime.removeDefaultLoggers >>> Runtime.addLogger(logger)
-
-  def run: ZIO[ZIOAppArgs, Nothing, Unit] =
-    getArgs.flatMap(arguments => cli(arguments.toList, readAll(java.lang.System.in))).flatMap(exit)
-
-  /** Runs the checker and writes its outcome to the console, logging to standard error; the caller
-    * exits with the code.
-    */
-  def cli(arguments: List[String], stdin: Task[String]): UIO[ExitCode] =
-    cliLogging(arguments, stdin, writeStandardError)
-
-  /** As `cli`, with each log line given to `writeLog`. The level comes from the arguments, and
-    * timestamps from ZIO's `Clock`.
-    */
-  def cliLogging(
-      arguments: List[String],
-      stdin: Task[String],
-      writeLog: String => Unit
-  ): UIO[ExitCode] =
-    val verbose = Settings.parseInvocation(arguments).exists(_.verbose)
-    val work =
-      for
-        outcome <- program(arguments, stdin)
-        _ <- Console.print(outcome.stdout).orDie
-        _ <- Console.printError(outcome.stderr).orDie
-      yield ExitCode(outcome.exitCode)
-    logging(verbose, writeLog)(work)
-
-  /** Runs `effect` with `logger` writing to `writeLog` at the level `--verbose` selects, with
-    * timestamps from ZIO's `Clock`.
-    */
-  private[cli] def logging[R, E, A](verbose: Boolean, writeLog: String => Unit)(
-      effect: ZIO[R, E, A]
-  ): ZIO[R, E, A] =
-    Clock.javaClock.flatMap { clock =>
-      minimumLevel.locally(Logging.minimumLevel(verbose)) {
-        logWriter.locally(writeLog)(logClock.locally(clock)(effect))
-      }
-    }
+        writeLog(Logging.line(clock.instant(), logLevel, message(), details))
 
   /** Everything but the console: `stdin` supplies standard input when no file is given. Every run
     * ends with an entry giving its findings and exit status.

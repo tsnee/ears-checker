@@ -59,6 +59,12 @@ object LoggingSuite extends ZIOSpecDefault:
             "2026-11-04T12:00:00Z INFO Read input file=a\\\\nb"
         )
       ,
+      test("a carriage return is written as \\r"):
+        assertTrue(
+          Logging.line(noon, LogLevel.Info, "a\r\nb", Map.empty) ==
+            "2026-11-04T12:00:00Z INFO a\\r\\nb"
+        )
+      ,
       test("other control characters and line separators are written as \\uXXXX"):
         assertTrue(
           Logging.line(
