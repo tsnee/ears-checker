@@ -26,3 +26,7 @@
   references mapped to GitHub, the release workflow (verify, then an approval-gated upload for
   review), and the `v*` tag ruleset; inspected the 0.1.0 POMs and jars and rehearsed signing and
   bundling locally with a throwaway key.
+- 2026-11-03: released 0.1.0 to Maven Central: a rehearsal upload dropped in the Portal, then the
+  real upload published; checked from outside (fetch from Central with an empty cache, the CLI on
+  JDK 17 and 27, a signature against the keyserver key, Scala.js source references at the tag);
+  archived publish-to-maven-central and synced its `release-publishing` spec.
