@@ -33,10 +33,10 @@ the secrets. Nothing in groups 1–4 writes a non-SNAPSHOT version to
 
 ## 5. First release (after the pull request merges)
 
-- [ ] 5.1 The owner pushes tag `v0.1.0` on the merge commit; verify a release run starts, `tag` and `checks` (both `check` and `check-jdk17`) pass, and `publish` waits for approval with no step run
-- [ ] 5.2 Rehearsal: the owner approves; verify the log shows a `USER_MANAGED` upload of version `0.1.0` that passed validation, and the owner sees the deployment in the Portal with all three modules' files and signatures; the owner drops it
-- [ ] 5.3 The owner reruns the `publish` job and approves; verify the upload passes validation again; the owner reviews and clicks Publish
-- [ ] 5.4 Check from outside once Central shows 0.1.0 (up to about 30 minutes): with an empty Coursier cache in the scratchpad, `cs fetch` resolves all three artifacts at `0.1.0` from Maven Central, `cs launch` runs the CLI on Temurin 17 and JDK 27, and one downloaded `.asc` verifies against the key fetched from `keyserver.ubuntu.com` in a throwaway gpg home
+- [x] 5.1 The owner pushes tag `v0.1.0` on the merge commit; verify a release run starts, `tag` and `checks` (both `check` and `check-jdk17`) pass, and `publish` waits for approval with no step run
+- [x] 5.2 Rehearsal: the owner approves; verify the log shows a `USER_MANAGED` upload of version `0.1.0` that passed validation, and the owner sees the deployment in the Portal with all three modules' files and signatures; the owner drops it
+- [x] 5.3 The owner reruns the `publish` job and approves; verify the upload passes validation again; the owner reviews and clicks Publish
+- [x] 5.4 Check from outside once Central shows 0.1.0 (up to about 30 minutes): with an empty Coursier cache in the scratchpad, `cs fetch` resolves all three artifacts at `0.1.0` from Maven Central, `cs launch` runs the CLI on Temurin 17 and JDK 27, and one downloaded `.asc` verifies against the key fetched from `keyserver.ubuntu.com` in a throwaway gpg home
 
 ## Workflow follow-up
 

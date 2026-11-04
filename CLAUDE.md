@@ -2,8 +2,8 @@
 
 Checks requirements against the EARS templates (Easy Approach to Requirements Syntax): a pure
 Scala 3 classifier library for the JVM and Scala.js, and the `ears-check` command-line tool for
-plain text, Markdown, and OpenSpec JSON. CC0-licensed; unreleased (0.1.0 will be the first
-release, with an unstable API).
+plain text, Markdown, and OpenSpec JSON. CC0-licensed; released on Maven Central from 0.1.0
+(`io.github.tsnee`), with an unstable API while the version is 0.x.
 
 This repository was extracted, with its history, from the one it was built in. Its first OpenSpec
 change, `bootstrap-ears-checker` (archived), made it build, test, check its own specs, and
@@ -107,7 +107,7 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
     `io.github.tsnee.ears.cli`; `OwnSpecsSuite` checks this repository's own specs
 - `openspec/` — specs `ears-classifier`, `ears-cli`, `openspec-check` (the OpenSpec gate:
   `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub Actions
-  workflow), and the archived changes that built them
+  workflow), `release-publishing` (the Maven Central release workflow), and the archived changes that built them
 - `scripts/` — `check-openspec` and the Claude Code hook that runs it
 - `.github/` — the CI and release workflows, and Dependabot's weekly updates to their action pins
 - `docs/worklog.md` — dated work log
