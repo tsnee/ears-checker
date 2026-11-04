@@ -129,10 +129,11 @@ actions" requirement covers setup and caching steps, not this.
   run compiled with them; task 1.2 confirms on the real build.
 - [Stale local measurements] → The plugin's data directory
   (`out/<module>/scoverage/data.dest`) is persistent, and each test run
-  adds measurement files beside the last run's (seen in task 1.3).
-  CI starts from a clean checkout, so its numbers are exact; locally,
-  `./mill clean ears.scoverage ears.cli.scoverage` before measuring
-  gives the same.
+  adds measurement files beside the last run's (seen in task 1.3), so
+  local coverage could only rise. The test modules (`CoveredTests` in
+  `build.mill`) delete the measurement files before each run, through
+  the args task that Mill evaluates before the tests (code review
+  finding 2). Running one suite then reports only that suite's coverage.
 - [A minimum blocks an unrelated change] → Lowering a minimum is a
   one-line change in `build.mill`, visible in review.
 

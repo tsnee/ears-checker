@@ -87,6 +87,24 @@ trait ZioSpecs extends ScalaModule with ScalafmtModule with TestModule.ZioTest {
   */
 trait Covered extends ScoverageModule {
   def scoverageVersion = "2.5.2"
+
+  /** Tests that measure only their own run. The plugin's data directory is persistent, so without
+    * this each run's measurement files pile up beside the last and coverage can only rise locally.
+    */
+  trait CoveredTests extends ScoverageTests {
+
+    /** Clears the measurements in the args task, which Mill evaluates before the tests run. */
+    override protected def testTask(args: Task[Seq[String]], globSelectors: Task[Seq[String]]) =
+      super.testTask(
+        Task.Anon {
+          os.list(scoverage.data().path)
+            .filter(_.last.startsWith("scoverage.measurements."))
+            .foreach(os.remove)
+          args()
+        },
+        globSelectors
+      )
+  }
 }
 
 /** Maven coordinates and POM metadata shared by every published module. */
@@ -130,7 +148,7 @@ object ears extends Base with Published with Covered {
   def statementCoverageMin = Some(95.0)
   def branchCoverageMin = Some(90.0)
 
-  object test extends ScoverageTests with ZioSpecs
+  object test extends CoveredTests with ZioSpecs
 
   /** The same library and tests built with Scala.js and run on Node, to keep `ears` portable. */
   object js extends Base with ScalaJSModule with Published {
@@ -176,7 +194,7 @@ object ears extends Base with Published with Covered {
     def statementCoverageMin = Some(96.0)
     def branchCoverageMin = Some(95.0)
 
-    object test extends ScoverageTests with ZioSpecs {
+    object test extends CoveredTests with ZioSpecs {
       // Tests run in a sandbox directory; this lets them find the repo's OpenSpec files.
       def forkEnv = Task {
         super.forkEnv() ++

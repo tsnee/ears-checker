@@ -174,7 +174,7 @@ object MainSuite extends ZIOSpecDefault:
           out <- TestConsole.output
           err <- TestConsole.outputErr
         yield assertTrue(code.code == 2, out.mkString.isEmpty, err.mkString.contains("Usage"))
-    ),
+    ) @@ TestAspect.silent,
     suite("unreadable input")(
       test("standard input that fails: status 2 and the cause on standard error"):
         for

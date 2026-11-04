@@ -28,7 +28,8 @@ with `gh`.
 
 ## 4. Review and pull request
 
-- [ ] 4.1 Run a local `/code-review` in a subagent over the branch's diff against `main`; report every finding to the owner, fix the ones the owner accepts, and record the rest with the owner's reason in the pull request description
+- [x] 4.1 Run a local `/code-review` in a subagent over the branch's diff against `main`; report every finding to the owner, fix the ones the owner accepts, and record the rest with the owner's reason in the pull request description
+  - 2026-11-04: 8 findings. Fixed, as the owner chose: 1 (the report step ignored Mill's exit status, since Actions' default shell has no `pipefail`, and one failure left a broken summary; now every module gets a section and the step fails at the end), 2 (test runs now clear old measurements), 6 (`TestAspect.silent` on the console tests), 8 (a 159-character CLAUDE.md line). Not fixed: 3 (no per-run check for instrumented jars: they come from the plain modules, so only an unusual build change could break it), 4 (logging in `Main`: a separate change), 5 (three Mill calls: the reports run separately for labeled sections), 7 (`close()` in `ZIO.succeed` and `deleteOnExit`: closing an in-memory stream can't fail, and the existing tests use `deleteOnExit`). Running tests through Metals also showed zio-test writing `target/`, which `.gitignore` now lists
 - [ ] 4.2 After the owner pushes and Claude opens the pull request, verify `check` and `check-jdk17` pass, the run's summary page shows both modules' percentages, and record the `check` job's time beside the previous run's (design Risks)
 
 ## Workflow follow-up

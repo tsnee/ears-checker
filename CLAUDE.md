@@ -38,16 +38,17 @@ publish locally on its own.
 - Coverage: `./mill __.test` measures `ears` and `ears.cli` (scoverage, on the JVM only; `ears.js`
   compiles the same sources). `./mill ears.cli.scoverage.consoleReport` (or `htmlReport`) shows
   it, and `./mill ears.cli.scoverage.validateCoverageMinimums` checks the module's
-  `statementCoverageMin` and `branchCoverageMin` in `build.mill`. Measurements pile up across
-  local runs: `./mill clean ears.scoverage ears.cli.scoverage` first for exact numbers.
+  `statementCoverageMin` and `branchCoverageMin` in `build.mill`. Each test run clears the last
+  run's measurements, so a report covers only the latest run (all of it after `__.test`).
 
 Run `./mill __.test` and both modules' `validateCoverageMinimums` before calling any change done,
 and report the coverage. Warnings are errors.
 
 CI (`.github/workflows/ci.yml`) runs the same five checks on every push to `main` and every pull
 request: `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`, the coverage minimums
-(with each module's percentages on the run's summary page), and `scripts/check-openspec`. A second job, `check-jdk17`, runs `scripts/check-openspec` again with
-JDK 17 starting the jar. It publishes nothing.
+(with each module's percentages on the run's summary page), and `scripts/check-openspec`. A
+second job, `check-jdk17`, runs `scripts/check-openspec` again with JDK 17 starting the jar. It
+publishes nothing.
 
 ## Releasing
 
