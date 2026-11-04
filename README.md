@@ -3,7 +3,7 @@
 Checks requirements against the EARS templates: a Scala 3 library for the JVM and Scala.js,
 and the `ears-check` command line for plain text, Markdown, and OpenSpec JSON.
 
-**Unreleased.** 0.1.0 will be the first release, and its API is not yet stable.
+**0.1.0** is on Maven Central. The API is not yet stable and may change in any 0.x release.
 
 ## EARS
 
@@ -25,8 +25,7 @@ A complex requirement combines clauses in the order Where, While, then When or I
 
 `ears-check [--format <string>] [--profile <string>] [--output <string>] [<file>...]`
 
-It runs on JDK 17 or newer. After 0.1.0 is published to Maven Central, run it with
-[Coursier](https://get-coursier.io):
+It runs on JDK 17 or newer. Run it from Maven Central with [Coursier](https://get-coursier.io):
 
 ```sh
 alias ears-check="cs launch --java-opt -XX:+IgnoreUnrecognizedVMOptions --java-opt --sun-misc-unsafe-memory-access=allow io.github.tsnee:ears-checker-cli_3:0.1.0 --"
@@ -71,8 +70,7 @@ $ echo $?
 ## Library
 
 `io.github.tsnee:ears-checker_3` (and `ears-checker_sjs1_3` for Scala.js) classifies one
-sentence. It has no IO and no effect system. It needs Scala 3.10 or newer. After 0.1.0 is
-published to Maven Central, add it with:
+sentence. It has no IO and no effect system. It needs Scala 3.10 or newer. Add it with:
 
 ```scala
 // Mill (the second :: picks the Scala.js build in a Scala.js module)

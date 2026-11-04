@@ -24,8 +24,6 @@ publish locally on its own.
   `scripts/claude-openspec-hook`) runs it after any edit under `openspec/` and reports failures
   back to Claude, including each EARS finding and its fix.
 - At the end of each working session, add a dated line to `docs/worklog.md`.
-- A downstream project runs this checker at a pinned version from `~/.ivy2/local` until 0.1.0
-  is on Maven Central. After a change that should reach it, run `./mill __.publishLocal`.
 
 ## Build and test
 
@@ -107,7 +105,8 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
     `io.github.tsnee.ears.cli`; `OwnSpecsSuite` checks this repository's own specs
 - `openspec/` — specs `ears-classifier`, `ears-cli`, `openspec-check` (the OpenSpec gate:
   `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub Actions
-  workflow), `release-publishing` (the Maven Central release workflow), and the archived changes that built them
+  workflow), `release-publishing` (the Maven Central release workflow), and the archived
+  changes that built them
 - `scripts/` — `check-openspec` and the Claude Code hook that runs it
 - `.github/` — the CI and release workflows, and Dependabot's weekly updates to their action pins
 - `docs/worklog.md` — dated work log
