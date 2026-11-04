@@ -48,6 +48,37 @@ object SettingsSuite extends ZIOSpecDefault:
       test("no file: one settings for standard input"):
         assertTrue(Settings.parse(Nil) == Right(NonEmptyList.one(Settings(None, None, None, None))))
     ),
+    suite("invocation")(
+      test("without --verbose: not verbose, and the same inputs as parse"):
+        val arguments = List("--output", "json", "notes.md")
+        assertTrue(
+          Settings.parseInvocation(arguments).map(_.verbose) == Right(false),
+          Settings.parseInvocation(arguments).map(_.inputs) == Settings.parse(arguments)
+        )
+      ,
+      test("--verbose before the files"):
+        assertTrue(
+          Settings.parseInvocation(List("--verbose", "notes.md")) ==
+            Right(Invocation(verbose = true, NonEmptyList.one(file("notes.md"))))
+        )
+      ,
+      test("--verbose after the files"):
+        assertTrue(
+          Settings.parseInvocation(List("notes.md", "change.json", "--verbose")).map(_.verbose) ==
+            Right(true)
+        )
+      ,
+      test("parse accepts --verbose and returns only the inputs"):
+        assertTrue(
+          Settings.parse(List("--verbose", "notes.md")) == Right(NonEmptyList.one(file("notes.md")))
+        )
+      ,
+      test("the usage text lists --verbose"):
+        assertTrue(
+          Settings.parseInvocation(List("--help")).left.map(_.text.contains("--verbose")) ==
+            Left(true)
+        )
+    ),
     suite("input format")(
       test("Markdown is inferred from a file name ending in .md"):
         assertTrue(file("requirements.md").inputFormat == InputFormat.Markdown)

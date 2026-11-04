@@ -23,7 +23,7 @@ A complex requirement combines clauses in the order Where, While, then When or I
 
 ## Command line
 
-`ears-check [--format <string>] [--profile <string>] [--output <string>] [<file>...]`
+`ears-check [--format <string>] [--profile <string>] [--output <string>] [--verbose] [<file>...]`
 
 It runs on JDK 17 or newer. Run it from Maven Central with [Coursier](https://get-coursier.io):
 
@@ -64,6 +64,12 @@ $ echo $?
   OpenSpec's validator requires). OpenSpec input defaults to `openspec`, other input to
   `classic`.
 - `--output`: `text` (one line per finding) or `json` (one document).
+- `--verbose`: log every step to standard error (the arguments, each input read, and the
+  outcome), not only warnings and errors.
+- Standard output carries only the findings or the usage text. Standard error carries error
+  messages and log entries, one line each: a timestamp, the level, the message, and details as
+  `key=value` pairs. Without `--verbose`, only failures are logged, each with its input, the
+  error's type and message, and the exit status.
 - Exit status: 0 when every requirement passes or `--help` is given, 1 when any finding is
   reported, and 2 when the arguments are invalid or an input can't be read or parsed.
 

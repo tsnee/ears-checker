@@ -6,6 +6,8 @@ import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.LinkedBlockingQueue
+import scala.jdk.CollectionConverters.*
 
 import zio.*
 import zio.test.*
@@ -24,6 +26,23 @@ object MainSuite extends ZIOSpecDefault:
   private val noStdin: Task[String] = ZIO.fail(new IllegalStateException("stdin not expected"))
 
   private def run(arguments: String*): UIO[Outcome] = Main.program(arguments.toList, noStdin)
+
+  /** Runs `cli` with the logger the application would build for these arguments, writing to
+    * `writeLog` instead of standard error.
+    */
+  private def withRunLogger(arguments: List[String], writeLog: String => Unit)(
+      effect: UIO[ExitCode]
+  ): UIO[ExitCode] =
+    Clock.javaClock.flatMap(clock =>
+      ZIO.withLogger(Main.loggerFor(arguments, writeLog, clock))(effect)
+    )
+
+  /** The log lines a run writes. */
+  private def logged(arguments: List[String], stdin: Task[String]): UIO[List[String]] =
+    for
+      lines <- ZIO.succeed(LinkedBlockingQueue[String]())
+      _ <- withRunLogger(arguments, line => lines.put(line))(Main.cli(arguments, stdin))
+    yield lines.asScala.toList
 
   /** A closed stream: every read fails with the JDK's `IOException("Stream closed")`. */
   private val closedStream: UIO[InputStream] = ZIO.succeed {
@@ -174,6 +193,78 @@ object MainSuite extends ZIOSpecDefault:
           out <- TestConsole.output
           err <- TestConsole.outputErr
         yield assertTrue(code.code == 2, out.mkString.isEmpty, err.mkString.contains("Usage"))
+    ) @@ TestAspect.silent,
+    suite("logging")(
+      test("--verbose changes neither the exit code nor the console output"):
+        // The run's console output and exit code, with the logger installed and logs discarded.
+        def console(arguments: List[String], input: String) =
+          for
+            outBefore <- TestConsole.output
+            errBefore <- TestConsole.outputErr
+            code <- withRunLogger(arguments, _ => ())(Main.cli(arguments, ZIO.succeed(input)))
+            out <- TestConsole.output
+            err <- TestConsole.outputErr
+          yield (
+            code.code,
+            out.drop(outBefore.size).mkString,
+            err.drop(errBefore.size).mkString
+          )
+        val passing = "The scheduler shall list upcoming events.\n"
+        val failing = "The scheduler lists events.\n"
+        for
+          quietPass <- console(Nil, passing)
+          verbosePass <- console(List("--verbose"), passing)
+          quietFail <- console(Nil, failing)
+          verboseFail <- console(List("--verbose"), failing)
+        yield assertTrue(
+          quietPass == verbosePass,
+          quietFail == verboseFail,
+          quietFail._2.contains("missing-modal")
+        )
+      ,
+      // These count lines to check the level filter is wired in; LoggingSuite checks the wording.
+      test("by default a passing input logs nothing"):
+        logged(Nil, ZIO.succeed("The scheduler shall list upcoming events.\n"))
+          .map(lines => assertTrue(lines.isEmpty))
+      ,
+      test("by default an unreadable input logs one entry"):
+        for
+          directory <- ZIO.attemptBlocking {
+            val path = Files.createTempDirectory("ears-check")
+            path.toFile.deleteOnExit()
+            path
+          }
+          lines <- logged(List(directory.toString), noStdin)
+        yield assertTrue(lines.size == 1)
+      ,
+      test("the application's logger takes its level from the command line"):
+        def entries(arguments: String*) =
+          for
+            lines <- ZIO.succeed(LinkedBlockingQueue[String]())
+            _ <- ZIO.scoped(
+              (ZLayer.succeed(ZIOAppArgs(Chunk.fromIterable(arguments))) >>>
+                Main.bootstrapWith(line => lines.put(line))).build *>
+                ZIO.logDebug("Starting") *> ZIO.logError("Stopping")
+            )
+          yield lines.asScala.toList.size
+        for
+          quiet <- entries("notes.txt")
+          verbose <- entries("--verbose", "notes.txt")
+        yield assertTrue(quiet == 1, verbose == 2)
+      ,
+      test("an entry's cause is written with it"):
+        for
+          lines <- ZIO.succeed(LinkedBlockingQueue[String]())
+          clock <- Clock.javaClock
+          _ <- ZIO.withLogger(Main.logger(LogLevel.Warning, line => lines.put(line), clock))(
+            ZIO.logErrorCause("Unexpected", Cause.fail("disk full"))
+          )
+          written = lines.asScala.toList
+        yield assertTrue(written.size == 1, written.exists(_.contains("cause=")))
+      ,
+      test("with --verbose a passing input logs several entries"):
+        logged(List("--verbose"), ZIO.succeed("The scheduler shall list upcoming events.\n"))
+          .map(lines => assertTrue(lines.size > 1))
     ) @@ TestAspect.silent,
     suite("unreadable input")(
       test("standard input that fails: status 2 and the cause on standard error"):

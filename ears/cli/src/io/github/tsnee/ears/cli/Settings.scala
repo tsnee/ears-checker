@@ -24,9 +24,12 @@ final case class Settings(
     outputOption: Option[OutputFormat]
 ) derives CanEqual
 
+/** The whole command line: the run-wide options and one settings per input. */
+final case class Invocation(verbose: Boolean, inputs: NonEmptyList[Settings]) derives CanEqual
+
 /** Usage text instead of settings: either the user asked for help, or the arguments were invalid.
   */
-final case class Usage(text: String, requested: Boolean) derives CanEqual
+final case class Usage(text: String, requested: Boolean, reasons: List[String]) derives CanEqual
 
 object Settings:
 
@@ -35,7 +38,14 @@ object Settings:
     * don't parse: decline reports both as `Help`, and only the invalid case carries errors.
     */
   def parse(arguments: List[String]): Either[Usage, NonEmptyList[Settings]] =
-    command.parse(arguments, Map.empty).left.map(help => Usage(help.toString, help.errors.isEmpty))
+    parseInvocation(arguments).map(_.inputs)
+
+  /** As `parse`, with the run-wide options too. */
+  def parseInvocation(arguments: List[String]): Either[Usage, Invocation] =
+    command
+      .parse(arguments, Map.empty)
+      .left
+      .map(help => Usage(help.toString, help.errors.isEmpty, help.errors))
 
   given CanEqual[NonEmptyList[Settings], NonEmptyList[Settings]] = CanEqual.derived
 
@@ -104,8 +114,12 @@ object Settings:
   private val filesOpt: Opts[NonEmptyList[Option[String]]] =
     Opts.arguments[String]("file").map(_.map(Option(_))).withDefault(NonEmptyList.one(None))
 
+  private val verboseOpt =
+    Opts.flag("verbose", "Log every step to standard error, not only warnings and errors.").orFalse
+
   private val command = Command("ears-check", "Check requirements against the EARS templates.")(
-    (filesOpt, formatOpt, profileOpt, outputOpt).mapN { (files, format, profile, output) =>
-      files.map(Settings(_, format, profile, output))
+    (filesOpt, formatOpt, profileOpt, outputOpt, verboseOpt).mapN {
+      (files, format, profile, output, verbose) =>
+        Invocation(verbose, files.map(Settings(_, format, profile, output)))
     }
   )

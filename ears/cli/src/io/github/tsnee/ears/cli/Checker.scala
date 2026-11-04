@@ -8,9 +8,10 @@ import zio.json.*
 import zio.json.ast.Json
 
 /** What the program prints and its exit status: 0 when every requirement passes, 1 when any fails,
-  * 2 when an input can't be read or parsed.
+  * 2 when an input can't be read or parsed. `findings` counts what was reported, for the log.
   */
-final case class Outcome(exitCode: Int, stdout: String, stderr: String) derives CanEqual
+final case class Outcome(exitCode: Int, stdout: String, stderr: String, findings: Int)
+    derives CanEqual
 
 /** One diagnostic for one requirement, with the corrected sentence when it has a fix. */
 final case class Finding(location: Location, requirement: String, diagnostic: Diagnostic)
@@ -35,7 +36,7 @@ object Checker:
     */
   def outcome(found: Either[String, NonEmptyList[(Settings, List[Candidate])]]): Outcome =
     found match
-      case Left(message) => Outcome(2, "", s"$message\n")
+      case Left(message) => Outcome(2, "", s"$message\n", 0)
       case Right(inputs) =>
         val findings = inputs.toList.flatMap { (settings, candidates) =>
           candidates.flatMap(findingsFor(settings.profile, _))
@@ -43,7 +44,12 @@ object Checker:
         val checked = inputs.toList.map((_, candidates) => candidates.size).sum
         val output = inputs.head match
           case (settings, _) => settings.output
-        Outcome(if findings.isEmpty then 0 else 1, report(output, checked, findings), "")
+        Outcome(
+          if findings.isEmpty then 0 else 1,
+          report(output, checked, findings),
+          "",
+          findings.size
+        )
 
   /** The requirements in one input's content, or why the content can't be parsed. */
   def candidates(settings: Settings, content: String): Either[String, List[Candidate]] =
