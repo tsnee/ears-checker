@@ -28,8 +28,8 @@ the secrets. Nothing in groups 1–4 writes a non-SNAPSHOT version to
 
 ## 4. Reviews before merging
 
-- [ ] 4.1 Run `/security-review` and a local `/code-review` in a subagent over the branch's diff against `main`; report every finding to the owner, fix the ones the owner accepts, and record the rest with the owner's reason in the pull request description
-- [ ] 4.2 After the owner pushes the branch and Claude opens the pull request, verify `check` and `check-jdk17` pass and that no release run started (no tag was pushed)
+- [x] 4.1 Run `/security-review` and a local `/code-review` in a subagent over the branch's diff against `main`; report every finding to the owner, fix the ones the owner accepts, and record the rest with the owner's reason in the pull request description
+- [x] 4.2 After the owner pushes the branch and Claude opens the pull request, verify `check` and `check-jdk17` pass and that no release run started (no tag was pushed)
 
 ## 5. First release (after the pull request merges)
 
