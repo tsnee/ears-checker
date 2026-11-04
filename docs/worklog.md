@@ -36,3 +36,5 @@
   per-module minimums (95/90 and 96/95), `Main`'s console wiring behind a testable `cli` seam
   with tests for unreadable input, and CI's coverage summary and check; `ears.cli` went from
   92.98% / 88.00% to 96.80% / 95.92%.
+- 2026-11-04: merged add-coverage-measurement (PR #10; the `check` job takes 2m2s, up from
+  about 1m45s) and archived it, syncing `test-coverage`, `continuous-integration`, and `ears-cli`.
