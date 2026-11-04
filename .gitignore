@@ -12,3 +12,5 @@ out/
 
 # OS
 .DS_Store
+# zio-test reports, written when tests run from the repository root (Metals)
+/target/

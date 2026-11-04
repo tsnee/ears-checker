@@ -35,13 +35,20 @@ publish locally on its own.
 - Mill 1.3.1 (pinned in the `build.mill` header), Scala 3.10.0, JDK 27 (Mill fetches it; the
   header pins JVM index 0.0.5 because Mill 1.3.1's default index predates JDK 27)
 - `ears.js` tests run on Node.
+- Coverage: `./mill __.test` measures `ears` and `ears.cli` (scoverage, on the JVM only; `ears.js`
+  compiles the same sources). `./mill ears.cli.scoverage.consoleReport` (or `htmlReport`) shows
+  it, and `./mill ears.cli.scoverage.validateCoverageMinimums` checks the module's
+  `statementCoverageMin` and `branchCoverageMin` in `build.mill`. Each test run clears the last
+  run's measurements, so a report covers only the latest run (all of it after `__.test`).
 
-Run `./mill __.test` before calling any change done. Warnings are errors.
+Run `./mill __.test` and both modules' `validateCoverageMinimums` before calling any change done,
+and report the coverage. Warnings are errors.
 
-CI (`.github/workflows/ci.yml`) runs the same four checks on every push to `main` and every pull
-request: `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`, and
-`scripts/check-openspec`. A second job, `check-jdk17`, runs `scripts/check-openspec` again with
-JDK 17 starting the jar. It publishes nothing.
+CI (`.github/workflows/ci.yml`) runs the same five checks on every push to `main` and every pull
+request: `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`, the coverage minimums
+(with each module's percentages on the run's summary page), and `scripts/check-openspec`. A
+second job, `check-jdk17`, runs `scripts/check-openspec` again with JDK 17 starting the jar. It
+publishes nothing.
 
 ## Releasing
 
@@ -105,8 +112,8 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
     `io.github.tsnee.ears.cli`; `OwnSpecsSuite` checks this repository's own specs
 - `openspec/` — specs `ears-classifier`, `ears-cli`, `openspec-check` (the OpenSpec gate:
   `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub Actions
-  workflow), `release-publishing` (the Maven Central release workflow), and the archived
-  changes that built them
+  workflow), `release-publishing` (the Maven Central release workflow), `test-coverage` (the
+  coverage minimums), and the archived changes that built them
 - `scripts/` — `check-openspec` and the Claude Code hook that runs it
 - `.github/` — the CI and release workflows, and Dependabot's weekly updates to their action pins
 - `docs/worklog.md` — dated work log

@@ -32,3 +32,7 @@
   archived publish-to-maven-central and synced its `release-publishing` spec.
 - 2026-11-03: the downstream project moved to 0.1.0 from Maven Central; dropped CLAUDE.md's
   `publishLocal` note and the README's "after 0.1.0 is published" wording.
+- 2026-11-04: add-coverage-measurement (implementation): scoverage on `ears` and `ears.cli` with
+  per-module minimums (95/90 and 96/95), `Main`'s console wiring behind a testable `cli` seam
+  with tests for unreadable input, and CI's coverage summary and check; `ears.cli` went from
+  92.98% / 88.00% to 96.80% / 95.92%.
