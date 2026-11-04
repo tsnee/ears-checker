@@ -31,7 +31,7 @@ object MainSuite extends ZIOSpecDefault:
   private def logged(arguments: List[String], stdin: Task[String]): UIO[List[String]] =
     for
       lines <- ZIO.succeed(LinkedBlockingQueue[String]())
-      _ <- Main.cliLogging(arguments, stdin, line => lines.put(line))
+      _ <- ZIO.withLogger(Main.logger)(Main.cliLogging(arguments, stdin, line => lines.put(line)))
     yield lines.asScala.toList
 
   /** A closed stream: every read fails with the JDK's `IOException("Stream closed")`. */
@@ -185,15 +185,34 @@ object MainSuite extends ZIOSpecDefault:
         yield assertTrue(code.code == 2, out.mkString.isEmpty, err.mkString.contains("Usage"))
     ) @@ TestAspect.silent,
     suite("logging")(
-      test("--verbose changes neither the outcome nor standard output"):
-        val passing = ZIO.succeed("The scheduler shall list upcoming events.\n")
-        val failing = ZIO.succeed("The scheduler lists events.\n")
+      test("--verbose changes neither the exit code nor the console output"):
+        // The run's console output and exit code, with the logger installed and logs discarded.
+        def console(arguments: List[String], input: String) =
+          for
+            outBefore <- TestConsole.output
+            errBefore <- TestConsole.outputErr
+            code <- ZIO.withLogger(Main.logger)(
+              Main.cliLogging(arguments, ZIO.succeed(input), _ => ())
+            )
+            out <- TestConsole.output
+            err <- TestConsole.outputErr
+          yield (
+            code.code,
+            out.drop(outBefore.size).mkString,
+            err.drop(errBefore.size).mkString
+          )
+        val passing = "The scheduler shall list upcoming events.\n"
+        val failing = "The scheduler lists events.\n"
         for
-          quietPass <- Main.program(Nil, passing)
-          verbosePass <- Main.program(List("--verbose"), passing)
-          quietFail <- Main.program(Nil, failing)
-          verboseFail <- Main.program(List("--verbose"), failing)
-        yield assertTrue(quietPass == verbosePass, quietFail == verboseFail)
+          quietPass <- console(Nil, passing)
+          verbosePass <- console(List("--verbose"), passing)
+          quietFail <- console(Nil, failing)
+          verboseFail <- console(List("--verbose"), failing)
+        yield assertTrue(
+          quietPass == verbosePass,
+          quietFail == verboseFail,
+          quietFail._2.contains("missing-modal")
+        )
       ,
       // These count lines to check the level filter is wired in; LoggingSuite checks the wording.
       test("by default a passing input logs nothing"):
@@ -209,6 +228,17 @@ object MainSuite extends ZIOSpecDefault:
           }
           lines <- logged(List(directory.toString), noStdin)
         yield assertTrue(lines.size == 1)
+      ,
+      test("an entry's cause is written with it"):
+        for
+          lines <- ZIO.succeed(LinkedBlockingQueue[String]())
+          _ <- ZIO.withLogger(Main.logger)(
+            Main.logging(verbose = false, line => lines.put(line))(
+              ZIO.logErrorCause("Unexpected", Cause.fail("disk full"))
+            )
+          )
+          written = lines.asScala.toList
+        yield assertTrue(written.size == 1, written.exists(_.contains("cause=")))
       ,
       test("with --verbose a passing input logs several entries"):
         logged(List("--verbose"), ZIO.succeed("The scheduler shall list upcoming events.\n"))

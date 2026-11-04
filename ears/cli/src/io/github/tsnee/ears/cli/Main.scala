@@ -4,7 +4,6 @@ import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.time.Instant
 
 import cats.data.NonEmptyList
 import zio.*
@@ -16,8 +15,37 @@ import zio.*
   */
 object Main extends ZIOAppDefault:
 
-  // ZIO's own logger writes in its own format; cliLogging installs this program's instead.
-  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = Runtime.removeDefaultLoggers
+  // What `logger` does with an entry, set per run by cliLogging. Outside a run (a defect while
+  // starting or exiting, say) it writes warnings and errors to standard error with the system clock.
+  private val minimumLevel: FiberRef[LogLevel] =
+    Unsafe.unsafe(unsafe => FiberRef.unsafe.make(LogLevel.Warning)(using unsafe))
+  private val logWriter: FiberRef[String => Unit] =
+    Unsafe.unsafe(unsafe => FiberRef.unsafe.make(writeStandardError)(using unsafe))
+  private val logClock: FiberRef[java.time.Clock] =
+    Unsafe.unsafe(unsafe => FiberRef.unsafe.make(java.time.Clock.systemUTC())(using unsafe))
+
+  /** The program's only logger: each entry at the fiber's minimum level or above, as one line (see
+    * `Logging.line`), with its cause when it has one.
+    */
+  val logger: ZLogger[String, Unit] = new ZLogger[String, Unit]:
+    def apply(
+        trace: Trace,
+        fiberId: FiberId,
+        logLevel: LogLevel,
+        message: () => String,
+        cause: Cause[Any],
+        context: FiberRefs,
+        spans: List[LogSpan],
+        annotations: Map[String, String]
+    ): Unit =
+      if logLevel >= context.getOrDefault(minimumLevel) then
+        val details = annotations ++ Option.when(!cause.isEmpty)("cause" -> cause.prettyPrint)
+        val timestamp = context.getOrDefault(logClock).instant()
+        context.getOrDefault(logWriter)(Logging.line(timestamp, logLevel, message(), details))
+
+  // ZIO's own logger writes in its own format; this program's replaces it.
+  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] =
+    Runtime.removeDefaultLoggers >>> Runtime.addLogger(logger)
 
   def run: ZIO[ZIOAppArgs, Nothing, Unit] =
     getArgs.flatMap(arguments => cli(arguments.toList, readAll(java.lang.System.in))).flatMap(exit)
@@ -26,29 +54,53 @@ object Main extends ZIOAppDefault:
     * exits with the code.
     */
   def cli(arguments: List[String], stdin: Task[String]): UIO[ExitCode] =
-    cliLogging(arguments, stdin, line => java.lang.System.err.println(line))
+    cliLogging(arguments, stdin, writeStandardError)
 
-  /** As `cli`, with each log line given to `writeLog`. */
+  /** As `cli`, with each log line given to `writeLog`. The level comes from the arguments, and
+    * timestamps from ZIO's `Clock`.
+    */
   def cliLogging(
       arguments: List[String],
       stdin: Task[String],
       writeLog: String => Unit
   ): UIO[ExitCode] =
     val verbose = Settings.parseInvocation(arguments).exists(_.verbose)
-    ZIO.withLogger(logger(Logging.minimumLevel(verbose), writeLog)) {
+    val work =
       for
         outcome <- program(arguments, stdin)
         _ <- Console.print(outcome.stdout).orDie
         _ <- Console.printError(outcome.stderr).orDie
       yield ExitCode(outcome.exitCode)
+    logging(verbose, writeLog)(work)
+
+  /** Runs `effect` with `logger` writing to `writeLog` at the level `--verbose` selects, with
+    * timestamps from ZIO's `Clock`.
+    */
+  private[cli] def logging[R, E, A](verbose: Boolean, writeLog: String => Unit)(
+      effect: ZIO[R, E, A]
+  ): ZIO[R, E, A] =
+    Clock.javaClock.flatMap { clock =>
+      minimumLevel.locally(Logging.minimumLevel(verbose)) {
+        logWriter.locally(writeLog)(logClock.locally(clock)(effect))
+      }
     }
 
-  /** Everything but the console: `stdin` supplies standard input when no file is given. */
+  /** Everything but the console: `stdin` supplies standard input when no file is given. Every run
+    * ends with an entry giving its findings and exit status.
+    */
   def program(arguments: List[String], stdin: Task[String]): UIO[Outcome] =
-    val argumentText = arguments.mkString(" ")
+    check(arguments, stdin).tap(outcome =>
+      annotated(Map("findings" -> outcome.findings.toString, "exit" -> outcome.exitCode.toString))(
+        ZIO.logInfo("Finished")
+      )
+    )
+
+  private def writeStandardError(line: String): Unit = java.lang.System.err.println(line)
+
+  private def check(arguments: List[String], stdin: Task[String]): UIO[Outcome] =
+    val argumentText = Logging.argumentsDetail(arguments)
     Settings.parseInvocation(arguments) match
-      case Left(Usage(text, true, _)) =>
-        ZIO.logDebug("Help requested").as(Outcome(0, s"$text\n", "", 0))
+      case Left(Usage(text, true, _))        => ZIO.succeed(Outcome(0, s"$text\n", "", 0))
       case Left(Usage(text, false, reasons)) =>
         annotated(
           Map("arguments" -> argumentText, "reasons" -> reasons.mkString("; "), "exit" -> "2")
@@ -68,16 +120,7 @@ object Main extends ZIOAppDefault:
             "inputs" -> all.size.toString,
             "verbose" -> verbose.toString
           )
-        for
-          _ <- annotated(details)(ZIO.logDebug("Arguments"))
-          found <- loaded.either
-          outcome = Checker.outcome(found)
-          _ <- ZIO.whenDiscard(found.isRight)(
-            annotated(
-              Map("findings" -> outcome.findings.toString, "exit" -> outcome.exitCode.toString)
-            )(ZIO.logInfo("Finished"))
-          )
-        yield outcome
+        annotated(details)(ZIO.logDebug("Arguments")) *> loaded.either.map(Checker.outcome)
 
   /** One input read and split into requirements, with its details on every entry it logs. */
   private def load(
@@ -125,22 +168,6 @@ object Main extends ZIOAppDefault:
 
   private def annotated[R, E, A](details: Map[String, String])(effect: ZIO[R, E, A]): ZIO[R, E, A] =
     ZIO.logAnnotate(details.map(LogAnnotation(_, _)).toSet)(effect)
-
-  /** Writes each entry at `minimum` or above as one line (see `Logging.line`). */
-  private def logger(minimum: LogLevel, writeLog: String => Unit): ZLogger[String, Unit] =
-    new ZLogger[String, Unit]:
-      def apply(
-          trace: Trace,
-          fiberId: FiberId,
-          logLevel: LogLevel,
-          message: () => String,
-          cause: Cause[Any],
-          context: FiberRefs,
-          spans: List[LogSpan],
-          annotations: Map[String, String]
-      ): Unit =
-        if logLevel >= minimum then
-          writeLog(Logging.line(Instant.now(), logLevel, message(), annotations))
 
   /** Reads a whole stream as UTF-8. */
   def readAll(in: InputStream): Task[String] =

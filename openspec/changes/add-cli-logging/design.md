@@ -61,25 +61,33 @@ calls in tests, which the project's rules say to avoid.
 - `minimumLevel(verbose: Boolean): LogLevel` — `Debug` or `Warning`.
 - `line(timestamp, level, message, annotations): String` — one line:
   `2026-11-04T12:00:00Z ERROR Cannot read input file=notes format=text …`.
-  Line breaks in the message or a value become `\n`; a value with a
-  space or `=` is quoted.
+  Line breaks in the message or a value become `\n`, and every other
+  control character and U+2028/U+2029 become `\uXXXX` (code review
+  finding 11); a value with a space, `=`, or `"` is quoted.
 - `inputDetails(settings): Map[String, String]` — `file`, `format`,
   `profile`, `output` for one input (`<stdin>` for standard input).
+- `argumentsDetail(arguments): String` — the arguments as a JSON array,
+  so `"my notes.md"` and `my notes.md` log differently (finding 5).
 
-`Main` wires it:
+`Main` wires it (revised after the code review, findings 3 and 9):
 
-- `bootstrap = Runtime.removeDefaultLoggers`, so ZIO's own logger
-  never writes.
-- `cli` parses the `Invocation` first, then runs everything else
-  under `ZIO.withLoggerScoped` with a `ZLogger` that filters by
-  `minimumLevel` and writes `Logging.line(...)` with
-  `java.lang.System.err.println` (unbuffered and safe from any fiber,
-  unlike interleaving with `Console`). The write is a seam:
-  `cliLogging(arguments, stdin, writeLog: String => Unit)` does the
-  work, and `cli(arguments, stdin)` is `cliLogging` with
-  `System.err.println`, so `cli`'s existing tests keep their calls and
-  new tests pass a fake writer. The logger's filter and line come from
-  `Logging` and are tested there.
+- One `ZLogger`, `Main.logger`, installed by `bootstrap` after
+  `Runtime.removeDefaultLoggers`. It reads its minimum level, its writer,
+  and a `java.time.Clock` from three `FiberRef`s, and adds a `cause`
+  detail (`Cause.prettyPrint`) when an entry has one (finding 4).
+- The `FiberRef`s default to warnings, `System.err.println`, and the
+  system clock, so a defect logged outside a run (while starting or
+  exiting) still reaches standard error in this format.
+- `cliLogging(arguments, stdin, writeLog)` sets them for the run with
+  `FiberRef.locally`: the level from `--verbose`, `writeLog`, and
+  ZIO's `Clock.javaClock`, so a test's `TestClock` sets the
+  timestamps. `cli(arguments, stdin)` is `cliLogging` with
+  `System.err.println`, so `cli`'s existing tests keep their calls.
+  Tests don't run `bootstrap`, so they install `Main.logger` with
+  `ZIO.withLogger` where they look at log lines.
+- ZIO keeps its logger set in a `private[zio]` `FiberRef`, so a run
+  can't replace the logger; one logger configured per fiber avoids
+  both a second logger and duplicate lines.
 - Details go on entries as ZIO log annotations
   (`ZIO.logAnnotate`), so the line shows them as `key=value`.
 
@@ -101,9 +109,12 @@ format.
 | Before reading an input | debug | `Reading input` with `inputDetails` |
 | Input read | info | `Read input` with `inputDetails`, `characters`, `requirements` |
 | Input unreadable or unparsable | error | `Cannot read input` (or `Cannot parse input`) with `inputDetails`, `error` (the exception's class or "parse"), `reason`, `exit=2` |
-| Run ended | info | `Finished` with `findings`, `exit` |
+| Run ended, however it ended | info | `Finished` with `findings`, `exit` |
 
-`--help` is a successful run: it logs only at debug. Findings are
+`Finished` closes every run, failures and `--help` included (finding
+1). `--help` logs nothing else: decline accepts it only on its own, so
+`--verbose` can't accompany it (the first draft's `Help requested`
+debug entry could never be written; finding 7). Findings are
 the program's result, not a failure, so a failing requirement is not
 a warning. Nothing logs at warn yet; the level exists for recoverable
 problems later.
@@ -121,9 +132,11 @@ already returns its parse error as a value, which `program` logs with
 - `SettingsSuite` (new cases only): `parseInvocation` with and
   without `--verbose`, `--verbose` after the files, and `parse`
   unchanged with `--verbose` present.
-- `MainSuite` (new cases only): `--verbose` changes neither standard
-  output nor the outcome; with the logger's writer faked, a default run
-  of a passing input writes nothing and a directory writes one line.
+- `MainSuite` (new cases only): `--verbose` changes neither the exit
+  code nor the console output (through `cliLogging` and `TestConsole`;
+  finding 6); with the logger's writer faked, a default run of a
+  passing input writes nothing, a directory writes one line, and an
+  entry with a cause writes it.
   That last pair checks the filter's wiring, not the wording, which
   stays with `LoggingSuite`.
 - The coverage minimums (`ears.cli` 96 / 95) must still pass.
@@ -135,11 +148,16 @@ already returns its parse error as a value, which `program` logs with
   it runs; the console writes the outcome at the end); the message
   itself is unchanged. `scripts/check-openspec` sees it only when an input
   fails, which already fails the check.
-- [Logging from a scoped logger misses entries logged outside `cli`]
-  → `run` logs nothing itself; `bootstrap` removes the default logger
-  so no stray entry appears in another format.
+- [Entries logged outside a run] → The logger is installed for the
+  whole application and defaults to warnings on standard error, so a
+  defect ZIO reports while starting or exiting still appears.
 - [Annotations hold user input] → Values are escaped, so a file name
-  with a line break can't forge a second entry.
+  with a line break or a terminal escape sequence can't forge a second
+  entry or change the terminal.
+- [The default omits info and debug] → The owner's global rule asks
+  for every level always; the owner chose warnings by default for this
+  command line (2026-11-04), and the code review's finding 2 records
+  the conflict.
 
 ## Migration Plan
 

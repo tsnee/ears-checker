@@ -59,11 +59,35 @@ object LoggingSuite extends ZIOSpecDefault:
             "2026-11-04T12:00:00Z INFO Read input file=a\\\\nb"
         )
       ,
-      test("whatever the details hold, an entry is one line"):
+      test("other control characters and line separators are written as \\uXXXX"):
+        assertTrue(
+          Logging.line(
+            noon,
+            LogLevel.Info,
+            "a\u001b[31mb",
+            Map("v" -> s"x\ty${0x2028.toChar}z\u0085")
+          ) ==
+            "2026-11-04T12:00:00Z INFO a\\u001b[31mb v=x\\u0009y\\u2028z\\u0085"
+        )
+      ,
+      test("whatever the details hold, an entry is one line of printable characters"):
         check(Gen.string, Gen.string) { (message, value) =>
           val written = Logging.line(noon, LogLevel.Error, message, Map("key" -> value))
-          assertTrue(!written.contains('\n'), !written.contains('\r'))
+          assertTrue(
+            !written.exists(Character.isISOControl),
+            !written.exists(c => c.toInt == 0x2028 || c.toInt == 0x2029)
+          )
         }
+    ),
+    suite("arguments")(
+      test("a JSON array keeps each argument whole"):
+        assertTrue(
+          Logging.argumentsDetail(List("my notes.md")) == """["my notes.md"]""",
+          Logging.argumentsDetail(List("my", "notes.md")) == """["my","notes.md"]"""
+        )
+      ,
+      test("no arguments: an empty array"):
+        assertTrue(Logging.argumentsDetail(Nil) == "[]")
     ),
     suite("input details")(
       test("a file: its name, format, profile, and output"):

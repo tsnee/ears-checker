@@ -4,6 +4,7 @@ import java.time.Instant
 
 import io.github.tsnee.ears.Profile
 import zio.LogLevel
+import zio.json.*
 
 /** How the command line logs, as pure functions: which levels a run shows and how an entry is
   * written. `Main` installs a logger built from these; nothing here does IO.
@@ -15,7 +16,8 @@ private[cli] object Logging:
     if verbose then LogLevel.Debug else LogLevel.Warning
 
   /** One entry as one line: timestamp, level, message, and the details as `key=value` pairs sorted
-    * by key. Backslashes and line breaks are escaped, so no entry can span or forge another line; a
+    * by key. Backslashes, line breaks, and every other control or line-separator character are
+    * escaped, so no entry can span or forge another line or send a terminal escape sequence; a
     * value that is empty or holds a space, `=`, or `"` is quoted.
     */
   def line(
@@ -36,8 +38,22 @@ private[cli] object Logging:
       "output" -> outputName(settings.output)
     )
 
-  private def escape(text: String): String =
-    text.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r")
+  /** The command line exactly, as a JSON array, so arguments with spaces keep their boundaries. */
+  def argumentsDetail(arguments: List[String]): String = arguments.toJson
+
+  private def escape(text: String): String = text.flatMap {
+    case '\\'                           => "\\\\"
+    case '\n'                           => "\\n"
+    case '\r'                           => "\\r"
+    case c if separatesLines(c)         => f"\\u${c.toInt}%04x"
+    case c if Character.isISOControl(c) => f"\\u${c.toInt}%04x"
+    case c                              => c.toString
+  }
+
+  /** Unicode's line and paragraph separators, which some tools treat as line breaks. (U+0085, the
+    * other one, is an ISO control character.)
+    */
+  private def separatesLines(c: Char): Boolean = c.toInt == 0x2028 || c.toInt == 0x2029
 
   private def quote(value: String): String =
     val escaped = escape(value)
