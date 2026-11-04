@@ -45,6 +45,22 @@ request: `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`, and
 `scripts/check-openspec`. A second job, `check-jdk17`, runs `scripts/check-openspec` again with
 JDK 17 starting the jar. It publishes nothing.
 
+## Releasing
+
+Releases go to Maven Central from `.github/workflows/release.yml`; the version comes from the
+tag (`EARS_RELEASE_VERSION`), and every other build is `0.1.0-SNAPSHOT`.
+
+1. Merge everything for the release to `main`; CI must pass.
+2. The owner pushes a tag `v<major>.<minor>.<patch>` on `main` (only admins may create `v*` tags).
+3. The `tag` job checks the tag is a version on `main`, and `checks` runs the whole CI workflow
+   (`ci.yml`) on it; then `publish` waits for the owner's approval (the `release` environment,
+   which holds the Sonatype token and signing key). It builds with no secrets, then signs and
+   uploads.
+4. `publish` uploads to the Central Portal for review (`--shouldRelease false`); the owner
+   inspects the deployment there and clicks Publish, or Drop to discard it.
+
+Published versions can't be deleted or reused; fix a bad release with a new patch version.
+
 ## Code style
 
 Strongly typed functional Scala 3, written for a reader who knows Haskell and PureScript well.
@@ -93,11 +109,11 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
   `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub Actions
   workflow), and the archived changes that built them
 - `scripts/` — `check-openspec` and the Claude Code hook that runs it
-- `.github/` — the CI workflow and Dependabot's weekly updates to its action pins
+- `.github/` — the CI and release workflows, and Dependabot's weekly updates to their action pins
 - `docs/worklog.md` — dated work log
 
 ## Likely next steps
 
-Packaging, each as its own OpenSpec change: Maven Central libraries (JVM and Scala.js); the CLI
-as a Coursier app and GraalVM binaries; an npm package; Scala Native once Markdown input no longer
+Packaging, each as its own OpenSpec change, building on the Maven Central releases: the CLI as a
+Coursier app and GraalVM binaries; an npm package; Scala Native once Markdown input no longer
 needs commonmark-java.

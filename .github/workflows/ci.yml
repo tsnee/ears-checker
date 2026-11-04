@@ -1,5 +1,5 @@
-# Format, compile, test, and the OpenSpec check, on every push to main and every pull request.
-# Publishes nothing; release publishing belongs to the packaging changes.
+# Format, compile, test, and the OpenSpec check, on every push to main and every pull request,
+# and on a release tag when release.yml calls it before publishing. Publishes nothing itself.
 name: CI
 
 on:
@@ -7,6 +7,7 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened]
+  workflow_call:
 
 # A newer commit on a pull request cancels its older run; every commit on main keeps its own run.
 concurrency:

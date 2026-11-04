@@ -81,7 +81,20 @@ trait ZioSpecs extends ScalaModule with ScalafmtModule with TestModule.ZioTest {
 
 /** Maven coordinates and POM metadata shared by every published module. */
 trait Published extends PublishModule {
-  def publishVersion = "0.1.0-SNAPSHOT"
+
+  /** The release workflow sets EARS_RELEASE_VERSION from the tag; every other build is a snapshot.
+    * An input, so the environment is read on every run and a cached version can't carry over.
+    * Anything but <major>.<minor>.<patch> fails, so a stray value can't publish a release version
+    * (to ~/.ivy2/local, say); an empty value counts as unset.
+    */
+  def publishVersion = Task.Input {
+    Task.env.get("EARS_RELEASE_VERSION").filter(_.nonEmpty) match {
+      case None => "0.1.0-SNAPSHOT"
+      case Some(v) if v.matches("""\d+\.\d+\.\d+""") => v
+      case Some(v) =>
+        Task.fail(s"EARS_RELEASE_VERSION must be <major>.<minor>.<patch>, not '$v'")
+    }
+  }
 
   /** The POM's one-line description of this artifact. */
   def pomDescription: String
@@ -114,6 +127,19 @@ object ears extends Base with Published {
     def pomDescription = ears.pomDescription
     def sources = ears.sources
     def mvnDeps = ears.mvnDeps
+
+    /** Scala.js IR records each source file's URI for source maps. A release points them at the
+      * tagged sources on GitHub; any other build makes them relative to the repository root, so
+      * no machine's paths end up in a jar.
+      */
+    def scalacOptions = Task {
+      val root = mill.api.BuildCtx.workspaceRoot.toNIO.toUri.toString
+      val target = publishVersion() match {
+        case v if v.endsWith("-SNAPSHOT") => ""
+        case v => s"->https://raw.githubusercontent.com/tsnee/ears-checker/v$v/"
+      }
+      super.scalacOptions() :+ s"-scalajs-mapSourceURI:$root$target"
+    }
 
     object test extends ScalaJSTests with ZioSpecs {
       def sources = ears.test.sources

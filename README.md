@@ -25,8 +25,15 @@ A complex requirement combines clauses in the order Where, While, then When or I
 
 `ears-check [--format <string>] [--profile <string>] [--output <string>] [<file>...]`
 
-The checker isn't packaged yet. Build it from this repository and define `ears-check` as an
-alias for the jar. It runs on JDK 17 or newer. On JDK 23 and newer,
+It runs on JDK 17 or newer. After 0.1.0 is published to Maven Central, run it with
+[Coursier](https://get-coursier.io):
+
+```sh
+alias ears-check="cs launch --java-opt -XX:+IgnoreUnrecognizedVMOptions --java-opt --sun-misc-unsafe-memory-access=allow io.github.tsnee:ears-checker-cli_3:0.1.0 --"
+```
+
+Or build it from this repository and define `ears-check` as an alias for the jar. On JDK 23 and
+newer,
 `--sun-misc-unsafe-memory-access=allow` stops the JVM's warnings about the Scala runtime's use of
 `sun.misc.Unsafe`; older JDKs don't know that flag, and `-XX:+IgnoreUnrecognizedVMOptions` makes
 them skip it, so the same alias works on any of them.
@@ -64,7 +71,26 @@ $ echo $?
 ## Library
 
 `io.github.tsnee:ears-checker_3` (and `ears-checker_sjs1_3` for Scala.js) classifies one
-sentence. It has no IO and no effect system.
+sentence. It has no IO and no effect system. It needs Scala 3.10 or newer. After 0.1.0 is
+published to Maven Central, add it with:
+
+```scala
+// Mill (the second :: picks the Scala.js build in a Scala.js module)
+mvn"io.github.tsnee::ears-checker::0.1.0"
+// sbt (%%% instead of %% for Scala.js)
+libraryDependencies += "io.github.tsnee" %% "ears-checker" % "0.1.0"
+```
+
+```xml
+<!-- Maven -->
+<dependency>
+  <groupId>io.github.tsnee</groupId>
+  <artifactId>ears-checker_3</artifactId>
+  <version>0.1.0</version>
+</dependency>
+```
+
+0.x versions may change the API in any minor release.
 
 ```scala
 import cats.data.NonEmptyList

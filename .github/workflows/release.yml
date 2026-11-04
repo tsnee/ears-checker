@@ -1,0 +1,84 @@
+# Releases a version to Maven Central when the owner pushes a tag v<major>.<minor>.<patch>.
+# tag and checks (the whole CI workflow) run with no secrets; publish then waits for the owner's
+# approval (the release environment) and uploads to the Central Portal for review. Nothing is
+# published until the owner clicks Publish there. See openspec/specs/release-publishing.
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+# One release run per tag at a time; a second push of the same tag waits rather than cancelling.
+# The group name must differ from ci.yml's when it's called from here: that one evaluates to
+# "Release-<ref>", and group names are compared without regard to case.
+concurrency:
+  group: maven-central-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Full history, so the tagged commit can be checked against main.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The format check repeats the trigger's tag filter on purpose: if the filter is ever
+      # widened, a tag that isn't a plain version still can't reach publish.
+      - name: Check the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! printf '%s\n' "$TAG" | grep -E -x -q 'v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::Tag $TAG is not v<major>.<minor>.<patch>"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $TAG points at $GITHUB_SHA, which is not on main"
+            exit 1
+          fi
+          echo "Tag $TAG is on main at $GITHUB_SHA"
+
+  # Every CI check (check and check-jdk17) on the tagged commit, from the same workflow file.
+  checks:
+    needs: tag
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: [tag, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Requires the owner's approval, and only v* tags may use it; it holds the publishing secrets.
+    environment: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set the release version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "EARS_RELEASE_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
+      # Compile and package everything here, with no secrets in the environment, so build code
+      # (compiler plugins, dependencies, scaladoc) never runs next to the signing key.
+      - name: Build the release artifacts
+        run: ./mill __.publishArtifacts
+
+      # Only signs and uploads: Mill reuses the artifacts the step above built. --shouldRelease
+      # false uploads for review (USER_MANAGED); Mill's default would publish at once.
+      - name: Upload to the Central Portal for review
+        env:
+          MILL_SONATYPE_USERNAME: ${{ secrets.MILL_SONATYPE_USERNAME }}
+          MILL_SONATYPE_PASSWORD: ${{ secrets.MILL_SONATYPE_PASSWORD }}
+          MILL_PGP_SECRET_BASE64: ${{ secrets.MILL_PGP_SECRET_BASE64 }}
+          MILL_PGP_PASSPHRASE: ${{ secrets.MILL_PGP_PASSPHRASE }}
+        run: |
+          echo "Uploading version $EARS_RELEASE_VERSION for review"
+          ./mill mill.javalib.SonatypeCentralPublishModule/publishAll --shouldRelease false
