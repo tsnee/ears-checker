@@ -41,3 +41,6 @@
 - 2026-11-04: add-cli-logging (implementation): `ears-check` logs to standard error through ZIO's
   logging with its own one-line format, warnings and errors by default and every level with
   `--verbose`; a pure `Logging` object chooses the level and formats entries.
+- 2026-11-04: add-cli-logging reviewed (8 of 11 findings fixed; the logger is now built in
+  `bootstrap` from the arguments and ZIO's Clock instead of through FiberRefs) and archived in
+  the same PR (#12), syncing 8 requirements into `ears-cli`.
