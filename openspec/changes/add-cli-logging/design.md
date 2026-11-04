@@ -131,8 +131,9 @@ already returns its parse error as a value, which `program` logs with
 ## Risks / Trade-offs
 
 - [Error entries duplicate the user message] → On a failure, standard
-  error gains one line after the existing message; the message itself
-  is unchanged. `scripts/check-openspec` sees it only when an input
+  error gains one line before the existing message (the program logs as
+  it runs; the console writes the outcome at the end); the message
+  itself is unchanged. `scripts/check-openspec` sees it only when an input
   fails, which already fails the check.
 - [Logging from a scoped logger misses entries logged outside `cli`]
   → `run` logs nothing itself; `bootstrap` removes the default logger

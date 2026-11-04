@@ -6,6 +6,8 @@ import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.LinkedBlockingQueue
+import scala.jdk.CollectionConverters.*
 
 import zio.*
 import zio.test.*
@@ -24,6 +26,13 @@ object MainSuite extends ZIOSpecDefault:
   private val noStdin: Task[String] = ZIO.fail(new IllegalStateException("stdin not expected"))
 
   private def run(arguments: String*): UIO[Outcome] = Main.program(arguments.toList, noStdin)
+
+  /** The log lines a run writes, through a fake writer instead of standard error. */
+  private def logged(arguments: List[String], stdin: Task[String]): UIO[List[String]] =
+    for
+      lines <- ZIO.succeed(LinkedBlockingQueue[String]())
+      _ <- Main.cliLogging(arguments, stdin, line => lines.put(line))
+    yield lines.asScala.toList
 
   /** A closed stream: every read fails with the JDK's `IOException("Stream closed")`. */
   private val closedStream: UIO[InputStream] = ZIO.succeed {
@@ -174,6 +183,36 @@ object MainSuite extends ZIOSpecDefault:
           out <- TestConsole.output
           err <- TestConsole.outputErr
         yield assertTrue(code.code == 2, out.mkString.isEmpty, err.mkString.contains("Usage"))
+    ) @@ TestAspect.silent,
+    suite("logging")(
+      test("--verbose changes neither the outcome nor standard output"):
+        val passing = ZIO.succeed("The scheduler shall list upcoming events.\n")
+        val failing = ZIO.succeed("The scheduler lists events.\n")
+        for
+          quietPass <- Main.program(Nil, passing)
+          verbosePass <- Main.program(List("--verbose"), passing)
+          quietFail <- Main.program(Nil, failing)
+          verboseFail <- Main.program(List("--verbose"), failing)
+        yield assertTrue(quietPass == verbosePass, quietFail == verboseFail)
+      ,
+      // These count lines to check the level filter is wired in; LoggingSuite checks the wording.
+      test("by default a passing input logs nothing"):
+        logged(Nil, ZIO.succeed("The scheduler shall list upcoming events.\n"))
+          .map(lines => assertTrue(lines.isEmpty))
+      ,
+      test("by default an unreadable input logs one entry"):
+        for
+          directory <- ZIO.attemptBlocking {
+            val path = Files.createTempDirectory("ears-check")
+            path.toFile.deleteOnExit()
+            path
+          }
+          lines <- logged(List(directory.toString), noStdin)
+        yield assertTrue(lines.size == 1)
+      ,
+      test("with --verbose a passing input logs several entries"):
+        logged(List("--verbose"), ZIO.succeed("The scheduler shall list upcoming events.\n"))
+          .map(lines => assertTrue(lines.size > 1))
     ) @@ TestAspect.silent,
     suite("unreadable input")(
       test("standard input that fails: status 2 and the cause on standard error"):
