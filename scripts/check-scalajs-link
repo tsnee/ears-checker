@@ -1,0 +1,88 @@
+#!/usr/bin/env sh
+# The Scala.js library's link check. It publishes ears.js locally as a release would (jar and
+# POM), has ears.linkCheck generate a program that references every public operation of the
+# library (from ears.js's SemanticDB: the shared and the Scala.js-only sources), then links that
+# program in release mode with scala-cli, against only the published artifact, and runs it on
+# Node. A method that refers to something missing on Scala.js, such as java.util.Locale, fails
+# to link.
+#
+# First it checks the generator itself: it generates a program from ears.linkCheck.fixture, which
+# has every shape of operation the generator handles, and compiles it with the fixture's sources.
+#
+# Needs scala-cli, node, and jq on the PATH.
+set -e
+
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+
+fail() {
+  echo "check-scalajs-link: $1" >&2
+  exit 1
+}
+
+# The build's values, in one Mill run: `show` of a brace selector prints one JSON object keyed by
+# task name. Mill runs on its own (not in a pipeline) so a failed build stops the script with
+# Mill's errors.
+tasks="ears.publishVersion,ears.js.scalaVersion,ears.js.scalaJSVersion,ears.js.semanticDbData"
+tasks="$tasks,ears.linkCheck.fixture.semanticDbData"
+if ! shown=$(./mill --ticker false show "{$tasks}"); then
+  fail "./mill show failed (see the Mill output above)"
+fi
+
+# One value from that object, without a PathRef's prefix. An empty or missing value fails here,
+# so that a path can't silently become the current directory further on.
+value() {
+  found=$(printf '%s' "$shown" |
+    jq -r --arg task "$1" '.[$task] // empty | sub("^ref:v[0-9]+:[0-9a-f]+:"; "")')
+  [ -n "$found" ] || fail "./mill show printed no value for $1: $shown"
+  printf '%s' "$found"
+}
+
+version=$(value ears.publishVersion)
+scala=$(value ears.js.scalaVersion)
+scalajs=$(value ears.js.scalaJSVersion)
+semanticdb=$(value ears.js.semanticDbData)
+fixture=$(value ears.linkCheck.fixture.semanticDbData)
+[ -d "$semanticdb" ] || fail "the library's SemanticDB directory doesn't exist: $semanticdb"
+[ -d "$fixture" ] || fail "the fixture's SemanticDB directory doesn't exist: $fixture"
+
+tmp=$(mktemp -d)
+# sh runs the EXIT trap on exit, but not when interrupted; the INT and TERM traps exit, which
+# runs it.
+trap 'rm -rf "$tmp"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# The generator's output for every shape it handles has to compile.
+mkdir "$tmp/fixture"
+if ! ./mill --ticker false ears.linkCheck.run "$fixture" "$tmp/fixture/LinkCheck.scala" >/dev/null; then
+  fail "generating the fixture's program failed (see the messages above)"
+fi
+if ! scala-cli compile ears/linkCheck/fixture/src "$tmp/fixture/LinkCheck.scala" \
+  --scala "$scala" --server=false; then
+  fail "the program generated from ears.linkCheck.fixture doesn't compile (see scala-cli's output above)"
+fi
+
+if ! ./mill --ticker false ears.js.publishLocal; then
+  fail "publishing ears.js to ~/.ivy2/local failed (see the Mill output above)"
+fi
+
+mkdir "$tmp/library"
+if ! generated=$(./mill --ticker false ears.linkCheck.run "$semanticdb" "$tmp/library/LinkCheck.scala"); then
+  fail "generating the link-check program failed (see the messages above)"
+fi
+
+if ! linked=$(scala-cli run "$tmp/library/LinkCheck.scala" --js --js-mode release \
+  --scala "$scala" --js-version "$scalajs" --repository ivy2Local \
+  --dependency "io.github.tsnee::ears-checker::$version" --server=false); then
+  fail "the program didn't link or run against ears-checker $version (see scala-cli's output above)"
+fi
+
+# The program's count is the length of the list the generator wrote, so matching lines show
+# only that the program the generator wrote is the one that linked and ran. Which operations it
+# references is the generator's job, and its tests'.
+expected=$(printf '%s\n' "$generated" | tail -n 1)
+reached=$(printf '%s\n' "$linked" | tail -n 1)
+if [ "$reached" != "$expected" ]; then
+  fail "the generator said \"$expected\", but the linked program printed \"$reached\""
+fi
+echo "check-scalajs-link: ears-checker $version links on Scala.js; $reached"

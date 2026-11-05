@@ -3,7 +3,7 @@
 Checks requirements against the EARS templates: a Scala 3 library for the JVM and Scala.js,
 and the `ears-check` command line for plain text, Markdown, and OpenSpec JSON.
 
-**0.1.0** is on Maven Central. The API is not yet stable and may change in any 0.x release.
+**0.1.1** is on Maven Central. The API is not yet stable and may change in any 0.x release.
 
 ## EARS
 
@@ -28,7 +28,7 @@ A complex requirement combines clauses in the order Where, While, then When or I
 It runs on JDK 17 or newer. Run it from Maven Central with [Coursier](https://get-coursier.io):
 
 ```sh
-alias ears-check="cs launch --java-opt -XX:+IgnoreUnrecognizedVMOptions --java-opt --sun-misc-unsafe-memory-access=allow io.github.tsnee:ears-checker-cli_3:0.1.0 --"
+alias ears-check="cs launch --java-opt -XX:+IgnoreUnrecognizedVMOptions --java-opt --sun-misc-unsafe-memory-access=allow io.github.tsnee:ears-checker-cli_3:0.1.1 --"
 ```
 
 Or build it from this repository and define `ears-check` as an alias for the jar. On JDK 23 and
@@ -80,9 +80,9 @@ sentence. It has no IO and no effect system. It needs Scala 3.10 or newer. Add i
 
 ```scala
 // Mill (the second :: picks the Scala.js build in a Scala.js module)
-mvn"io.github.tsnee::ears-checker::0.1.0"
+mvn"io.github.tsnee::ears-checker::0.1.1"
 // sbt (%%% instead of %% for Scala.js)
-libraryDependencies += "io.github.tsnee" %% "ears-checker" % "0.1.0"
+libraryDependencies += "io.github.tsnee" %% "ears-checker" % "0.1.1"
 ```
 
 ```xml
@@ -90,11 +90,12 @@ libraryDependencies += "io.github.tsnee" %% "ears-checker" % "0.1.0"
 <dependency>
   <groupId>io.github.tsnee</groupId>
   <artifactId>ears-checker_3</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
 </dependency>
 ```
 
-0.x versions may change the API in any minor release.
+0.x versions may change the API in any minor release. Scala.js users need 0.1.1 or newer:
+0.1.0's Scala.js build doesn't link in an application without scala-java-locales.
 
 ```scala
 import cats.data.NonEmptyList
@@ -141,9 +142,13 @@ and measures test coverage on the JVM; `./mill ears.scoverage.htmlReport` (or `e
 `scripts/check-npm-package` builds the npm package, lints it with publint and Are the Types
 Wrong, installs it into an empty project, and type-checks and runs a TypeScript program that uses
 it; it needs `tsc`, `publint`, and `attw` installed from npm.
+`scripts/check-scalajs-link` publishes the Scala.js library locally, generates a program that
+references every public operation, and links it in release mode against only that artifact,
+the way a user's application gets it; it needs [Scala CLI](https://scala-cli.virtuslab.org).
 GitHub Actions checks formatting, compiles, runs every test, checks each module's coverage
 against its minimum in `build.mill`, checks the npm package on the oldest and newest Node it
-supports, and checks the OpenSpec specs on each push to `main` and each pull request.
+supports, links the Scala.js library as a user gets it, and checks the OpenSpec specs on each
+push to `main` and each pull request.
 
 ## License
 

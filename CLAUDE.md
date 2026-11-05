@@ -33,8 +33,9 @@ as the npm package `@tsnee/ears-checker`, not yet published.
   index pin is there because Mill's default index can predate the pinned JDK; raise it with the
   JDK.
 - `ears.js` and `ears.npm.js` tests run on Node.
-- Coverage: `./mill __.test` measures `ears`, `ears.cli`, and `ears.npm` (scoverage, on the JVM
-  only; the Scala.js modules compile the same sources). `./mill ears.cli.scoverage.consoleReport`
+- Coverage: `./mill __.test` measures `ears`, `ears.cli`, `ears.npm`, and `ears.linkCheck`
+  (scoverage, on the JVM only; the Scala.js modules compile the same sources).
+  `./mill ears.cli.scoverage.consoleReport`
   (or `htmlReport`) shows it, and `./mill ears.cli.scoverage.validateCoverageMinimums` checks the
   module's `statementCoverageMin` and `branchCoverageMin` in `build.mill`. Each test run clears
   the last run's measurements, so a report covers only the latest run (all of it after
@@ -47,19 +48,30 @@ as the npm package `@tsnee/ears-checker`, not yet published.
   Claude's sandbox.
 - The library must link on Scala.js with only its declared dependencies. zio-test brings
   scala-java-locales into every Scala.js test, which hides a missing class such as
-  `java.util.Locale`; the npm package's release link (in `check-npm-package`) has no test
-  dependencies and catches it. Code that differs by platform goes in `ears/src-jvm` and
-  `ears/js/src`.
+  `java.util.Locale`. `scripts/check-scalajs-link` catches it: it publishes `ears.js` locally,
+  has `ears.linkCheck` generate a program referencing every public operation from the
+  library's SemanticDB, and links that with `scala-cli` in release mode against only the
+  published artifact. A new public operation needs nothing; one the generator can't reference
+  yet (an overload, `using` parameters, varargs) fails the check by name. Supporting a new shape
+  means a case in `LinkCheck` and a member of `ears.linkCheck.fixture`, whose generated program
+  the script compiles. It needs `scala-cli` and `jq`. Code that differs by platform goes in
+  `ears/src-jvm` and `ears/js/src`.
+- Tests that read files the build passes in `forkEnv` read the variable through `Live`
+  (zio-test's `TestSystem` has no environment), and run only through `./mill`: Metals' test
+  runner doesn't pass `forkEnv`. Metals can't run the library's suites either: they're shared
+  with `ears.js.test`.
 
-Run `./mill __.test`, every module's `validateCoverageMinimums`, and `scripts/check-npm-package`
-before calling any change done, and report the coverage. Warnings are errors.
+Run `./mill __.test`, every module's `validateCoverageMinimums`, `scripts/check-npm-package`,
+and `scripts/check-scalajs-link` before calling any change done, and report the coverage.
+Warnings are errors.
 
 CI (`.github/workflows/ci.yml`) runs the same checks on every push to `main` and every pull
 request: `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`,
-`scripts/check-npm-package`, the coverage minimums (with each module's percentages on the run's
-summary page), and `scripts/check-openspec`. A second job, `check-jdk17`, runs on the oldest
-supported runtimes: `scripts/check-openspec` with JDK 17 starting the jar, and
-`scripts/check-npm-package` on the oldest Node the package declares. It publishes nothing.
+`scripts/check-npm-package`, `scripts/check-scalajs-link`, the coverage minimums (with each
+module's percentages on the run's summary page), and `scripts/check-openspec`. A second job,
+`check-jdk17`, runs on the oldest supported runtimes: `scripts/check-openspec` with JDK 17
+starting the jar, and `scripts/check-npm-package` on the oldest Node the package declares. It
+publishes nothing.
 
 ## Releasing
 
@@ -128,10 +140,15 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
   - `ears/npm/` — the npm package, package `io.github.tsnee.ears.npm`: `src` is the pure core
     (`Api`, built and measured on the JVM), `js/src` the Scala.js export (`Facade`), `package/`
     the hand-written `index.d.ts` and README, and `smoke/` the TypeScript consumer
+  - `ears/linkCheck/` — the link-check generator (ZIO, scalameta's `semanticdb-shared`),
+    package `io.github.tsnee.ears.linkcheck`: `LinkCheck` picks out the public operations and
+    writes the program; `Main` reads SemanticDB and writes the file; `fixture/` has one
+    operation of every shape it references
 - `openspec/` — specs `ears-classifier`, `ears-cli`, `npm-package`, `openspec-check` (the
   OpenSpec gate: `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub
   Actions workflow), `release-publishing` (the Maven Central release workflow), `test-coverage`
   (the coverage minimums), and the archived changes that built them
-- `scripts/` — `check-openspec` and the Claude Code hook that runs it, and `check-npm-package`
+- `scripts/` — `check-openspec` and the Claude Code hook that runs it, `check-npm-package`, and
+  `check-scalajs-link`
 - `.github/` — the CI and release workflows, and Dependabot's weekly updates to their action pins
 - `docs/worklog.md` — dated work log; `docs/roadmap.md` — planned changes

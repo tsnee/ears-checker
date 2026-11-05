@@ -60,6 +60,15 @@ jobs:
       - name: Check the npm package
         run: scripts/check-npm-package
 
+      # scala-cli links the Scala.js library's link-check program against the published artifact;
+      # it uses the runner's Java from setup-java.
+      - uses: VirtusLab/scala-cli-setup@3f5bf11a33bb88343238780c18257c8fa43789e1 # v1.18.0
+        with:
+          scala-cli-version: "1.18.0"
+
+      - name: Check the Scala.js library
+        run: scripts/check-scalajs-link
+
       # Each module's percentages on the run's summary page, from Mill's own report (it logs to
       # standard error). Before the check, so the summary is written even when the check fails.
       # Every module gets its section; a failed report says so there, and fails the step at the end.
@@ -67,7 +76,7 @@ jobs:
         run: |
           failed=0
           fence="\`\`\`"
-          for module in ears ears.cli ears.npm; do
+          for module in ears ears.cli ears.npm ears.linkCheck; do
             if report="$(./mill --ticker false "$module.scoverage.consoleReport" 2>&1)"; then
               lines="$(printf '%s\n' "$report" | grep -E '^(Statement|Branch) coverage' || true)"
             else
@@ -89,6 +98,7 @@ jobs:
           ./mill ears.scoverage.validateCoverageMinimums
           + ears.cli.scoverage.validateCoverageMinimums
           + ears.npm.scoverage.validateCoverageMinimums
+          + ears.linkCheck.scoverage.validateCoverageMinimums
 
       - name: Check OpenSpec
         run: scripts/check-openspec

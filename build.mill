@@ -337,4 +337,34 @@ object ears extends Base with Published with Covered {
       }
     }
   }
+
+  /** Writes a program that references every public operation of the library, from the library's
+    * SemanticDB; `scripts/check-scalajs-link` links it against the published Scala.js artifact.
+    * Not published.
+    */
+  object linkCheck extends Base with Covered {
+    def mvnDeps = Seq(
+      mvn"dev.zio::zio:2.1.27",
+      mvn"org.scalameta:semanticdb-shared_2.13:4.17.4"
+    )
+
+    def statementCoverageMin = Some(96.0)
+    def branchCoverageMin = Some(100.0)
+
+    object test extends CoveredTests with ZioSpecs {
+      // The Scala.js library's SemanticDB (shared and Scala.js-only sources: what's published),
+      // and the fixture's, for the tests that run the rules on real compiler output.
+      def forkEnv = Task {
+        super.forkEnv() ++ Map(
+          "EARS_SEMANTICDB" -> ears.js.semanticDbData().path.toString,
+          "FIXTURE_SEMANTICDB" -> fixture.semanticDbData().path.toString
+        )
+      }
+    }
+
+    /** Every operation shape the generator handles; `scripts/check-scalajs-link` compiles the
+      * program generated from it. Not published.
+      */
+    object fixture extends Base
+  }
 }

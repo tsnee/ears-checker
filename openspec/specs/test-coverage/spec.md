@@ -8,11 +8,11 @@ when a module's coverage falls below its minimum, without changing what is publi
 ## Requirements
 
 ### Requirement: Coverage measured by the tests
-When the JVM tests of `ears`, `ears.cli`, or `ears.npm` run, the build SHALL record the statement and branch coverage of that module's sources.
+When the JVM tests of `ears`, `ears.cli`, `ears.npm`, or `ears.linkCheck` run, the build SHALL record the statement and branch coverage of that module's sources.
 
 #### Scenario: Coverage report after tests
 - **WHEN** a developer runs `./mill __.test` and then asks the build for a coverage report
-- **THEN** the report gives statement and branch percentages for `ears`, for `ears.cli`, and for `ears.npm`
+- **THEN** the report gives statement and branch percentages for `ears`, for `ears.cli`, for `ears.npm`, and for `ears.linkCheck`
 
 ### Requirement: Statement coverage minimum
 If a module's statement coverage is below that module's statement minimum, then the coverage check SHALL fail and name the module and both percentages.

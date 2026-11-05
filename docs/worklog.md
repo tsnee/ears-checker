@@ -54,3 +54,11 @@
 - 2026-11-05: add-npm-package reviewed (all 8 findings fixed), passed CI on Node 22 and 26, and
   archived in the same PR (#13), creating the `npm-package` spec (26 requirements) and updating
   `continuous-integration`, `ears-classifier`, `release-publishing`, and `test-coverage`.
+- 2026-11-05: released 0.1.1 (the Scala.js linking fix); `scala-cli` showed 0.1.0 failing to link
+  on its own and 0.1.1 linking. add-scalajs-link-check implemented: `ears.linkCheck` generates a
+  program referencing every public operation from the library's SemanticDB (7 today), and
+  `scripts/check-scalajs-link` links it with `scala-cli` against the locally published artifact;
+  a `Locale.ROOT` call in `Rendering` now fails CI. README moved to 0.1.1; roadmap reordered.
+- 2026-11-05: add-scalajs-link-check reviewed (all 8 findings fixed, adding a fixture of every
+  operation shape whose generated program the script compiles), passed CI, and archived in the
+  same PR (#14), adding 3 requirements to `continuous-integration` and updating `test-coverage`.
