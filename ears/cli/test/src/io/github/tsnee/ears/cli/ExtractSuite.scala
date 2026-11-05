@@ -40,46 +40,17 @@ object ExtractSuite extends ZIOSpecDefault:
           )
         )
     ),
+    // What's read from Markdown, and on which line, is the facade's: ears/markdown's conformance
+    // suite runs those cases on every platform. Left here is what the CLI adds: the file name.
     suite("Markdown")(
-      test("a list item is checked; a heading and a fenced code block are not"):
+      test("each sentence the facade reads becomes a candidate in the file, on its line"):
         val content =
-          "# Reminders\n\n- The scheduler SHALL list upcoming events.\n\n```\nSHALL inside code\n```\n"
+          "# Reminders\n\nIntro.\n\n- The scheduler SHALL list events.\n- The calendar " +
+            "SHALL sync.\n"
         assertTrue(
           Candidate.fromMarkdown("reqs.md", content) == List(
-            Candidate(Location.Line("reqs.md", 3), "The scheduler SHALL list upcoming events.")
-          )
-        )
-      ,
-      test("a sentence that starts with inline code is located on its own line"):
-        val content =
-          "# Reminders\n\nIntro paragraph.\n\nMore intro text.\n\n- `ears-checker` shall check every line.\n"
-        assertTrue(
-          Candidate.fromMarkdown("reqs.md", content) == List(
-            Candidate(Location.Line("reqs.md", 7), "ears-checker shall check every line.")
-          )
-        )
-      ,
-      test("escapes and entities before a sentence don't move it to another line"):
-        val content =
-          "Some \\*escaped\\* text &amp;amp; more.\nThe scheduler shall list events.\n"
-        assertTrue(
-          Candidate.fromMarkdown("reqs.md", content) == List(
-            Candidate(Location.Line("reqs.md", 2), "The scheduler shall list events.")
-          )
-        )
-      ,
-      test("a sentence whose keyword is only inside inline code is not checked"):
-        assertTrue(Candidate.fromMarkdown("reqs.md", "Write `SHALL` in uppercase.\n").isEmpty)
-      ,
-      test("sentences split at a period and whitespace; soft line breaks become spaces"):
-        val content =
-          "Reminders are useful. When a reminder is due,\nthe scheduler SHALL send a notice.\n"
-        assertTrue(
-          Candidate.fromMarkdown("reqs.md", content) == List(
-            Candidate(
-              Location.Line("reqs.md", 1),
-              "When a reminder is due, the scheduler SHALL send a notice."
-            )
+            Candidate(Location.Line("reqs.md", 5), "The scheduler SHALL list events."),
+            Candidate(Location.Line("reqs.md", 6), "The calendar SHALL sync.")
           )
         )
     ),

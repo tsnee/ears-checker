@@ -62,3 +62,13 @@
 - 2026-11-05: add-scalajs-link-check reviewed (all 8 findings fixed, adding a fixture of every
   operation shape whose generated program the script compiles), passed CI, and archived in the
   same PR (#14), adding 3 requirements to `continuous-integration` and updating `test-coverage`.
+- 2026-11-05: add-markdown-facade implemented: `ears/markdown` reads Markdown through one parser
+  per platform (commonmark-java, mdast on Node, cmark on Scala Native) with shared extraction,
+  and a 23-fixture conformance suite passes on all three. The CLI's output on this repository's
+  88 Markdown files is byte-identical. Probes found the mdast and cmark differences (text runs
+  across lines, code-span line endings, image alt text, inline HTML, CRLF, cmark needing
+  `CMARK_OPT_SOURCEPOS`); `ZioSpecs` now adds to a test module's dependencies.
+- 2026-11-05: add-markdown-facade reviewed (all 8 findings fixed: cmark's line errors, mdast's
+  image references and decoded line feeds, the BOM, deep nesting; 38 fixtures), passed CI with
+  cmark 0.30.2, and archived in the same PR (#15), creating `markdown-input` (5 requirements)
+  and updating `continuous-integration` and `test-coverage`.
