@@ -59,3 +59,6 @@
   program referencing every public operation from the library's SemanticDB (7 today), and
   `scripts/check-scalajs-link` links it with `scala-cli` against the locally published artifact;
   a `Locale.ROOT` call in `Rendering` now fails CI. README moved to 0.1.1; roadmap reordered.
+- 2026-11-05: add-scalajs-link-check reviewed (all 8 findings fixed, adding a fixture of every
+  operation shape whose generated program the script compiles), passed CI, and archived in the
+  same PR (#14), adding 3 requirements to `continuous-integration` and updating `test-coverage`.

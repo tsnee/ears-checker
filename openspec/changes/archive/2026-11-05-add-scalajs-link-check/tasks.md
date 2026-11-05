@@ -41,4 +41,5 @@ with `gh`. Compile, test, and format through Metals (BSP) where it can; `publish
     8. New tests for `private` and `protected` members; the real-library test's name filter now sees `val`s.
 
     313 tests pass; `ears.linkCheck` is at 97.28% / 100%; the `Locale.ROOT` breakage still fails to link
-- [ ] 4.3 Commit; the owner pushes. Open the pull request with `gh`, recommending squash merge. Report the CI run's result and minutes. After CI passes, archive the change on the same branch (syncing `continuous-integration` and `test-coverage`) for the owner to push and merge
+- [x] 4.3 Commit; the owner pushes. Open the pull request with `gh`, recommending squash merge. Report the CI run's result and minutes. After CI passes, archive the change on the same branch (syncing `continuous-integration` and `test-coverage`) for the owner to push and merge
+  - 2026-11-05: committed as 1f4aa7b, pushed by the owner; PR #14. CI run 42022718822 passed: `check` 2m 48s (scala-cli setup 12s, the Scala.js library check 21s, "7 operations reachable"), `check-jdk17` 1m 27s. Archived on the same branch
