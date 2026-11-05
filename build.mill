@@ -7,6 +7,7 @@ package build
 import mill.*
 import mill.contrib.scoverage.ScoverageModule
 import mill.scalajslib.*
+import mill.scalajslib.api.ModuleKind
 import mill.scalalib.*
 import mill.scalalib.publish.*
 import mill.scalalib.scalafmt.ScalafmtModule
@@ -107,6 +108,21 @@ trait Covered extends ScoverageModule {
   }
 }
 
+/** Scala.js IR records each source file's URI for source maps. A release points them at the
+  * tagged sources on GitHub; any other build makes them relative to the repository root, so no
+  * machine's paths end up in a jar or the npm package.
+  */
+trait SourceUris extends ScalaJSModule {
+  def scalacOptions = Task {
+    val root = mill.api.BuildCtx.workspaceRoot.toNIO.toUri.toString
+    val target = ears.publishVersion() match {
+      case v if v.endsWith("-SNAPSHOT") => ""
+      case v => s"->${ears.releaseSourceUrl(v)}"
+    }
+    super.scalacOptions() :+ s"-scalajs-mapSourceURI:$root$target"
+  }
+}
+
 /** Maven coordinates and POM metadata shared by every published module. */
 trait Published extends PublishModule {
 
@@ -117,7 +133,7 @@ trait Published extends PublishModule {
     */
   def publishVersion = Task.Input {
     Task.env.get("EARS_RELEASE_VERSION").filter(_.nonEmpty) match {
-      case None => "0.1.0-SNAPSHOT"
+      case None => "0.2.0-SNAPSHOT"
       case Some(v) if v.matches("""\d+\.\d+\.\d+""") => v
       case Some(v) =>
         Task.fail(s"EARS_RELEASE_VERSION must be <major>.<minor>.<patch>, not '$v'")
@@ -145,35 +161,154 @@ object ears extends Base with Published with Covered {
 
   def mvnDeps = Seq(mvn"org.typelevel::cats-parse::1.1.0")
 
+  /** Sources for both platforms. `src-jvm` and `js/src` hold the few that differ by platform. */
+  def sharedSources = Task.Sources("src")
+  def sources = Task(sharedSources() ++ jvmSources())
+  def jvmSources = Task.Sources("src-jvm")
+
+  /** Where a release's sources are on GitHub: the base for its source map URIs. */
+  def releaseSourceUrl(version: String): String =
+    s"https://raw.githubusercontent.com/tsnee/ears-checker/v$version/"
+
   def statementCoverageMin = Some(95.0)
   def branchCoverageMin = Some(90.0)
 
   object test extends CoveredTests with ZioSpecs
 
   /** The same library and tests built with Scala.js and run on Node, to keep `ears` portable. */
-  object js extends Base with ScalaJSModule with Published {
+  object js extends Base with ScalaJSModule with Published with SourceUris {
     def scalaJSVersion = "1.22.0"
     override def warts = pureWarts
     def artifactName = ears.artifactName()
     def pomDescription = ears.pomDescription
-    def sources = ears.sources
+    def sources = Task(ears.sharedSources() ++ super.sources())
     def mvnDeps = ears.mvnDeps
-
-    /** Scala.js IR records each source file's URI for source maps. A release points them at the
-      * tagged sources on GitHub; any other build makes them relative to the repository root, so
-      * no machine's paths end up in a jar.
-      */
-    def scalacOptions = Task {
-      val root = mill.api.BuildCtx.workspaceRoot.toNIO.toUri.toString
-      val target = publishVersion() match {
-        case v if v.endsWith("-SNAPSHOT") => ""
-        case v => s"->https://raw.githubusercontent.com/tsnee/ears-checker/v$v/"
-      }
-      super.scalacOptions() :+ s"-scalajs-mapSourceURI:$root$target"
-    }
 
     object test extends ScalaJSTests with ZioSpecs {
       def sources = ears.test.sources
+    }
+  }
+
+  /** The npm package `@tsnee/ears-checker`. This module is its pure core, every decision behind
+    * `classify`, compiled and measured on the JVM; `js` adds the Scala.js export. Neither is
+    * published to Maven Central: top-level exports in a Scala.js library would be exported from
+    * every application that depends on it.
+    */
+  object npm extends Base with Covered {
+    override def warts = pureWarts
+    def moduleDeps = Seq(ears)
+
+    def statementCoverageMin = Some(100.0)
+    def branchCoverageMin = Some(100.0)
+
+    object test extends CoveredTests with ZioSpecs {
+      def moduleDeps = super.moduleDeps ++ Seq(ears.test)
+    }
+
+    /** The core's sources and the export, linked as an ES module. */
+    object js extends Base with ScalaJSModule with SourceUris {
+      def scalaJSVersion = ears.js.scalaJSVersion()
+      override def warts = pureWarts
+      def moduleDeps = Seq(ears.js)
+      def sources = Task(super.sources() ++ npm.sources())
+      def moduleKind = Task(ModuleKind.ESModule)
+
+      object test extends ScalaJSTests with ZioSpecs {
+        def moduleDeps = super.moduleDeps ++ Seq(ears.js.test)
+      }
+    }
+
+    /** The hand-written package files: `index.d.ts` and `README.md`. */
+    def packageFiles = Task.Source("package")
+
+    def license = Task.Source(mill.api.BuildCtx.workspaceRoot / "LICENSE")
+
+    /** The release version, or the next version with npm's `-dev` in place of `-SNAPSHOT`. */
+    def npmVersion = Task {
+      ears.publishVersion().stripSuffix("-SNAPSHOT") + {
+        if (ears.publishVersion().endsWith("-SNAPSHOT")) "-dev" else ""
+      }
+    }
+
+    /** The npm package `@tsnee/ears-checker`, ready for `npm pack`: the linked ES module, its
+      * source map with this repository's sources embedded, the declarations, README, license,
+      * and a generated `package.json`.
+      */
+    def npmPackage = Task {
+      val linked = js.fullLinkJS().dest.path
+      val out = Task.dest
+      os.copy(linked / "main.js", out / "main.js")
+      embedProjectSources(
+        linked / "main.js.map",
+        ears.releaseSourceUrl(ears.publishVersion()),
+        (ears.js.sources() ++ js.sources()).map(_.path)
+      ) match {
+        case Right(map) => os.write(out / "main.js.map", ujson.write(map))
+        case Left(message) => Task.fail(message)
+      }
+      os.copy(packageFiles().path / "index.d.ts", out / "index.d.ts")
+      os.copy(packageFiles().path / "README.md", out / "README.md")
+      os.copy(license().path, out / "LICENSE")
+      val repository = "https://github.com/tsnee/ears-checker"
+      val manifest = ujson.Obj(
+        "name" -> "@tsnee/ears-checker",
+        "version" -> npmVersion(),
+        "description" -> ears.pomDescription,
+        "keywords" -> ujson.Arr("ears", "requirements", "requirements-engineering", "lint"),
+        "homepage" -> s"$repository#readme",
+        "bugs" -> ujson.Obj("url" -> s"$repository/issues"),
+        "repository" -> ujson.Obj("type" -> "git", "url" -> s"git+$repository.git"),
+        "license" -> "CC0-1.0",
+        "type" -> "module",
+        "exports" -> ujson.Obj(
+          "." -> ujson.Obj("types" -> "./index.d.ts", "default" -> "./main.js"),
+          "./package.json" -> "./package.json"
+        ),
+        "types" -> "./index.d.ts",
+        "files" -> ujson.Arr("main.js", "main.js.map", "index.d.ts"),
+        "sideEffects" -> false,
+        "engines" -> ujson.Obj("node" -> ">=22")
+      )
+      os.write(out / "package.json", ujson.write(manifest, indent = 2) + "\n")
+      PathRef(out)
+    }
+
+    /** The map with `sourcesContent` for every source from this repository: a path relative to
+      * the repository root, or, in a release, its tagged URL on GitHub. Library sources keep
+      * their public `https://` URLs and no content. Content is read only from under `roots`, the
+      * linked modules' source directories (Mill allows a task to read only declared sources).
+      * Anything else fails the build rather than ship a map with a gap or a path from this
+      * machine: a `file:` URI or an absolute path (a Scala.js module without `SourceUris`), or
+      * a relative path outside `roots`.
+      */
+    private def embedProjectSources(
+        map: os.Path,
+        release: String,
+        roots: Seq[os.Path]
+    ): Either[String, ujson.Value] = {
+      val json = ujson.read(os.read(map))
+      def unrecognized(uri: String) =
+        Left(s"Source map names $uri, an unrecognized source URI: neither a library's https URL " +
+          "nor one of the package's own sources")
+      val contents = json("sources").arr.toSeq.map { source =>
+        val uri = source.str
+        val path =
+          if (uri.startsWith(release)) uri.stripPrefix(release)
+          else uri
+        if (path.startsWith("https://")) Right(ujson.Null) // a library's public source
+        else
+          scala.util.Try(os.RelPath(path)).toOption // no scheme, not absolute
+            .filter(_ => !path.contains(":"))
+            .map(mill.api.BuildCtx.workspaceRoot / _)
+            .filter(file => roots.exists(file.startsWith) && os.isFile(file))
+            .fold[Either[String, ujson.Value]](unrecognized(uri))(file =>
+              Right(ujson.Str(os.read(file)))
+            )
+      }
+      contents.collectFirst { case Left(message) => message }.toLeft {
+        json("sourcesContent") = ujson.Arr(contents.collect { case Right(content) => content }*)
+        json
+      }
     }
   }
 

@@ -33,7 +33,8 @@ jobs:
           distribution: temurin
           java-version: "27"
 
-      # ears.js tests run on Node.
+      # The Scala.js tests and the npm package check run on Node: the newest here, the oldest the
+      # package supports in check-jdk17.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "26"
@@ -41,8 +42,11 @@ jobs:
       # Dependencies, Mill's JDK, and the Mill launcher.
       - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
 
-      - name: Install the OpenSpec CLI
-        run: npm install -g @fission-ai/openspec@1.16.0
+      # The OpenSpec CLI, and the TypeScript compiler and linters the npm package check uses.
+      - name: Install the npm tools
+        run: >-
+          npm install -g @fission-ai/openspec@1.16.0 typescript@7.0.2 publint@0.3.25
+          @arethetypeswrong/cli@0.18.5
 
       - name: Check formatting
         run: ./mill __.checkFormat
@@ -53,6 +57,9 @@ jobs:
       - name: Test
         run: ./mill __.test
 
+      - name: Check the npm package
+        run: scripts/check-npm-package
+
       # Each module's percentages on the run's summary page, from Mill's own report (it logs to
       # standard error). Before the check, so the summary is written even when the check fails.
       # Every module gets its section; a failed report says so there, and fails the step at the end.
@@ -60,7 +67,7 @@ jobs:
         run: |
           failed=0
           fence="\`\`\`"
-          for module in ears ears.cli; do
+          for module in ears ears.cli ears.npm; do
             if report="$(./mill --ticker false "$module.scoverage.consoleReport" 2>&1)"; then
               lines="$(printf '%s\n' "$report" | grep -E '^(Statement|Branch) coverage' || true)"
             else
@@ -78,13 +85,18 @@ jobs:
 
       # The minimums are statementCoverageMin and branchCoverageMin in build.mill.
       - name: Check coverage
-        run: ./mill ears.scoverage.validateCoverageMinimums + ears.cli.scoverage.validateCoverageMinimums
+        run: >-
+          ./mill ears.scoverage.validateCoverageMinimums
+          + ears.cli.scoverage.validateCoverageMinimums
+          + ears.npm.scoverage.validateCoverageMinimums
 
       - name: Check OpenSpec
         run: scripts/check-openspec
 
-  # The OpenSpec check again, with the oldest JDK the jar supports starting it. The tests stay in
-  # check: Mill runs them on its own JDK, not the runner's.
+  # The oldest supported runtimes: the OpenSpec check again with JDK 17, the oldest JDK the jar
+  # supports, starting it; and the npm package check on Node 22, the oldest Node the package
+  # declares. The tests stay in check: Mill runs them on its own JDK, not the runner's. The job
+  # keeps its name so branch protection that names it keeps working.
   check-jdk17:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -98,15 +110,20 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # For the OpenSpec CLI.
+      # The oldest Node the npm package declares (engines), which the OpenSpec CLI also supports.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "26"
+          node-version: "22"
 
       - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
 
-      - name: Install the OpenSpec CLI
-        run: npm install -g @fission-ai/openspec@1.16.0
+      - name: Install the npm tools
+        run: >-
+          npm install -g @fission-ai/openspec@1.16.0 typescript@7.0.2 publint@0.3.25
+          @arethetypeswrong/cli@0.18.5
 
       - name: Check OpenSpec
         run: scripts/check-openspec
+
+      - name: Check the npm package
+        run: scripts/check-npm-package

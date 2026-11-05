@@ -1,6 +1,6 @@
 package io.github.tsnee.ears
 
-import java.util.Locale
+import io.github.tsnee.ears.LetterCase.*
 
 private[ears] object Rendering:
 
@@ -21,4 +21,4 @@ private[ears] object Rendering:
     capitalize(clauses.mkString + main)
 
   private def capitalize(sentence: String): String =
-    sentence.take(1).toUpperCase(Locale.ROOT) + sentence.drop(1)
+    sentence.take(1).upperCase + sentence.drop(1)

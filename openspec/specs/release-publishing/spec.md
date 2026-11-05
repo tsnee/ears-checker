@@ -58,11 +58,11 @@ The release workflow SHALL publish every module at the version the tag names, wi
 - **THEN** every uploaded POM has version `0.1.0`
 
 ### Requirement: Snapshot version outside releases
-While no release version is set, the build SHALL use version `0.1.0-SNAPSHOT`.
+While no release version is set, the build SHALL use version `0.2.0-SNAPSHOT`.
 
 #### Scenario: Local publish
 - **WHEN** `./mill __.publishLocal` runs on a developer machine
-- **THEN** it publishes version `0.1.0-SNAPSHOT`
+- **THEN** it publishes version `0.2.0-SNAPSHOT`
 
 ### Requirement: Malformed release version
 If the release version is set to anything but `<major>.<minor>.<patch>`, then the build SHALL fail without producing artifacts.
@@ -73,7 +73,7 @@ If the release version is set to anything but `<major>.<minor>.<patch>`, then th
 
 #### Scenario: Empty value
 - **WHEN** `EARS_RELEASE_VERSION` is set but empty
-- **THEN** the build uses `0.1.0-SNAPSHOT`, as when it is unset
+- **THEN** the build uses `0.2.0-SNAPSHOT`, as when it is unset
 
 ### Requirement: Review before publishing
 When the release workflow uploads a release, the release workflow SHALL leave the deployment in the Central Portal for the owner to publish or drop.

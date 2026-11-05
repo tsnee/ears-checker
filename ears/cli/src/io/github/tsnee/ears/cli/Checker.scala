@@ -64,11 +64,8 @@ object Checker:
         diagnostics.toList.map(Finding(candidate.location, candidate.text, _))
       case Right(_) => Nil
 
-  /** "WrongCase" becomes "wrong-case", the spelling the specs use. */
-  def kindName(finding: Finding): String =
-    finding.diagnostic.kind.toString
-      .flatMap(c => if c.isUpper then s"-${c.toLower}" else c.toString)
-      .drop(1)
+  /** "wrong-case", the spelling the specs use: the library's name for the kind. */
+  def kindName(finding: Finding): String = finding.diagnostic.kind.kebabName
 
   private def locationText(location: Location): String = location match
     case Location.Line(file, line)                                   => s"$file:$line"

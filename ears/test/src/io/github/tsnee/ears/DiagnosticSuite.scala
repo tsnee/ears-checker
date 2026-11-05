@@ -184,5 +184,16 @@ object DiagnosticSuite extends ZIOSpecDefault:
       test("independent problems: wrong case and missing period together"):
         val found = kinds("The scheduler shall list upcoming events")
         assertTrue(found.contains(WrongCase), found.contains(MissingPeriod))
+    ),
+    suite("names")(
+      test("each kind's name is its case name in kebab case, and names are distinct"):
+        val kebab = (name: String) =>
+          name.flatMap(c => if c.isUpper then s"-${c.toLower}" else c.toString).drop(1)
+        val names = DiagnosticKind.values.toList.map(_.kebabName)
+        assertTrue(
+          names == DiagnosticKind.values.toList.map(kind => kebab(kind.toString)),
+          names.distinct == names,
+          WrongCase.kebabName == "wrong-case"
+        )
     )
   )

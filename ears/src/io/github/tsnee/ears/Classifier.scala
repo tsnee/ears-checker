@@ -1,8 +1,7 @@
 package io.github.tsnee.ears
 
-import java.util.Locale
-
 import cats.data.NonEmptyList
+import io.github.tsnee.ears.LetterCase.*
 
 /** Classification: the lenient skeleton parse, then independent checks that each report zero or
   * more diagnostics. A sentence with no diagnostics becomes a typed `Requirement`.
@@ -111,13 +110,13 @@ private[ears] object Classifier:
     )
     List(modalProblem, emptyResponse).flatten
 
-  private def rank(keyword: String): Int = keyword.toLowerCase(Locale.ROOT) match
+  private def rank(keyword: String): Int = keyword.lowerCase match
     case "where" => 0
     case "while" => 1
     case _       => 2
 
   private def lowerKeyword(clause: RawClause): String =
-    clause.keyword.value.toLowerCase(Locale.ROOT)
+    clause.keyword.value.lowerCase
 
   private def clauseChecks(anchored: Shape.Anchored): List[Diagnostic] =
     val clauses = anchored.clauses
@@ -171,7 +170,7 @@ private[ears] object Classifier:
         clauses.sortBy(clause => rank(clause.keyword.value)).zipWithIndex.map { (clause, i) =>
           val keyword = lowerKeyword(clause)
           val written =
-            if i == 0 then keyword.take(1).toUpperCase(Locale.ROOT) + keyword.drop(1) else keyword
+            if i == 0 then keyword.take(1).upperCase + keyword.drop(1) else keyword
           s"$written ${clause.text.value},"
         }
       val fix = Option.when(fixable && clauses.forall(_.comma.isDefined))(
@@ -234,7 +233,7 @@ private[ears] object Classifier:
     val article = if anchored.clauses.isEmpty && anchored.thenWord.isEmpty then "The" else "the"
     val firstWord = system.value.takeWhile(c => !Character.isWhitespace(c))
     val determiner = Option
-      .when(system.value.length > firstWord.length)(firstWord.toLowerCase(Locale.ROOT))
+      .when(system.value.length > firstWord.length)(firstWord.lowerCase)
     val firstWordSpan = SourceSpan(start, start + firstWord.length)
     if determiner.exists(quantifiers.contains) then
       Diagnostic(
@@ -249,7 +248,7 @@ private[ears] object Classifier:
         else if article == "The" && firstWord.drop(1).forall(c => !Character.isUpperCase(c)) then
           TextEdit(
             SourceSpan(start, start + 1),
-            s"$article ${firstWord.take(1).toLowerCase(Locale.ROOT)}"
+            s"$article ${firstWord.take(1).lowerCase}"
           )
         else TextEdit(SourceSpan(start, start), s"$article ")
       Diagnostic(

@@ -114,15 +114,36 @@ A `Requirement` is the syntax tree, with a source span on every part. A `Diagnos
 kind, a span, a message, and usually a `Fix` whose `applyTo(input)` gives the corrected
 sentence.
 
+## JavaScript and TypeScript
+
+The npm package `@tsnee/ears-checker` is the same classifier compiled to JavaScript, as an ES
+module with TypeScript declarations and no dependencies. It isn't on npm yet; build it with
+`./mill ears.npm.npmPackage`, which prints the package directory, and install that directory
+or the tarball `npm pack` makes from it.
+
+```ts
+import { classify } from "@tsnee/ears-checker";
+
+const result = classify("The scheduler SHALL list upcoming events.", { profile: "openspec" });
+if (result.ok) console.log(result.template); // "ubiquitous"
+else console.log(result.diagnostics.map((d) => d.fix?.fixed ?? d.message));
+```
+
+The package's [README](ears/npm/package/README.md) describes the results and options.
+
 ## Building
 
-`./mill __.test` runs every test on the JVM and, for the library, on Node, and measures test
-coverage on the JVM; `./mill ears.scoverage.htmlReport` and `./mill ears.cli.scoverage.htmlReport`
-write reports under `out/`.
-`./mill __.publishLocal` publishes 0.1.0-SNAPSHOT to `~/.ivy2/local`.
+`./mill __.test` runs every test on the JVM and, for the library and the npm package, on Node,
+and measures test coverage on the JVM; `./mill ears.scoverage.htmlReport` (or `ears.cli`, or
+`ears.npm`) writes a report under `out/`.
+`./mill __.publishLocal` publishes the next version as a snapshot (`0.2.0-SNAPSHOT`) to
+`~/.ivy2/local`.
+`scripts/check-npm-package` builds the npm package, lints it with publint and Are the Types
+Wrong, installs it into an empty project, and type-checks and runs a TypeScript program that uses
+it; it needs `tsc`, `publint`, and `attw` installed from npm.
 GitHub Actions checks formatting, compiles, runs every test, checks each module's coverage
-against its minimum in `build.mill`, and checks the OpenSpec specs on each push to `main` and each
-pull request.
+against its minimum in `build.mill`, checks the npm package on the oldest and newest Node it
+supports, and checks the OpenSpec specs on each push to `main` and each pull request.
 
 ## License
 

@@ -44,3 +44,13 @@
 - 2026-11-04: add-cli-logging reviewed (8 of 11 findings fixed; the logger is now built in
   `bootstrap` from the arguments and ZIO's Clock instead of through FiberRefs) and archived in
   the same PR (#12), syncing 8 requirements into `ears-cli`.
+- 2026-11-05: add-npm-package implemented: `@tsnee/ears-checker` built by
+  `ears.npm.npmPackage`, with a measured JVM core (`ears.npm`, 100%) and a thin Scala.js export
+  (`ears.npm.js`), hand-written declarations, and `scripts/check-npm-package` (publint, attw,
+  TypeScript under Node and bundler resolution, Node 22 and 26 in CI). Found and fixed a 0.1.0
+  bug: the Scala.js library didn't link without scala-java-locales (`java.util.Locale`), hidden
+  by zio-test's dependencies; v0.1.1 follows the merge. Snapshots are now 0.2.0-SNAPSHOT
+  (npm 0.2.0-dev). The roadmap moved from CLAUDE.md to `docs/roadmap.md`.
+- 2026-11-05: add-npm-package reviewed (all 8 findings fixed), passed CI on Node 22 and 26, and
+  archived in the same PR (#13), creating the `npm-package` spec (26 requirements) and updating
+  `continuous-integration`, `ears-classifier`, `release-publishing`, and `test-coverage`.
