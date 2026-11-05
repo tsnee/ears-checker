@@ -5,6 +5,9 @@ Planned changes, each its own OpenSpec change. Order and scope can change; the s
 
 ## Next
 
+- **Release 0.1.1.** The owner tags `v0.1.1` on `main` once `add-npm-package` is merged: 0.1.0's
+  Scala.js artifact doesn't link without scala-java-locales. Then the README's install lines
+  and its "0.1.0 is on Maven Central" line move to 0.1.1.
 - **Publish the npm package.** Publish `@tsnee/ears-checker` from the release workflow with
   npm's trusted publishing, in its own job behind its own approval, after the Central Portal
   deployment is published. The plan is in the archived `add-npm-package` change's design

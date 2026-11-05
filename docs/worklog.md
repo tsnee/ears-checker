@@ -51,3 +51,6 @@
   bug: the Scala.js library didn't link without scala-java-locales (`java.util.Locale`), hidden
   by zio-test's dependencies; v0.1.1 follows the merge. Snapshots are now 0.2.0-SNAPSHOT
   (npm 0.2.0-dev). The roadmap moved from CLAUDE.md to `docs/roadmap.md`.
+- 2026-11-05: add-npm-package reviewed (all 8 findings fixed), passed CI on Node 22 and 26, and
+  archived in the same PR (#13), creating the `npm-package` spec (26 requirements) and updating
+  `continuous-integration`, `ears-classifier`, `release-publishing`, and `test-coverage`.
