@@ -68,3 +68,7 @@
   88 Markdown files is byte-identical. Probes found the mdast and cmark differences (text runs
   across lines, code-span line endings, image alt text, inline HTML, CRLF, cmark needing
   `CMARK_OPT_SOURCEPOS`); `ZioSpecs` now adds to a test module's dependencies.
+- 2026-11-05: add-markdown-facade reviewed (all 8 findings fixed: cmark's line errors, mdast's
+  image references and decoded line feeds, the BOM, deep nesting; 38 fixtures), passed CI with
+  cmark 0.30.2, and archived in the same PR (#15), creating `markdown-input` (5 requirements)
+  and updating `continuous-integration` and `test-coverage`.

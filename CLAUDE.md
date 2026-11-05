@@ -158,7 +158,8 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
     shared (`Markdown`, `Extraction`), and each platform has its `MarkdownParser`: `src-jvm`
     (commonmark-java), `js/src` (mdast), `native/src` (cmark); `test/src` is the conformance
     suite. Not published: `ears.cli` compiles the shared and JVM sources in
-- `openspec/` — specs `ears-classifier`, `ears-cli`, `npm-package`, `openspec-check` (the
+- `openspec/` — specs `ears-classifier`, `ears-cli`, `markdown-input` (the Markdown facade, the
+  same on every platform), `npm-package`, `openspec-check` (the
   OpenSpec gate: `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub
   Actions workflow), `release-publishing` (the Maven Central release workflow), `test-coverage`
   (the coverage minimums), and the archived changes that built them
