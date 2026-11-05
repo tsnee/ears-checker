@@ -1,0 +1,91 @@
+#!/usr/bin/env sh
+# The npm package's smoke check: build @tsnee/ears-checker, lint the packed package with publint
+# and Are the Types Wrong, install it into an empty project, and use it from TypeScript: type-check
+# ears/npm/smoke/consumer.ts under Node and bundler module resolution, then run it on Node.
+# Needs node, npm, jq, tsc, publint, and attw on the PATH; CI installs pinned versions.
+set -e
+
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+root=$(pwd)
+
+# Mill runs on its own (not in a pipeline) so a failed build stops the script with Mill's errors.
+if ! built=$(./mill --ticker false show ears.npm.npmPackage); then
+  echo "check-npm-package: building the npm package failed (see the Mill output above)" >&2
+  exit 1
+fi
+package=$(printf '%s' "$built" | jq -r 'sub("^ref:v[0-9]+:[0-9a-f]+:"; "")')
+if [ -z "$package" ] || [ ! -f "$package/package.json" ]; then
+  echo "check-npm-package: Mill printed no usable package directory: $built" >&2
+  exit 1
+fi
+
+# Every npm command uses a cache in the temporary directory: nothing is written to ~/.npm, and
+# nothing from it is reused.
+tmp=$(mktemp -d)
+# sh runs the EXIT trap on exit, but not when interrupted; the INT and TERM traps exit, which
+# runs it.
+trap 'rm -rf "$tmp"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+cache="$tmp/cache"
+
+npm pack "$package" --pack-destination "$tmp" --cache "$cache" --silent >/dev/null
+set -- "$tmp"/tsnee-ears-checker-*.tgz
+tarball=$1
+if [ ! -f "$tarball" ]; then
+  echo "check-npm-package: npm pack wrote no tarball" >&2
+  exit 1
+fi
+
+# No file may name a path on this machine, such as a source map entry the build failed to make
+# relative.
+if tar -xOzf "$tarball" | grep -q -F -e "$root" -e "$HOME"; then
+  echo "check-npm-package: the package names a path on this machine ($root or $HOME)" >&2
+  exit 1
+fi
+
+publint run "$tarball" --strict
+# An ESM-only package can't be loaded by require(), by design; the profile leaves that out.
+attw "$tarball" --profile esm-only
+
+# An empty ES-module project with only the packed package installed.
+project="$tmp/consumer"
+mkdir "$project"
+printf '{"name": "consumer", "private": true, "type": "module"}\n' >"$project/package.json"
+(cd "$project" && npm install "$tarball" --cache "$cache" --no-audit --no-fund --silent)
+
+# Every installed package, at any depth: `npm ls --all --parseable` prints the project's own
+# directory first, then one line per package. The package must be the only one.
+installed=$(cd "$project" && npm ls --all --parseable --cache "$cache" | sed 1d)
+count=$(printf '%s\n' "$installed" | grep -c .) || true
+case "$count:$installed" in
+  "1:"*/node_modules/@tsnee/ears-checker) ;;
+  *)
+    echo "check-npm-package: installing the package installed: $installed" >&2
+    exit 1
+    ;;
+esac
+declared=$(jq -c '[.dependencies, .peerDependencies, .optionalDependencies,
+  .bundleDependencies, .bundledDependencies] | map(select(. != null))' \
+  "$project/node_modules/@tsnee/ears-checker/package.json")
+if [ "$declared" != '[]' ]; then
+  echo "check-npm-package: the package declares dependencies: $declared" >&2
+  exit 1
+fi
+
+cp "$root/ears/npm/smoke/consumer.ts" "$project/consumer.ts"
+cd "$project"
+# --verbatimModuleSyntax and --erasableSyntaxOnly reject what Node's type stripping can't run,
+# such as a type imported without `import type`.
+typecheck() {
+  if ! tsc --noEmit --strict --verbatimModuleSyntax --erasableSyntaxOnly \
+    --exactOptionalPropertyTypes --noUncheckedIndexedAccess --target es2022 \
+    --module "$1" --moduleResolution "$2" consumer.ts; then
+    echo "check-npm-package: consumer.ts doesn't type-check with --moduleResolution $2" >&2
+    exit 1
+  fi
+}
+typecheck nodenext nodenext
+typecheck esnext bundler
+node consumer.ts
+echo "check-npm-package: the npm package builds, lints, installs, type-checks, and runs"

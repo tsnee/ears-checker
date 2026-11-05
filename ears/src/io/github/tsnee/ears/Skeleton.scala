@@ -1,9 +1,8 @@
 package io.github.tsnee.ears
 
-import java.util.Locale
-
 import cats.parse.Parser
 import cats.parse.Parser0
+import io.github.tsnee.ears.LetterCase.*
 
 /** Where the parts of a sentence are, found by a lenient parse that never fails. Validation judges
   * the result; nothing here decides whether the sentence is good EARS.
@@ -128,9 +127,9 @@ private[ears] object SkeletonParser:
   private def isThe(text: String): Boolean = text.equalsIgnoreCase("the")
   private def isThen(text: String): Boolean = text.equalsIgnoreCase("then")
   private def isClauseKeyword(text: String): Boolean =
-    clauseKeywords.contains(text.toLowerCase(Locale.ROOT))
+    clauseKeywords.contains(text.lowerCase)
   private def isWeakModal(text: String): Boolean =
-    weakModals.contains(text.toLowerCase(Locale.ROOT))
+    weakModals.contains(text.lowerCase)
 
   /** The first "shall" in any case anchors the main clause. Failing that, the first weak modal
     * whose preceding words can be a main clause does.

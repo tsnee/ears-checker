@@ -3,11 +3,8 @@
 Checks requirements against the EARS templates (Easy Approach to Requirements Syntax): a pure
 Scala 3 classifier library for the JVM and Scala.js, and the `ears-check` command-line tool for
 plain text, Markdown, and OpenSpec JSON. CC0-licensed; released on Maven Central from 0.1.0
-(`io.github.tsnee`), with an unstable API while the version is 0.x.
-
-This repository was extracted, with its history, from the one it was built in. Its first OpenSpec
-change, `bootstrap-ears-checker` (archived), made it build, test, check its own specs, and
-publish locally on its own.
+(`io.github.tsnee`), with an unstable API while the version is 0.x. The classifier is also built
+as the npm package `@tsnee/ears-checker`, not yet published.
 
 ## Workflow
 
@@ -32,28 +29,44 @@ publish locally on its own.
 - `./mill ears.cli.assembly` builds the runnable jar. Run it on any JDK from 17 with
   `java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow -jar <jar> …`:
   the flag silences JDK 23+'s `sun.misc.Unsafe` warnings, and older JDKs skip it
-- Mill 1.3.1 (pinned in the `build.mill` header), Scala 3.10.0, JDK 27 (Mill fetches it; the
-  header pins JVM index 0.0.5 because Mill 1.3.1's default index predates JDK 27)
-- `ears.js` tests run on Node.
-- Coverage: `./mill __.test` measures `ears` and `ears.cli` (scoverage, on the JVM only; `ears.js`
-  compiles the same sources). `./mill ears.cli.scoverage.consoleReport` (or `htmlReport`) shows
-  it, and `./mill ears.cli.scoverage.validateCoverageMinimums` checks the module's
-  `statementCoverageMin` and `branchCoverageMin` in `build.mill`. Each test run clears the last
-  run's measurements, so a report covers only the latest run (all of it after `__.test`).
+- The `build.mill` header pins the Mill version, the JDK Mill fetches, and the JVM index. The
+  index pin is there because Mill's default index can predate the pinned JDK; raise it with the
+  JDK.
+- `ears.js` and `ears.npm.js` tests run on Node.
+- Coverage: `./mill __.test` measures `ears`, `ears.cli`, and `ears.npm` (scoverage, on the JVM
+  only; the Scala.js modules compile the same sources). `./mill ears.cli.scoverage.consoleReport`
+  (or `htmlReport`) shows it, and `./mill ears.cli.scoverage.validateCoverageMinimums` checks the
+  module's `statementCoverageMin` and `branchCoverageMin` in `build.mill`. Each test run clears
+  the last run's measurements, so a report covers only the latest run (all of it after
+  `__.test`). Scoverage can't measure Scala.js-only code, so keep it thin: decisions go in code
+  that also builds for the JVM.
+- The npm package: `./mill ears.npm.npmPackage` builds its directory. `scripts/check-npm-package`
+  packs it, lints it with publint and Are the Types Wrong, installs it into an empty project, and
+  type-checks and runs `ears/npm/smoke/consumer.ts`; it needs `tsc`, `publint`, and `attw` from
+  npm. npm commands here take `--cache` in a temporary directory, since `~/.npm` is read-only in
+  Claude's sandbox.
+- The library must link on Scala.js with only its declared dependencies. zio-test brings
+  scala-java-locales into every Scala.js test, which hides a missing class such as
+  `java.util.Locale`; the npm package's release link (in `check-npm-package`) has no test
+  dependencies and catches it. Code that differs by platform goes in `ears/src-jvm` and
+  `ears/js/src`.
 
-Run `./mill __.test` and both modules' `validateCoverageMinimums` before calling any change done,
-and report the coverage. Warnings are errors.
+Run `./mill __.test`, every module's `validateCoverageMinimums`, and `scripts/check-npm-package`
+before calling any change done, and report the coverage. Warnings are errors.
 
-CI (`.github/workflows/ci.yml`) runs the same five checks on every push to `main` and every pull
-request: `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`, the coverage minimums
-(with each module's percentages on the run's summary page), and `scripts/check-openspec`. A
-second job, `check-jdk17`, runs `scripts/check-openspec` again with JDK 17 starting the jar. It
-publishes nothing.
+CI (`.github/workflows/ci.yml`) runs the same checks on every push to `main` and every pull
+request: `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`,
+`scripts/check-npm-package`, the coverage minimums (with each module's percentages on the run's
+summary page), and `scripts/check-openspec`. A second job, `check-jdk17`, runs on the oldest
+supported runtimes: `scripts/check-openspec` with JDK 17 starting the jar, and
+`scripts/check-npm-package` on the oldest Node the package declares. It publishes nothing.
 
 ## Releasing
 
 Releases go to Maven Central from `.github/workflows/release.yml`; the version comes from the
-tag (`EARS_RELEASE_VERSION`), and every other build is `0.1.0-SNAPSHOT`.
+tag (`EARS_RELEASE_VERSION`). Every other build is the next minor version as a snapshot:
+`-SNAPSHOT` for Maven and `-dev` for npm (`publishVersion` and `ears.npm.npmVersion` in
+`build.mill`). Bump it after each minor release; a patch release doesn't change it.
 
 1. Merge everything for the release to `main`; CI must pass.
 2. The owner pushes a tag `v<major>.<minor>.<patch>` on `main` (only admins may create `v*` tags).
@@ -107,19 +120,18 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
 
 - `ears/` — the classifier library, package `io.github.tsnee.ears`: cats-parse tokenizer,
   lenient skeleton parse, classifier with fixable diagnostics, rendering
+  - `ears/src` holds the sources for both platforms; `ears/src-jvm` and `ears/js/src` hold the
+    few that differ (`LetterCase`)
   - `ears.js` — the same sources and tests built with Scala.js and run on Node
   - `ears/cli/` — the `ears-check` command (ZIO, decline, zio-json, commonmark-java), package
     `io.github.tsnee.ears.cli`; `OwnSpecsSuite` checks this repository's own specs
-- `openspec/` — specs `ears-classifier`, `ears-cli`, `openspec-check` (the OpenSpec gate:
-  `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub Actions
-  workflow), `release-publishing` (the Maven Central release workflow), `test-coverage` (the
-  coverage minimums), and the archived changes that built them
-- `scripts/` — `check-openspec` and the Claude Code hook that runs it
+  - `ears/npm/` — the npm package, package `io.github.tsnee.ears.npm`: `src` is the pure core
+    (`Api`, built and measured on the JVM), `js/src` the Scala.js export (`Facade`), `package/`
+    the hand-written `index.d.ts` and README, and `smoke/` the TypeScript consumer
+- `openspec/` — specs `ears-classifier`, `ears-cli`, `npm-package`, `openspec-check` (the
+  OpenSpec gate: `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub
+  Actions workflow), `release-publishing` (the Maven Central release workflow), `test-coverage`
+  (the coverage minimums), and the archived changes that built them
+- `scripts/` — `check-openspec` and the Claude Code hook that runs it, and `check-npm-package`
 - `.github/` — the CI and release workflows, and Dependabot's weekly updates to their action pins
-- `docs/worklog.md` — dated work log
-
-## Likely next steps
-
-Packaging, each as its own OpenSpec change, building on the Maven Central releases: the CLI as a
-Coursier app and GraalVM binaries; an npm package; Scala Native once Markdown input no longer
-needs commonmark-java.
+- `docs/worklog.md` — dated work log; `docs/roadmap.md` — planned changes
