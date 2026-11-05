@@ -1,0 +1,9 @@
+{
+  "name": "ears-markdown-js-test",
+  "private": true,
+  "description": "The npm parser for ears.markdown.js's Node tests; not published.",
+  "type": "module",
+  "dependencies": {
+    "mdast-util-from-markdown": "2.1.0"
+  }
+}

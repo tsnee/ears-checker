@@ -134,9 +134,12 @@ The package's [README](ears/npm/package/README.md) describes the results and opt
 
 ## Building
 
-`./mill __.test` runs every test on the JVM and, for the library and the npm package, on Node,
-and measures test coverage on the JVM; `./mill ears.scoverage.htmlReport` (or `ears.cli`, or
-`ears.npm`) writes a report under `out/`.
+`./mill __.test` runs every test on the JVM and, for the library, the npm package, and the
+Markdown reader, on Node; the Markdown reader's conformance suite also runs natively with Scala
+Native, which needs [cmark](https://github.com/commonmark/cmark) installed (`brew install
+cmark`, or `apt-get install libcmark-dev`) and a C compiler. It measures test coverage on the
+JVM; `./mill ears.scoverage.htmlReport` (or `ears.cli`, `ears.npm`, `ears.linkCheck`, or
+`ears.markdown`) writes a report under `out/`.
 `./mill __.publishLocal` publishes the next version as a snapshot (`0.2.0-SNAPSHOT`) to
 `~/.ivy2/local`.
 `scripts/check-npm-package` builds the npm package, lints it with publint and Are the Types

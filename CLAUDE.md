@@ -32,9 +32,19 @@ as the npm package `@tsnee/ears-checker`, not yet published.
 - The `build.mill` header pins the Mill version, the JDK Mill fetches, and the JVM index. The
   index pin is there because Mill's default index can predate the pinned JDK; raise it with the
   JDK.
-- `ears.js` and `ears.npm.js` tests run on Node.
-- Coverage: `./mill __.test` measures `ears`, `ears.cli`, `ears.npm`, and `ears.linkCheck`
-  (scoverage, on the JVM only; the Scala.js modules compile the same sources).
+- `ears.js`, `ears.npm.js`, and `ears.markdown.js` tests run on Node; `ears.markdown.native`'s
+  run natively (Scala Native 0.5), linked with the system's cmark through `pkg-config` (`brew
+  install cmark`; CI installs `libcmark-dev`).
+- Markdown is read only through the facade in `ears/markdown` (`Markdown.sentences`), never with
+  a parser directly. Its conformance suite runs every fixture on the JVM, Node, and Scala Native;
+  a case where the parsers could differ gets a fixture. The Node tests' npm parser is pinned by
+  `ears/markdown/js/package-lock.json` and installed (with the network, the first time and after
+  a clean) by the Mill task
+  `ears.markdown.js.npmDependencies`; Mill's import map points the tests' import at it.
+- Coverage: `./mill __.test` measures `ears`, `ears.cli`, `ears.npm`, `ears.linkCheck`, and
+  `ears.markdown` (scoverage, on the JVM only; the Scala.js and Scala Native modules compile the
+  same sources). `ears.cli` compiles the facade's sources in and excludes them from its own
+  coverage (`-coverage-exclude-files`), since `ears.markdown` measures them.
   `./mill ears.cli.scoverage.consoleReport`
   (or `htmlReport`) shows it, and `./mill ears.cli.scoverage.validateCoverageMinimums` checks the
   module's `statementCoverageMin` and `branchCoverageMin` in `build.mill`. Each test run clears
@@ -144,6 +154,10 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
     package `io.github.tsnee.ears.linkcheck`: `LinkCheck` picks out the public operations and
     writes the program; `Main` reads SemanticDB and writes the file; `fixture/` has one
     operation of every shape it references
+  - `ears/markdown/` — the Markdown facade, package `io.github.tsnee.ears.markdown`: `src` is
+    shared (`Markdown`, `Extraction`), and each platform has its `MarkdownParser`: `src-jvm`
+    (commonmark-java), `js/src` (mdast), `native/src` (cmark); `test/src` is the conformance
+    suite. Not published: `ears.cli` compiles the shared and JVM sources in
 - `openspec/` — specs `ears-classifier`, `ears-cli`, `npm-package`, `openspec-check` (the
   OpenSpec gate: `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub
   Actions workflow), `release-publishing` (the Maven Central release workflow), `test-coverage`

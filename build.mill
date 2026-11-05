@@ -7,7 +7,9 @@ package build
 import mill.*
 import mill.contrib.scoverage.ScoverageModule
 import mill.scalajslib.*
+import mill.scalajslib.api.ESModuleImportMapping
 import mill.scalajslib.api.ModuleKind
+import mill.scalanativelib.*
 import mill.scalalib.*
 import mill.scalalib.publish.*
 import mill.scalalib.scalafmt.ScalafmtModule
@@ -76,7 +78,9 @@ trait ZioSpecs extends ScalaModule with ScalafmtModule with TestModule.ZioTest {
     super.scalacOptions().filterNot(wartOptions(Seq("Any")).contains)
   }
 
-  def mvnDeps = Seq(
+  // Added to what the test module already has: Scala Native's test modules bring their test
+  // interface this way.
+  def mvnDeps = super.mvnDeps() ++ Seq(
     mvn"dev.zio::zio-test::2.1.27",
     mvn"dev.zio::zio-test-sbt::2.1.27"
   )
@@ -312,12 +316,106 @@ object ears extends Base with Published with Covered {
     }
   }
 
+  /** Requirement sentences from Markdown: shared extraction over a small parser facade, with one
+    * parser per platform (commonmark-java here; mdast on Node in `js`; cmark in `native`). Not
+    * published: `cli` compiles the shared and JVM sources into itself.
+    */
+  object markdown extends Base with Covered {
+    override def warts = pureWarts
+    def sharedSources = Task.Sources("src")
+    def jvmSources = Task.Sources("src-jvm")
+    def sources = Task(sharedSources() ++ jvmSources())
+    def mvnDeps = Seq(mvn"org.commonmark:commonmark:0.31.0")
+
+    def statementCoverageMin = Some(100.0)
+    def branchCoverageMin = Some(100.0)
+
+    /** The conformance suite, which every platform's test module compiles. */
+    object test extends CoveredTests with ZioSpecs
+
+    /** The shared sources and the mdast parser, for Node. Its tests run the conformance suite. */
+    object js extends Base with ScalaJSModule {
+      def scalaJSVersion = ears.js.scalaJSVersion()
+      override def warts = pureWarts
+      def sources = Task(markdown.sharedSources() ++ super.sources())
+      def moduleKind = Task(ModuleKind.ESModule)
+
+      /** `package.json` and `package-lock.json`, which pin the npm parser. */
+      def npmManifest = Task.Sources("package.json", "package-lock.json")
+
+      /** The npm parser and its dependencies, installed with `npm ci` from the lockfile. The cache
+        * is in the task's own directory, so nothing is written to `~/.npm`.
+        */
+      def npmDependencies = Task {
+        npmManifest().foreach(file => os.copy.into(file.path, Task.dest))
+        os.proc(
+          "npm", "ci", "--cache", (Task.dest / "cache").toString, "--no-audit", "--no-fund",
+          "--loglevel=error"
+        ).call(cwd = Task.dest, stdout = os.Inherit, stderr = os.Inherit)
+        PathRef(Task.dest / "node_modules")
+      }
+
+      object test extends ScalaJSTests with ZioSpecs {
+        def sources = markdown.test.sources
+
+        // Node resolves a bare import only from `node_modules` above the importing file, and the
+        // tests are linked under `out/`: the map points the import at the installed package.
+        def scalaJSImportMap = Task {
+          val entry = npmDependencies().path / "mdast-util-from-markdown" / "index.js"
+          Seq(ESModuleImportMapping.Prefix("mdast-util-from-markdown", entry.toNIO.toUri.toString))
+        }
+      }
+    }
+
+    /** The shared sources and the cmark parser, for Scala Native. Its tests run the conformance
+      * suite natively, linked with the system's cmark.
+      */
+    object native extends Base with ScalaNativeModule {
+      def scalaNativeVersion = "0.5.12"
+      override def warts = pureWarts
+      def sources = Task(markdown.sharedSources() ++ super.sources())
+
+      /** cmark's linker flags, from `pkg-config`: read on every run (an input), so a change of
+        * the system library is noticed.
+        */
+      def cmarkLinking = Task.Input {
+        val missing = "cmark isn't installed, or pkg-config can't find it: install them " +
+          "(`brew install cmark pkg-config`, or `apt-get install libcmark-dev pkg-config`) " +
+          "to link ears.markdown.native"
+        // os-lib throws when the program itself isn't there.
+        scala.util.Try(os.proc("pkg-config", "--libs", "libcmark").call(check = false)).toOption
+          .filter(_.exitCode == 0) match {
+          case Some(found) => found.out.trim().split("\\s+").toSeq.filter(_.nonEmpty)
+          case None => Task.fail(missing)
+        }
+      }
+
+      // cmark's flags first, so its -L comes before Mill's defaults (such as Homebrew's lib
+      // directory) and the library pkg-config names is the one linked.
+      def nativeLinkingOptions = Task(cmarkLinking() ++ super.nativeLinkingOptions())
+
+      object test extends ScalaNativeTests with ZioSpecs {
+        def sources = markdown.test.sources
+        def nativeLinkingOptions = Task(cmarkLinking() ++ super.nativeLinkingOptions())
+      }
+    }
+  }
+
   /** Command-line checker over plain text, Markdown, and OpenSpec JSON. */
   object cli extends Base with Published with Covered {
     def artifactName = "ears-checker-cli"
     def pomDescription = "EARS checker for plain text, Markdown, and OpenSpec JSON"
     def moduleDeps = Seq(ears)
     def mainClass = Some("io.github.tsnee.ears.cli.Main")
+    // The Markdown facade's shared and JVM sources, compiled in rather than depended on, so the
+    // published POM names no unpublished artifact.
+    def sources = Task(super.sources() ++ markdown.sharedSources() ++ markdown.jvmSources())
+
+    // `markdown` measures those sources itself, with its conformance suite; here they'd count as
+    // CLI code that the CLI's tests needn't reach. Scala 3's coverage ignores the option outside
+    // an instrumented compile.
+    def scalacOptions =
+      Task(super.scalacOptions() :+ "-coverage-exclude-files:.*/ears/markdown/.*")
 
     def mvnDeps = Seq(
       mvn"dev.zio::zio:2.1.27",
