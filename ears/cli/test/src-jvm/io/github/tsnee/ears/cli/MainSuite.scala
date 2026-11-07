@@ -25,7 +25,8 @@ object MainSuite extends ZIOSpecDefault:
 
   private val noStdin: Task[String] = ZIO.fail(new IllegalStateException("stdin not expected"))
 
-  private def run(arguments: String*): UIO[Outcome] = Main.program(arguments.toList, noStdin)
+  private def run(arguments: String*): UIO[Outcome] =
+    Cli.program(arguments.toList, Main.reading(noStdin))
 
   /** Runs `cli` with the logger the application would build for these arguments, writing to
     * `writeLog` instead of standard error.
@@ -34,14 +35,16 @@ object MainSuite extends ZIOSpecDefault:
       effect: UIO[ExitCode]
   ): UIO[ExitCode] =
     Clock.javaClock.flatMap(clock =>
-      ZIO.withLogger(Main.loggerFor(arguments, writeLog, clock))(effect)
+      ZIO.withLogger(Cli.loggerFor(arguments, writeLog, () => clock.instant()))(effect)
     )
 
   /** The log lines a run writes. */
   private def logged(arguments: List[String], stdin: Task[String]): UIO[List[String]] =
     for
       lines <- ZIO.succeed(LinkedBlockingQueue[String]())
-      _ <- withRunLogger(arguments, line => lines.put(line))(Main.cli(arguments, stdin))
+      _ <- withRunLogger(arguments, line => lines.put(line))(
+        Cli.cli(arguments, Main.reading(stdin))
+      )
     yield lines.asScala.toList
 
   /** A closed stream: every read fails with the JDK's `IOException("Stream closed")`. */
@@ -86,8 +89,8 @@ object MainSuite extends ZIOSpecDefault:
       yield assertTrue(outcome.exitCode == 1, outcome.stdout.contains("\"kind\":\"wrong-case\""))
     ,
     test("piped input: standard input is read when no file is given"):
-      Main
-        .program(Nil, ZIO.succeed("The scheduler shall list upcoming events.\n"))
+      Cli
+        .program(Nil, Main.reading(ZIO.succeed("The scheduler shall list upcoming events.\n")))
         .map(outcome => assertTrue(outcome.exitCode == 0, outcome.stdout.isEmpty))
     ,
     test("missing file: exit status 2 and a message naming the file"):
@@ -164,14 +167,17 @@ object MainSuite extends ZIOSpecDefault:
     suite("the console wiring")(
       test("a passing requirement: exit code 0 and nothing written"):
         for
-          code <- Main.cli(Nil, ZIO.succeed("The scheduler shall list upcoming events.\n"))
+          code <- Cli.cli(
+            Nil,
+            Main.reading(ZIO.succeed("The scheduler shall list upcoming events.\n"))
+          )
           out <- TestConsole.output
           err <- TestConsole.outputErr
         yield assertTrue(code.code == 0, out.mkString.isEmpty, err.mkString.isEmpty)
       ,
       test("a failing requirement: exit code 1 and the finding on standard output"):
         for
-          code <- Main.cli(Nil, ZIO.succeed("The scheduler lists events.\n"))
+          code <- Cli.cli(Nil, Main.reading(ZIO.succeed("The scheduler lists events.\n")))
           out <- TestConsole.output
           err <- TestConsole.outputErr
         yield assertTrue(
@@ -182,14 +188,14 @@ object MainSuite extends ZIOSpecDefault:
       ,
       test("--help: exit code 0 and the usage text on standard output"):
         for
-          code <- Main.cli(List("--help"), noStdin)
+          code <- Cli.cli(List("--help"), Main.reading(noStdin))
           out <- TestConsole.output
           err <- TestConsole.outputErr
         yield assertTrue(code.code == 0, out.mkString.contains("Usage"), err.mkString.isEmpty)
       ,
       test("bad arguments: exit code 2 and the usage text on standard error"):
         for
-          code <- Main.cli(List("--format", "yaml"), noStdin)
+          code <- Cli.cli(List("--format", "yaml"), Main.reading(noStdin))
           out <- TestConsole.output
           err <- TestConsole.outputErr
         yield assertTrue(code.code == 2, out.mkString.isEmpty, err.mkString.contains("Usage"))
@@ -201,7 +207,9 @@ object MainSuite extends ZIOSpecDefault:
           for
             outBefore <- TestConsole.output
             errBefore <- TestConsole.outputErr
-            code <- withRunLogger(arguments, _ => ())(Main.cli(arguments, ZIO.succeed(input)))
+            code <- withRunLogger(arguments, _ => ())(
+              Cli.cli(arguments, Main.reading(ZIO.succeed(input)))
+            )
             out <- TestConsole.output
             err <- TestConsole.outputErr
           yield (
@@ -243,7 +251,7 @@ object MainSuite extends ZIOSpecDefault:
             lines <- ZIO.succeed(LinkedBlockingQueue[String]())
             _ <- ZIO.scoped(
               (ZLayer.succeed(ZIOAppArgs(Chunk.fromIterable(arguments))) >>>
-                Main.bootstrapWith(line => lines.put(line))).build *>
+                Cli.bootstrapWith(line => lines.put(line))).build *>
                 ZIO.logDebug("Starting") *> ZIO.logError("Stopping")
             )
           yield lines.asScala.toList.size
@@ -256,7 +264,9 @@ object MainSuite extends ZIOSpecDefault:
         for
           lines <- ZIO.succeed(LinkedBlockingQueue[String]())
           clock <- Clock.javaClock
-          _ <- ZIO.withLogger(Main.logger(LogLevel.Warning, line => lines.put(line), clock))(
+          _ <- ZIO.withLogger(
+            Cli.logger(LogLevel.Warning, line => lines.put(line), () => clock.instant())
+          )(
             ZIO.logErrorCause("Unexpected", Cause.fail("disk full"))
           )
           written = lines.asScala.toList
@@ -267,27 +277,22 @@ object MainSuite extends ZIOSpecDefault:
           .map(lines => assertTrue(lines.size > 1))
     ) @@ TestAspect.silent,
     suite("unreadable input")(
-      test("standard input that fails: status 2 and the cause on standard error"):
+      test("standard input that fails: status 2 and standard input named on standard error"):
         for
           stream <- closedStream
-          outcome <- Main.program(Nil, Main.readAll(stream))
+          outcome <- Cli.program(Nil, Main.reading(Main.readAll(stream)))
         yield assertTrue(
           outcome.exitCode == 2,
           outcome.stdout.isEmpty,
-          outcome.stderr.contains("Cannot read standard input: Stream closed")
+          outcome.stderr == "Cannot read standard input\n"
         )
       ,
-      test("an error with no message: the error's class names the cause"):
-        Main.program(Nil, ZIO.fail(IllegalStateException())).map { outcome =>
-          assertTrue(
-            outcome.exitCode == 2,
-            outcome.stderr.contains(
-              "Cannot read standard input: java.lang.IllegalStateException"
-            )
-          )
+      test("an error with no message: status 2 and standard input named"):
+        Cli.program(Nil, Main.reading(ZIO.fail(IllegalStateException()))).map { outcome =>
+          assertTrue(outcome.exitCode == 2, outcome.stderr == "Cannot read standard input\n")
         }
       ,
-      test("a directory given as a file: status 2, its name, and the system's reason"):
+      test("a directory given as a file: status 2 and its name"):
         for
           directory <- ZIO.attemptBlocking {
             val path = Files.createTempDirectory("ears-check")
@@ -295,14 +300,10 @@ object MainSuite extends ZIOSpecDefault:
             path
           }
           outcome <- run(directory.toString)
-          prefix = s"Cannot read $directory: "
-          reason = outcome.stderr.stripPrefix(prefix).trim
         yield assertTrue(
           outcome.exitCode == 2,
           outcome.stdout.isEmpty,
-          outcome.stderr.startsWith(prefix),
-          reason.nonEmpty,
-          reason != "no such file"
+          outcome.stderr == s"Cannot read $directory\n"
         )
       ,
       test("readAll decodes a stream as UTF-8"):

@@ -227,6 +227,14 @@ A CLI meets the locale in six places:
 | The OS's error text | Only in log entries, never interpreted (Decision 1). |
 | Our own text | Fixed English, ISO timestamps. |
 
+**No `--encoding` option** (decided with the owner, 2026-11-07). UTF-8 only, with a clear
+error, covers the formats the checker reads. An option limited to what Scala.js's library
+decodes (US-ASCII, ISO-8859-1, UTF-8, and the UTF-16 variants) would be small, but ISO-8859-1
+accepts every byte, so a wrong choice would pass unnoticed. Windows-1252, the legacy encoding
+people actually have, isn't in Scala.js, and Node's decoder maps a few of its bytes differently
+from Java's: supporting it means a shared decoding table per charset. Revisit only when someone
+needs another encoding.
+
 `Utf8.decode` is shared: the platform reads bytes, and Java's UTF-8 decoder in its reporting
 mode (which Scala.js implements too) decodes them, so both platforms agree on what's invalid
 and where. The column counts characters, as an editor does. Measured cost: none visible on
@@ -239,6 +247,11 @@ dropped by the Markdown facade.
 - **[The jar's output changes]** Only where Decisions 1 and 7 say: read-failure messages, input
   that isn't UTF-8, output under a non-UTF-8 locale, and empty file names. Apply compared the
   jar's output on this repository's files with `main`'s jar byte for byte.
+- **[Non-ASCII file names under the C locale on Linux]** Checked in Docker (JDK 17 and 27): the
+  Java launcher decodes the command line with the locale's charset before `main` runs, so
+  `résumé.txt` arrives as `r��sum��.txt` and can't be opened (`InvalidPathException`, exit 2).
+  Nothing in the program can recover the name; the README tells JVM users to run under a UTF-8
+  locale. Node decodes the command line as UTF-8 (to be confirmed on Linux).
 - **[Standard input closed by the caller]** With file descriptor 0 closed (`<&-`), the JVM
   reads whatever file it opened first as descriptor 0, usually one of its own, which strict
   decoding then rejects; Node reads nothing. It takes a caller that closes standard input on

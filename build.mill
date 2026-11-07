@@ -37,8 +37,58 @@ val zioSafeWarts = Seq(
 /** The full Unsafe set, for code with no ZIO in it. */
 val pureWarts = zioSafeWarts :+ "Any"
 
+/** Versions shared by the JVM and Scala.js builds, so they can't drift apart. */
+val zioVersion = "2.1.27"
+val declineVersion = "2.6.2"
+val zioJsonVersion = "1.1.1"
+
 def wartOptions(warts: Seq[String]): Seq[String] =
   warts.map(w => s"-P:wartremover:traverser:org.wartremover.warts.$w")
+
+/** A Scala.js source map for an npm package, with `sourcesContent` for every source from this
+  * repository: a path relative to the repository root, or, in a release, its tagged URL on
+  * GitHub. Library sources keep their URIs and no content: a public `https://` URL, or a
+  * `file:` URI from the machine that built the library (ZIO's, decline's, and others' are).
+  * Content is read only from under `roots`, the linked modules' source directories (Mill allows
+  * a task to read only declared sources). Anything else fails the build rather than ship a map
+  * with a gap or a path from this machine: a `file:` URI in this repository or an absolute path
+  * (a Scala.js module without `SourceUris`), or a relative path outside `roots`.
+  */
+def embedProjectSources(
+    map: os.Path,
+    release: String,
+    roots: Seq[os.Path]
+): Either[String, ujson.Value] = {
+  val json = ujson.read(os.read(map))
+  // A file: URI elsewhere: a library built on another machine. Parsed, not compared as text, so
+  // another spelling of a path in this repository can't pass for one.
+  def elsewhere(uri: String) =
+    scala.util.Try(java.nio.file.Paths.get(java.net.URI(uri))).toOption
+      .exists(file => !file.normalize.startsWith(mill.api.BuildCtx.workspaceRoot.toNIO))
+  def unrecognized(uri: String) =
+    Left(s"Source map names $uri, an unrecognized source URI: neither a library's https URL " +
+      "nor one of the package's own sources")
+  val contents = json("sources").arr.toSeq.map { source =>
+    val uri = source.str
+    val path =
+      if (uri.startsWith(release)) uri.stripPrefix(release)
+      else uri
+    if (path.startsWith("https://")) Right(ujson.Null) // a library's public source
+    else if (path.startsWith("file:") && elsewhere(path)) Right(ujson.Null)
+    else
+      scala.util.Try(os.RelPath(path)).toOption // no scheme, not absolute
+        .filter(_ => !path.contains(":"))
+        .map(mill.api.BuildCtx.workspaceRoot / _)
+        .filter(file => roots.exists(file.startsWith) && os.isFile(file))
+        .fold[Either[String, ujson.Value]](unrecognized(uri))(file =>
+          Right(ujson.Str(os.read(file)))
+        )
+  }
+  contents.collectFirst { case Left(message) => message }.toLeft {
+    json("sourcesContent") = ujson.Arr(contents.collect { case Right(content) => content }*)
+    json
+  }
+}
 
 /** Shared settings: Scala 3.10 targeting Java 17, warnings as errors, strict equality, explicit
   * nulls, and WartRemover warts as errors.
@@ -81,8 +131,8 @@ trait ZioSpecs extends ScalaModule with ScalafmtModule with TestModule.ZioTest {
   // Added to what the test module already has: Scala Native's test modules bring their test
   // interface this way.
   def mvnDeps = super.mvnDeps() ++ Seq(
-    mvn"dev.zio::zio-test::2.1.27",
-    mvn"dev.zio::zio-test-sbt::2.1.27"
+    mvn"dev.zio::zio-test::$zioVersion",
+    mvn"dev.zio::zio-test-sbt::$zioVersion"
   )
 }
 
@@ -276,44 +326,6 @@ object ears extends Base with Published with Covered {
       os.write(out / "package.json", ujson.write(manifest, indent = 2) + "\n")
       PathRef(out)
     }
-
-    /** The map with `sourcesContent` for every source from this repository: a path relative to
-      * the repository root, or, in a release, its tagged URL on GitHub. Library sources keep
-      * their public `https://` URLs and no content. Content is read only from under `roots`, the
-      * linked modules' source directories (Mill allows a task to read only declared sources).
-      * Anything else fails the build rather than ship a map with a gap or a path from this
-      * machine: a `file:` URI or an absolute path (a Scala.js module without `SourceUris`), or
-      * a relative path outside `roots`.
-      */
-    private def embedProjectSources(
-        map: os.Path,
-        release: String,
-        roots: Seq[os.Path]
-    ): Either[String, ujson.Value] = {
-      val json = ujson.read(os.read(map))
-      def unrecognized(uri: String) =
-        Left(s"Source map names $uri, an unrecognized source URI: neither a library's https URL " +
-          "nor one of the package's own sources")
-      val contents = json("sources").arr.toSeq.map { source =>
-        val uri = source.str
-        val path =
-          if (uri.startsWith(release)) uri.stripPrefix(release)
-          else uri
-        if (path.startsWith("https://")) Right(ujson.Null) // a library's public source
-        else
-          scala.util.Try(os.RelPath(path)).toOption // no scheme, not absolute
-            .filter(_ => !path.contains(":"))
-            .map(mill.api.BuildCtx.workspaceRoot / _)
-            .filter(file => roots.exists(file.startsWith) && os.isFile(file))
-            .fold[Either[String, ujson.Value]](unrecognized(uri))(file =>
-              Right(ujson.Str(os.read(file)))
-            )
-      }
-      contents.collectFirst { case Left(message) => message }.toLeft {
-        json("sourcesContent") = ujson.Arr(contents.collect { case Right(content) => content }*)
-        json
-      }
-    }
   }
 
   /** Requirement sentences from Markdown: shared extraction over a small parser facade, with one
@@ -407,9 +419,16 @@ object ears extends Base with Published with Covered {
     def pomDescription = "EARS checker for plain text, Markdown, and OpenSpec JSON"
     def moduleDeps = Seq(ears)
     def mainClass = Some("io.github.tsnee.ears.cli.Main")
+
+    /** The program, shared with `js`; `src-jvm` has the JVM's entry point and reading. */
+    def sharedSources = Task.Sources("src")
+    def jvmSources = Task.Sources("src-jvm")
+
     // The Markdown facade's shared and JVM sources, compiled in rather than depended on, so the
     // published POM names no unpublished artifact.
-    def sources = Task(super.sources() ++ markdown.sharedSources() ++ markdown.jvmSources())
+    def sources = Task(
+      sharedSources() ++ jvmSources() ++ markdown.sharedSources() ++ markdown.jvmSources()
+    )
 
     // `markdown` measures those sources itself, with its conformance suite; here they'd count as
     // CLI code that the CLI's tests needn't reach. Scala 3's coverage ignores the option outside
@@ -418,9 +437,9 @@ object ears extends Base with Published with Covered {
       Task(super.scalacOptions() :+ "-coverage-exclude-files:.*/ears/markdown/.*")
 
     def mvnDeps = Seq(
-      mvn"dev.zio::zio:2.1.27",
-      mvn"com.monovore::decline:2.6.2",
-      mvn"dev.zio::zio-json:1.1.1",
+      mvn"dev.zio::zio:$zioVersion",
+      mvn"com.monovore::decline:$declineVersion",
+      mvn"dev.zio::zio-json:$zioJsonVersion",
       mvn"org.commonmark:commonmark:0.31.0"
     )
 
@@ -428,10 +447,99 @@ object ears extends Base with Published with Covered {
     def branchCoverageMin = Some(95.0)
 
     object test extends CoveredTests with ZioSpecs {
+
+      /** The suites shared with `js.test`; `src-jvm` has those that need the JVM. */
+      def sharedSources = Task.Sources("src")
+      def jvmSources = Task.Sources("src-jvm")
+      def sources = Task(sharedSources() ++ jvmSources())
+
       // Tests run in a sandbox directory; this lets them find the repo's OpenSpec files.
       def forkEnv = Task {
         super.forkEnv() ++
           Map("OPENSPEC_DIR" -> (mill.api.BuildCtx.workspaceRoot / "openspec").toString)
+      }
+    }
+
+    /** The same program on Node: the shared sources, Node's entry point and reading (`js/src`),
+      * and the Markdown facade's Node parser. Not published to Maven; it becomes the npm package
+      * `@tsnee/ears-checker-cli`.
+      */
+    object js extends Base with ScalaJSModule with SourceUris {
+      def scalaJSVersion = ears.js.scalaJSVersion()
+      def moduleDeps = Seq(ears.js)
+      def sources = Task(cli.sharedSources() ++ super.sources() ++ markdown.js.sources())
+      def mainClass = Some("io.github.tsnee.ears.cli.NodeMain")
+      def moduleKind = Task(ModuleKind.ESModule)
+
+      // ZIO needs java.time on Scala.js but doesn't declare it; zio-test brings it into tests.
+      def mvnDeps = Seq(
+        mvn"dev.zio::zio::$zioVersion",
+        mvn"com.monovore::decline::$declineVersion",
+        mvn"dev.zio::zio-json::$zioJsonVersion",
+        mvn"io.github.cquiroz::scala-java-time::2.9.0"
+      )
+
+      object test extends ScalaJSTests with ZioSpecs {
+        def sources = cli.test.sharedSources
+        def scalaJSImportMap = markdown.js.test.scalaJSImportMap
+      }
+
+      /** The hand-written package file: `README.md`. */
+      def packageFiles = Task.Source("package")
+
+      /** The npm package `@tsnee/ears-checker-cli`, ready for `npm pack`: the linked ES module, its
+        * source map with this repository's sources embedded, the `ears-check` command, the README,
+        * license, and a generated `package.json`. It depends on exactly the Markdown parser the
+        * facade's conformance suite runs on Node, read from that suite's lockfile.
+        */
+      def npmPackage = Task {
+        val linked = fullLinkJS().dest.path
+        val out = Task.dest
+        os.copy(linked / "main.js", out / "main.js")
+        embedProjectSources(
+          linked / "main.js.map",
+          ears.releaseSourceUrl(ears.publishVersion()),
+          (ears.js.sources() ++ sources()).map(_.path)
+        ) match {
+          case Right(map) => os.write(out / "main.js.map", ujson.write(map))
+          case Left(message) => Task.fail(message)
+        }
+        // A shebang in front of main.js would shift its source map by a line.
+        os.write(
+          out / "bin" / "ears-check.js",
+          "#!/usr/bin/env node\nimport \"../main.js\";\n",
+          perms = "rwxr-xr-x",
+          createFolders = true
+        )
+        os.copy(packageFiles().path / "README.md", out / "README.md")
+        os.copy(npm.license().path, out / "LICENSE")
+        val parser = "mdast-util-from-markdown"
+        val lockfile = markdown.js.npmManifest().map(_.path).filter(_.last == "package-lock.json")
+        val pinned = lockfile.headOption
+          .flatMap(file => ujson.read(os.read(file))("packages").obj.get(s"node_modules/$parser"))
+          .map(_("version").str)
+          .getOrElse(Task.fail(s"$parser isn't in ears/markdown/js/package-lock.json"))
+        val repository = "https://github.com/tsnee/ears-checker"
+        val manifest = ujson.Obj(
+          "name" -> "@tsnee/ears-checker-cli",
+          "version" -> npm.npmVersion(),
+          "description" -> cli.pomDescription,
+          "keywords" -> ujson.Arr(
+            "ears", "requirements", "requirements-engineering", "lint", "cli", "markdown",
+            "openspec"
+          ),
+          "homepage" -> s"$repository#readme",
+          "bugs" -> ujson.Obj("url" -> s"$repository/issues"),
+          "repository" -> ujson.Obj("type" -> "git", "url" -> s"git+$repository.git"),
+          "license" -> "CC0-1.0",
+          "type" -> "module",
+          "bin" -> ujson.Obj("ears-check" -> "./bin/ears-check.js"),
+          "files" -> ujson.Arr("main.js", "main.js.map", "bin/ears-check.js"),
+          "dependencies" -> ujson.Obj(parser -> pinned),
+          "engines" -> ujson.Obj("node" -> ">=22")
+        )
+        os.write(out / "package.json", ujson.write(manifest, indent = 2) + "\n")
+        PathRef(out)
       }
     }
   }
@@ -442,7 +550,7 @@ object ears extends Base with Published with Covered {
     */
   object linkCheck extends Base with Covered {
     def mvnDeps = Seq(
-      mvn"dev.zio::zio:2.1.27",
+      mvn"dev.zio::zio:$zioVersion",
       mvn"org.scalameta:semanticdb-shared_2.13:4.17.4"
     )
 

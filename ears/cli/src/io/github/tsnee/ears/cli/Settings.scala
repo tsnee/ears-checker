@@ -112,7 +112,16 @@ object Settings:
 
   /** Every file argument, or a single `None` for standard input. */
   private val filesOpt: Opts[NonEmptyList[Option[String]]] =
-    Opts.arguments[String]("file").map(_.map(Option(_))).withDefault(NonEmptyList.one(None))
+    Opts
+      .arguments[String]("file")
+      // An empty name means different things to each platform: the working directory on the JVM,
+      // no file on Node.
+      .mapValidated(files =>
+        if files.exists(_.isEmpty) then "A file name can't be empty.".invalidNel
+        else files.validNel
+      )
+      .map(_.map(Option(_)))
+      .withDefault(NonEmptyList.one(None))
 
   private val verboseOpt =
     Opts.flag("verbose", "Log every step to standard error, not only warnings and errors.").orFalse
