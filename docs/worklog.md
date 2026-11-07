@@ -78,5 +78,6 @@
   and runs in CI on Node 26 and 22. Review led to: no interpretation of platform read errors
   (`Cannot read <input>`, the reason in the log), strict UTF-8 input with the bad byte's line
   and column, UTF-8 output on the JVM whatever the locale, and empty file names rejected; the
-  library's source-map helper now keeps dependencies' own `file:` URIs. Node's slowness on large
+  library's source-map helper now renames dependencies' build-machine `file:` URIs to
+  `library/<package path>`, so no package carries a machine path. Node's slowness on large
   Markdown files went on the roadmap.

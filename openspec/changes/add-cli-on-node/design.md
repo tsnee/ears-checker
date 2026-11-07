@@ -156,8 +156,13 @@ The task writes `@tsnee/ears-checker-cli` under its `Task.dest`, in the style of
   `embedProjectSources` moves into a shared helper both tasks use, so no path from the build
   machine ends up in the package. Unlike the library's dependencies, several of the CLI's
   (ZIO, zio-json, decline, izumi-reflect, the Scala.js locales) name their sources by `file:`
-  URIs from the machines that built them, not `https://` URLs; the helper keeps those, without
-  content, as it does `https://` ones, and still fails on a `file:` URI in this repository;
+  URIs from the machines that built them (`file:///home/runner/work/zio/…`, and developers'
+  home directories), not `https://` URLs. npm users don't expect a package to carry machine
+  paths, so the helper renames each to `library/` and its package path under `src/main/scala…`
+  (`library/zio/ZIO.scala`), without content; a library `file:` URI in any other layout fails
+  the build, as does a `file:` URI in this repository. (First the helper kept them as they were;
+  the first CI run showed the cost: GitHub's runners build ZIO under `/home/runner`, `$HOME` on a
+  runner too, so the package check couldn't tell their paths from ours. Decided with the owner.)
 - `bin/ears-check.js`, two generated lines: `#!/usr/bin/env node` and `import "../main.js";`.
   A shebang can't go in front of `main.js` itself without shifting its source map by a line;
 - a README for the CLI package, and `LICENSE`;
@@ -194,10 +199,8 @@ A POSIX `sh` script in the style of `check-npm-package`:
    difference fails the script, naming the case and showing both sides. Each case also names
    the statuses it may end with, so both builds failing the same way fails too; and every
    tracked Markdown file must exist.
-5. Fails if any packed file contains the repository path, or `$HOME` anywhere but the source
-   map's list of sources, where libraries' own `file:` URIs (Decision 4) are kept. The first
-   CI run showed why: GitHub's runners build ZIO and others under `/home/runner`, which is also
-   `$HOME` on a runner.
+5. Fails if any packed file contains the repository path or `$HOME` (libraries' machine paths
+   are renamed by the build; Decision 4).
 
 CI runs it in `check` (Node 26) after the npm package check, and in `check-jdk17` (Node 22,
 the oldest the package declares). It needs the network only to install from the registry.

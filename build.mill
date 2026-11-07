@@ -47,12 +47,14 @@ def wartOptions(warts: Seq[String]): Seq[String] =
 
 /** A Scala.js source map for an npm package, with `sourcesContent` for every source from this
   * repository: a path relative to the repository root, or, in a release, its tagged URL on
-  * GitHub. Library sources keep their URIs and no content: a public `https://` URL, or a
-  * `file:` URI from the machine that built the library (ZIO's, decline's, and others' are).
-  * Content is read only from under `roots`, the linked modules' source directories (Mill allows
-  * a task to read only declared sources). Anything else fails the build rather than ship a map
-  * with a gap or a path from this machine: a `file:` URI in this repository or an absolute path
-  * (a Scala.js module without `SourceUris`), or a relative path outside `roots`.
+  * GitHub. Library sources get no content. One with a public `https://` URL keeps it; one named
+  * by a `file:` URI from the machine that built the library (ZIO's, decline's, and others' are)
+  * becomes `library/` and its package path, such as `library/zio/ZIO.scala`, so the package
+  * names no machine's paths, theirs or ours. Content is read only from under `roots`, the linked
+  * modules' source directories (Mill allows a task to read only declared sources). Anything else
+  * fails the build rather than ship a map with a gap or a machine's path: a `file:` URI in this
+  * repository or an absolute path (a Scala.js module without `SourceUris`), a library `file:`
+  * URI without the usual `src/main/scala` layout, or a relative path outside `roots`.
   */
 def embedProjectSources(
     map: os.Path,
@@ -65,27 +67,35 @@ def embedProjectSources(
   def elsewhere(uri: String) =
     scala.util.Try(java.nio.file.Paths.get(java.net.URI(uri))).toOption
       .exists(file => !file.normalize.startsWith(mill.api.BuildCtx.workspaceRoot.toNIO))
+  // The package path under the library's Scala source directory (scala, scala-3, scala-2.13+).
+  val libraryLayout = """.*/src/main/scala[^/]*/(.+)""".r
   def unrecognized(uri: String) =
     Left(s"Source map names $uri, an unrecognized source URI: neither a library's https URL " +
-      "nor one of the package's own sources")
-  val contents = json("sources").arr.toSeq.map { source =>
+      "or src/main/scala file, nor one of the package's own sources")
+  val rewritten = json("sources").arr.toSeq.map { source =>
     val uri = source.str
     val path =
       if (uri.startsWith(release)) uri.stripPrefix(release)
       else uri
-    if (path.startsWith("https://")) Right(ujson.Null) // a library's public source
-    else if (path.startsWith("file:") && elsewhere(path)) Right(ujson.Null)
+    if (path.startsWith("https://")) Right(uri -> ujson.Null) // a library's public source
+    else if (path.startsWith("file:") && elsewhere(path))
+      path match {
+        case libraryLayout(packagePath) => Right(s"library/$packagePath" -> ujson.Null)
+        case _ => unrecognized(uri)
+      }
     else
       scala.util.Try(os.RelPath(path)).toOption // no scheme, not absolute
         .filter(_ => !path.contains(":"))
         .map(mill.api.BuildCtx.workspaceRoot / _)
         .filter(file => roots.exists(file.startsWith) && os.isFile(file))
-        .fold[Either[String, ujson.Value]](unrecognized(uri))(file =>
-          Right(ujson.Str(os.read(file)))
+        .fold[Either[String, (String, ujson.Value)]](unrecognized(uri))(file =>
+          Right(uri -> ujson.Str(os.read(file)))
         )
   }
-  contents.collectFirst { case Left(message) => message }.toLeft {
-    json("sourcesContent") = ujson.Arr(contents.collect { case Right(content) => content }*)
+  rewritten.collectFirst { case Left(message) => message }.toLeft {
+    val kept = rewritten.collect { case Right(entry) => entry }
+    json("sources") = ujson.Arr(kept.map((uri, _) => ujson.Str(uri))*)
+    json("sourcesContent") = ujson.Arr(kept.map(_._2)*)
     json
   }
 }
