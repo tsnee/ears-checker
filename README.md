@@ -157,9 +157,13 @@ JVM; `./mill ears.scoverage.htmlReport` (or `ears.cli`, `ears.npm`, `ears.linkCh
 `ears.markdown`) writes a report under `out/`.
 `./mill __.publishLocal` publishes the next version as a snapshot (`0.2.0-SNAPSHOT`) to
 `~/.ivy2/local`.
-`scripts/check-npm-package` builds the npm package, lints it with publint and Are the Types
-Wrong, installs it into an empty project, and type-checks and runs a TypeScript program that uses
-it; it needs `tsc`, `publint`, and `attw` installed from npm.
+Both npm packages are minified with [esbuild](https://esbuild.github.io), which Mill installs
+from `ears/npm/tools/package-lock.json` (with the network, the first time and after a clean);
+the library keeps a source map that leads back to the Scala sources, and the command line ships
+none. `scripts/check-npm-package` builds the npm package, checks its size and its source map,
+lints it with publint and Are the Types Wrong, installs it into an empty project, and
+type-checks and runs a TypeScript program that uses it; it needs `tsc`, `publint`, and `attw`
+installed from npm.
 `scripts/check-npm-cli` builds the command line's npm package and jar, installs the package into
 an empty project, and runs both on this repository's Markdown and specs and on error cases,
 failing on any difference in output, messages, or exit status; it needs the

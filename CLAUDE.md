@@ -52,22 +52,29 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
   the last run's measurements, so a report covers only the latest run (all of it after
   `__.test`). Scoverage can't measure Scala.js-only code, so keep it thin: decisions go in code
   that also builds for the JVM.
-- The npm package: `./mill ears.npm.npmPackage` builds its directory. `scripts/check-npm-package`
-  packs it, lints it with publint and Are the Types Wrong, installs it into an empty project, and
-  type-checks and runs `ears/npm/smoke/consumer.ts`; it needs `tsc`, `publint`, and `attw` from
-  npm. npm commands here take `--cache` in a temporary directory, since `~/.npm` is read-only in
-  Claude's sandbox.
+- The npm package: `./mill ears.npm.npmPackage` builds its directory, with `main.js` minified
+  by esbuild after Scala.js (`minify` in `build.mill`) and a source map that leads back to the
+  Scala sources. esbuild is pinned in `ears/npm/tools/package-lock.json` and installed by
+  `ears.npm.tools.npmDependencies` (`npm ci --ignore-scripts`, as every `NpmInstalled` module
+  does). `scripts/check-npm-package` packs it, checks `main.js` against its size limit and that
+  the map leads `classify` to `Facade.scala`, lints it with publint and Are the Types Wrong,
+  installs it into an empty project, and type-checks and runs `ears/npm/smoke/consumer.ts`; it
+  needs `tsc`, `publint`, and `attw` from npm. npm commands here take `--cache` in a temporary
+  directory, since `~/.npm` is read-only in Claude's sandbox. A size limit is raised only on
+  purpose, with the reason in the commit.
 - The CLI is one program on the JVM and Node: `Cli` (`ears/cli/src`) is shared, and each
   platform's entry point supplies a `Reading`, its files and standard input: `Main` on the JVM
   (`ears/cli/src-jvm`), `NodeMain` over `node:fs` (`ears/cli/js/src`). Platform I/O goes only
   through `Reading`, and decisions stay in shared code, where they're measured. The platforms'
   read errors aren't interpreted (their kinds and wording differ and can change with a JDK or
   Node release): the message is `Cannot read <input>`, and the log entry carries the platform's
-  error. Input is UTF-8 (`Utf8`, shared), and the JVM writes UTF-8 whatever the locale. `./mill ears.cli.js.npmPackage` builds `@tsnee/ears-checker-cli`, which
-  depends on exactly the parser version in the facade's lockfile. `scripts/check-npm-cli` packs
-  and installs it, then runs it and the jar on this repository's Markdown, its specs as OpenSpec
-  JSON, and the error cases, and fails on any difference in standard output, messages (log lines
-  aside), or exit status; it needs `openspec`.
+  error. Input is UTF-8 (`Utf8`, shared), and the JVM writes UTF-8 whatever the locale.
+  `./mill ears.cli.js.npmPackage` builds `@tsnee/ears-checker-cli`, minified by esbuild and
+  without a source map, which depends on exactly the parser version in the facade's lockfile.
+  `scripts/check-npm-cli` packs it, checks that it has no map and that `main.js` is within its
+  size limit, installs it, then runs it and the jar on this repository's Markdown, its specs as
+  OpenSpec JSON, and the error cases, and fails on any difference in standard output, messages
+  (log lines aside), or exit status; it needs `openspec`.
 - The library must link on Scala.js with only its declared dependencies. zio-test brings
   scala-java-locales into every Scala.js test, which hides a missing class such as
   `java.util.Locale`. `scripts/check-scalajs-link` catches it: it publishes `ears.js` locally,
@@ -165,7 +172,8 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
     `OwnSpecsSuite` checks this repository's own specs
   - `ears/npm/` — the npm package, package `io.github.tsnee.ears.npm`: `src` is the pure core
     (`Api`, built and measured on the JVM), `js/src` the Scala.js export (`Facade`), `package/`
-    the hand-written `index.d.ts` and README, and `smoke/` the TypeScript consumer
+    the hand-written `index.d.ts` and README, `smoke/` the TypeScript consumer, and `tools/`
+    the esbuild lockfile both packages are minified with (`ears.npm.tools`)
   - `ears/linkCheck/` — the link-check generator (ZIO, scalameta's `semanticdb-shared`),
     package `io.github.tsnee.ears.linkcheck`: `LinkCheck` picks out the public operations and
     writes the program; `Main` reads SemanticDB and writes the file; `fixture/` has one

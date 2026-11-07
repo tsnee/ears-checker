@@ -44,6 +44,48 @@ if tar -xOzf "$tarball" | grep -q -F -e "$root" -e "$HOME"; then
   exit 1
 fi
 
+unpacked="$tmp/unpacked"
+mkdir "$unpacked"
+tar -xzf "$tarball" -C "$unpacked"
+
+# The code within its size limit: minified, main.js is about 608 KB; unminified, 1.57 MB. Raise
+# the limit only on purpose, saying why in the commit.
+limit=700000
+size=$(wc -c <"$unpacked/package/main.js" | tr -d ' ')
+if [ "$size" -gt "$limit" ]; then
+  echo "check-npm-package: main.js is $size bytes, over the limit of $limit" >&2
+  exit 1
+fi
+
+# The source map leads from the shipped code to the Scala sources: the start of the function
+# exported as classify maps into Facade.scala. JavaScript, because Node's own source-map reader
+# is the authority on what a debugger sees; Scala would have to decode the mappings by hand.
+if ! node --input-type=module -e '
+  import { readFileSync } from "node:fs";
+  import { SourceMap } from "node:module";
+  const dir = process.argv[1];
+  const code = readFileSync(`${dir}/main.js`, "utf8");
+  const name = code.match(/export\s*\{\s*([\w$]+) as classify\s*\}/)?.[1];
+  const escaped = name?.replace(/\$/g, "\\$");
+  const found = escaped && new RegExp(`let ${escaped}\\s*=\\s*\\(?(function)`, "d").exec(code);
+  if (!found) {
+    console.error("no definition of the function exported as classify");
+    process.exit(1);
+  }
+  const at = found.indices[1][0];
+  const line = code.slice(0, at).split("\n").length - 1;
+  const column = at - (code.lastIndexOf("\n", at - 1) + 1);
+  const map = new SourceMap(JSON.parse(readFileSync(`${dir}/main.js.map`, "utf8")));
+  const source = map.findEntry(line, column).originalSource ?? "nothing";
+  if (!source.endsWith("/Facade.scala")) {
+    console.error(`classify maps to ${source}`);
+    process.exit(1);
+  }
+' "$unpacked/package"; then
+  echo "check-npm-package: the source map doesn't lead classify back to Facade.scala" >&2
+  exit 1
+fi
+
 publint run "$tarball" --strict
 # An ESM-only package can't be loaded by require(), by design; the profile leaves that out.
 attw "$tarball" --profile esm-only

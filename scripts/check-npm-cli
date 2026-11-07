@@ -46,11 +46,29 @@ if [ ! -f "$tarball" ]; then
   exit 1
 fi
 
-# No file may name a path on this machine, such as a source map entry the build failed to make
-# relative. (The build also renames libraries' own file: URIs, from the machines that built
-# them, to library/<package path>; see embedProjectSources.)
+# No file may name a path on this machine, such as the repository's path compiled into the
+# code.
 if tar -xOzf "$tarball" | grep -q -F -e "$root" -e "$HOME"; then
   echo "check-npm-cli: the package names a path on this machine ($root or $HOME)" >&2
+  exit 1
+fi
+
+# No source map: a command-line tool's users don't debug into it.
+unpacked="$tmp/unpacked"
+mkdir "$unpacked"
+tar -xzf "$tarball" -C "$unpacked"
+maps=$(find "$unpacked" -name '*.map')
+if [ -n "$maps" ] || tail -n 1 "$unpacked/package/main.js" | grep -q "^//# sourceMappingURL="; then
+  echo "check-npm-cli: the package has a source map (${maps:-a sourceMappingURL comment})" >&2
+  exit 1
+fi
+
+# The code within its size limit: minified, main.js is about 1.85 MB; unminified, 5.08 MB. Raise
+# the limit only on purpose, saying why in the commit.
+limit=2100000
+size=$(wc -c <"$unpacked/package/main.js" | tr -d ' ')
+if [ "$size" -gt "$limit" ]; then
+  echo "check-npm-cli: main.js is $size bytes, over the limit of $limit" >&2
   exit 1
 fi
 

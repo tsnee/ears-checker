@@ -81,3 +81,10 @@
   library's source-map helper now renames dependencies' build-machine `file:` URIs to
   `library/<package path>`, so no package carries a machine path. Node's slowness on large
   Markdown files went on the roadmap.
+- 2026-11-07: shrink-npm-packages implemented (second change in batch-node-cli): esbuild 0.28.2,
+  pinned in `ears/npm/tools` and installed by `ears.npm.tools` (`npm ci --ignore-scripts`, now
+  shared with the Markdown facade through `NpmInstalled`), minifies both packages. The library's
+  `main.js` went from 1.57 MB to 608 KB (packed 584 KB to 501 KB) with its source map carried
+  through; the CLI's from 5.08 MB to 1.85 MB, without a map (packed 1.72 MB to 500 KB, installed
+  9.4 MB to 1.86 MB). The package checks enforce size limits and the map; the `library/`
+  source-path rewrite went, unused without the CLI's map.
