@@ -33,8 +33,8 @@ jobs:
           distribution: temurin
           java-version: "27"
 
-      # The Scala.js tests and the npm package check run on Node: the newest here, the oldest the
-      # package supports in check-jdk17.
+      # The Scala.js tests and the npm package and Node CLI checks run on Node: the newest here, the
+      # oldest the packages support in check-jdk17.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "26"
@@ -67,6 +67,10 @@ jobs:
 
       - name: Check the npm package
         run: scripts/check-npm-package
+
+      # The Node CLI, installed from its packed package, against the JVM jar on the same inputs.
+      - name: Check the Node CLI
+        run: scripts/check-npm-cli
 
       # scala-cli links the Scala.js library's link-check program against the published artifact;
       # it uses the runner's Java from setup-java.
@@ -113,9 +117,10 @@ jobs:
         run: scripts/check-openspec
 
   # The oldest supported runtimes: the OpenSpec check again with JDK 17, the oldest JDK the jar
-  # supports, starting it; and the npm package check on Node 22, the oldest Node the package
-  # declares. The tests stay in check: Mill runs them on its own JDK, not the runner's. The job
-  # keeps its name so branch protection that names it keeps working.
+  # supports, starting it; and the npm package and Node CLI checks on Node 22, the oldest Node the
+  # packages declare (the CLI check runs the jar on JDK 17 too). The tests stay in check: Mill
+  # runs them on its own JDK, not the runner's. The job keeps its name so branch protection that
+  # names it keeps working.
   check-jdk17:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -146,3 +151,6 @@ jobs:
 
       - name: Check the npm package
         run: scripts/check-npm-package
+
+      - name: Check the Node CLI
+        run: scripts/check-npm-cli

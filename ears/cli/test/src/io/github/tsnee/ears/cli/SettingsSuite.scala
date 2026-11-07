@@ -33,6 +33,13 @@ object SettingsSuite extends ZIOSpecDefault:
       test("an unknown format is rejected"):
         assertTrue(Settings.parse(List("--format", "yaml")).isLeft)
       ,
+      test("an empty file name is rejected, even among others"):
+        assertTrue(
+          Settings.parse(List("notes.md", "")) match
+            case Left(Usage(_, false, reasons)) => reasons == List("A file name can't be empty.")
+            case _                              => false
+        )
+      ,
       test("several files: one settings per file, in order, each with the shared options"):
         val json = Some(OutputFormat.Json)
         assertTrue(

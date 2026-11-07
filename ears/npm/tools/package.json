@@ -1,0 +1,8 @@
+{
+  "name": "ears-npm-tools",
+  "private": true,
+  "description": "Build tools for the npm packages (esbuild, which minifies them); not published.",
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

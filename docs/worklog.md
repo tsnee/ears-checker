@@ -72,3 +72,19 @@
   image references and decoded line feeds, the BOM, deep nesting; 38 fixtures), passed CI with
   cmark 0.30.2, and archived in the same PR (#15), creating `markdown-input` (5 requirements)
   and updating `continuous-integration` and `test-coverage`.
+- 2026-11-07: add-cli-on-node implemented: the CLI's program is shared (`Cli` behind `Reading`),
+  with `Main` on the JVM and `NodeMain` on Node; `@tsnee/ears-checker-cli` builds (1.72 MB
+  packed, `main.js` 5.04 MB); `scripts/check-npm-cli` finds the two builds identical on 16 cases
+  and runs in CI on Node 26 and 22. Review led to: no interpretation of platform read errors
+  (`Cannot read <input>`, the reason in the log), strict UTF-8 input with the bad byte's line
+  and column, UTF-8 output on the JVM whatever the locale, and empty file names rejected; the
+  library's source-map helper now renames dependencies' build-machine `file:` URIs to
+  `library/<package path>`, so no package carries a machine path. Node's slowness on large
+  Markdown files went on the roadmap.
+- 2026-11-07: shrink-npm-packages implemented (second change in batch-node-cli): esbuild 0.28.2,
+  pinned in `ears/npm/tools` and installed by `ears.npm.tools` (`npm ci --ignore-scripts`, now
+  shared with the Markdown facade through `NpmInstalled`), minifies both packages. The library's
+  `main.js` went from 1.57 MB to 608 KB (packed 584 KB to 501 KB) with its source map carried
+  through; the CLI's from 5.08 MB to 1.85 MB, without a map (packed 1.72 MB to 500 KB, installed
+  9.4 MB to 1.86 MB). The package checks enforce size limits and the map; the `library/`
+  source-path rewrite went, unused without the CLI's map.
