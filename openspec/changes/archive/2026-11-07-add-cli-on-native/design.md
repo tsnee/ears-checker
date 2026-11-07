@@ -134,7 +134,9 @@ See proposal.md for why. What's in place, and what probes found (2026-11-07, Sca
   `parser` log detail names it); then removes the runtime package, checks no cmark is left
   (`ldconfig -p` and the directories), and expects exit 2, the message, and the `attempts`
   detail for Markdown, and the usual result for plain text.
-- Apply records how much time the native steps add.
+- On CI run 42414891269 (2026-11-07, `ubuntu-26.04`), the native tests added to `Test` (283 s
+  in all), "Check the native CLI" took 154 s, and the step with less cmark 4 s; the `check` job
+  took 739 s.
 
 ### 5. Docs
 
@@ -154,6 +156,6 @@ See proposal.md for why. What's in place, and what probes found (2026-11-07, Sca
   name, which glibc never resolves from the current directory.
 - **[Native-only code is unmeasured]** The loader shell is thin; every decision is in
   `CmarkLibrary`, at 100% coverage with the rest of `ears.markdown`.
-- **[Linux file names under the C locale]** Unknown for the native binary; apply checks it on
-  CI's Linux and the README says what it found.
+- **[Linux file names under the C locale]** Checked on CI run 42414891269: under `LC_ALL=C`, the
+  native binary opened `résumé.txt` and reported its finding, as the Node build does.
 - **[Build time]** Release linking takes tens of seconds; the probe took 22 s on this machine.

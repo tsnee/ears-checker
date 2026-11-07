@@ -194,8 +194,8 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
     suite. Not published: `ears.cli` compiles the shared and JVM sources in
 - `openspec/` — specs `ears-classifier`, `ears-cli`, `markdown-input` (the Markdown facade, the
   same on every platform), `npm-package`, `cli-npm-package` (the CLI's npm package),
-  `openspec-check` (the
-  OpenSpec gate: `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub
+  `cli-native-binary` (the native binary), `openspec-check` (the OpenSpec gate:
+  `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub
   Actions workflow), `release-publishing` (the Maven Central release workflow), `test-coverage`
   (the coverage minimums), and the archived changes that built them
 - `scripts/` — `check-openspec` and the Claude Code hook that runs it, `check-npm-package`,

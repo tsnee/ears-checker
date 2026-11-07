@@ -113,3 +113,7 @@
   fixed: each candidate is tried until one binds, and the log names the parser or every library
   tried. Coverage: ears 95.91/92.04, ears.cli 96.87/98.67, ears.npm 100/100, ears.linkCheck
   97.28/100, ears.markdown 100/100 (statement/branch %).
+- 2026-11-07: add-cli-on-native's CI run 42414891269 passed (check 739 s, check-jdk17 141 s;
+  the native CLI check 154 s). The first run (42409556968) showed `libcmark0.30.0` doesn't exist
+  on Ubuntu 26.04 (it's `libcmark0.30.2`), so the message now says `apt install cmark`. On
+  Linux under `LC_ALL=C`, the native binary opens a non-ASCII file name.

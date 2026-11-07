@@ -105,8 +105,8 @@ $ echo $?
   ignored, and UTF-16 or UTF-32 input is named by its byte-order mark. Output is written as
   UTF-8. On Linux, the JVM decodes file names on the command line with the locale's charset, so
   under the C locale (common in Docker images) it can't open a file whose name isn't ASCII; run
-  it under a UTF-8 locale, such as `LC_ALL=C.UTF-8`. The Node build reads file names as UTF-8
-  regardless.
+  it under a UTF-8 locale, such as `LC_ALL=C.UTF-8`. The Node build and the native binary open
+  such a file under any locale.
 - Exit status: 0 when every requirement passes or `--help` is given, 1 when any finding is
   reported, and 2 when the arguments are invalid or an input can't be read or parsed.
 
