@@ -7,21 +7,9 @@ Planned changes, each its own OpenSpec change. Order and scope can change; the s
 
 In this order:
 
-1. **Inline code is opaque to the classifier.** Everything between backticks should count as one
-   quoted word, whatever periods, commas, spaces, or modal keywords it holds. Today the
-   classifier has no notion of code: `` `Cannot read notes.txt. Check the path.` `` ends a
-   sentence inside the quote, `` `The calendar shall sync` `` counts as a second modal, and
-   `` `Done.` `` passes only because a period before a backtick isn't punctuation. To settle: an
-   unmatched backtick, double-backtick spans, fixes that would edit inside code, and whether
-   the Markdown facade's sentences keep their backticks.
-
-   In the same batch, two small encoding fixes: plain-text input drops a leading UTF-8
-   byte-order mark, as Markdown input already does (today it stays at the start of the first
-   line, and a `missing-article` fix keeps it); and UTF-16 input is reported as UTF-16, not as
-   invalid UTF-8 at line 1, column 1.
-2. **The CLI on Scala Native**, with the cmark parser `ears.markdown.native` already has; the
+1. **The CLI on Scala Native**, with the cmark parser `ears.markdown.native` already has; the
    binary links cmark, so its packaging has to say how users get it.
-3. **Publish the npm packages**: the library `@tsnee/ears-checker` and the command line
+2. **Publish the npm packages**: the library `@tsnee/ears-checker` and the command line
    `@tsnee/ears-checker-cli`. Publish them from the release workflow with npm's trusted
    publishing, in their own job behind its own approval, after the Central Portal deployment is
    published. The plan is in the archived `add-npm-package` change's design (Decision 9). npm

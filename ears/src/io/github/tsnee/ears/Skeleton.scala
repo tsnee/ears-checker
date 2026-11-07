@@ -73,10 +73,38 @@ private[ears] object SkeletonParser:
 
   private val wordChar: Parser[Unit] = Parser.oneOf(
     List(
-      Parser.charWhere(c => !Character.isWhitespace(c) && c != ',' && c != '.').void,
+      Parser.charWhere(c => !Character.isWhitespace(c) && c != ',' && c != '.' && c != '`').void,
       (Parser.charIn(',', '.') *> Parser.not(boundary)).backtrack
     )
   )
+
+  // Inline code, as in CommonMark: a run of backticks opens a code span that closes at the next
+  // run of the same length. The span is part of a word, so its spaces, commas, periods, and words
+  // are never punctuation, keywords, or modals. A run with no matching run is ordinary characters,
+  // all of it; so is a backslash-escaped backtick. As in Markdown, a backslash escapes a backslash,
+  // so in \\` the backtick opens code.
+
+  private val backtickRun: Parser[String] = Parser.char('`').rep.string
+
+  private val escapedBacktick: Parser[Unit] = (Parser.char('\\') ~ Parser.char('`')).void
+
+  private val escapedBackslash: Parser[Unit] = (Parser.char('\\') ~ Parser.char('\\')).void
+
+  private val codeSpanOrBackticks: Parser[Unit] = backtickRun.flatMap { open =>
+    val content = Parser.oneOf(
+      List(
+        Parser.charWhere(_ != '`').void,
+        backtickRun.filter(_.length != open.length).backtrack.void
+      )
+    )
+    (content.rep0.with1 ~ backtickRun.filter(_.length == open.length)).void.backtrack
+      .orElse(Parser.unit)
+  }
+
+  private val wordPart: Parser[Unit] =
+    Parser.oneOf(
+      List(escapedBackslash.backtrack, escapedBacktick.backtrack, codeSpanOrBackticks, wordChar)
+    )
 
   private def located[A](parser: Parser[A]): Parser[(A, SourceSpan)] =
     (Parser.index.with1 ~ parser ~ Parser.index).map { case ((start, value), end) =>
@@ -85,7 +113,7 @@ private[ears] object SkeletonParser:
 
   private val token: Parser[Token] = Parser.oneOf(
     List(
-      located(wordChar.rep.string).map(Token.Word(_, _)),
+      located(wordPart.rep.string).map(Token.Word(_, _)),
       located(Parser.char(',')).map((_, span) => Token.Comma(span)),
       located(Parser.char('.')).map((_, span) => Token.Period(span))
     )

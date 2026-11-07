@@ -81,5 +81,51 @@ object HelpersSuite extends ZIOSpecDefault:
         val depth = 100000
         val found = Walk.preorder[Int](0, n => if n < depth then List(n + 1) else Nil)
         assertTrue(found.size == depth + 1, found.lastOption.contains(depth))
+    ),
+    suite("Extraction")(
+      test("code without backticks: one backtick each side"):
+        assertTrue(Extraction.codeSpan("notes.md") == "`notes.md`")
+      ,
+      test("code holding a run of backticks: a fence one longer"):
+        assertTrue(
+          Extraction.codeSpan("a ` b") == "``a ` b``",
+          Extraction.codeSpan("a``b") == "```a``b```"
+        )
+      ,
+      test("code starting or ending with a backtick: a space of padding each side"):
+        assertTrue(
+          Extraction.codeSpan("`a") == "`` `a ``",
+          Extraction.codeSpan("a`") == "`` a` ``"
+        )
+      ,
+      test("text: each backtick escaped, other backslashes left alone"):
+        assertTrue(Extraction.escapedText("a `b` \\c", beforeCode = false) == "a \\`b\\` \\c")
+      ,
+      test("text: backslashes right before a backtick are doubled"):
+        assertTrue(
+          Extraction.escapedText("\\`", beforeCode = false) == "\\\\\\`",
+          Extraction.escapedText("\\\\`", beforeCode = false) == "\\\\\\\\\\`"
+        )
+      ,
+      test("text before code: its trailing backslashes are doubled"):
+        assertTrue(
+          Extraction.escapedText("C:\\", beforeCode = true) == "C:\\\\",
+          Extraction.escapedText("C:\\", beforeCode = false) == "C:\\"
+        )
+      ,
+      test("a code span written by codeSpan closes only at its end, by the classifier's rule"):
+        check(Gen.string1(Gen.elements('a', '`', ' ', '.'))) { literal =>
+          val written = Extraction.codeSpan(literal)
+          val fence = written.takeWhile(_ == '`')
+          val inner = written.drop(fence.length).dropRight(fence.length)
+          val runs = "`+".r.findAllIn(inner).map(_.length).toList
+          assertTrue(
+            written.endsWith(fence),
+            fence.length == runs.maxOption.getOrElse(0) + 1,
+            !inner.startsWith("`"),
+            !inner.endsWith("`"),
+            !runs.contains(fence.length)
+          )
+        }
     )
   )

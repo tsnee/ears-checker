@@ -29,8 +29,8 @@ object Utf8Suite extends ZIOSpecDefault:
         assertTrue(Utf8.decode(original.getBytes(StandardCharsets.UTF_8)) == Right(original))
       )
     ,
-    test("a UTF-8 byte-order mark is kept, as U+FEFF"):
-      assertTrue(Utf8.decode(bytes(0xef, 0xbb, 0xbf, 0x61)) == Right("﻿a"))
+    test("a UTF-8 byte-order mark is dropped"):
+      assertTrue(Utf8.decode(bytes(0xef, 0xbb, 0xbf, 0x61)) == Right("a"))
     ,
     test("a Latin-1 byte: its line and column"):
       assertTrue(
@@ -41,8 +41,24 @@ object Utf8Suite extends ZIOSpecDefault:
     test("the column counts characters, not bytes"):
       assertTrue(Utf8.decode(bytes(0xc3, 0xa9, 0xff)) == Left(ReadFailure.NotUtf8(1, 2)))
     ,
-    test("UTF-16's byte-order mark is invalid at the start"):
-      assertTrue(Utf8.decode(bytes(0xff, 0xfe, 0x61, 0x00)) == Left(ReadFailure.NotUtf8(1, 1)))
+    test("a UTF-16 byte-order mark names UTF-16"):
+      assertTrue(
+        Utf8.decode(bytes(0xff, 0xfe, 0x61, 0x00)) == Left(ReadFailure.OtherEncoding("UTF-16")),
+        Utf8.decode(bytes(0xfe, 0xff, 0x00, 0x61)) == Left(ReadFailure.OtherEncoding("UTF-16"))
+      )
+    ,
+    test("a UTF-32 byte-order mark names UTF-32"):
+      assertTrue(
+        Utf8.decode(bytes(0xff, 0xfe, 0x00, 0x00, 0x61, 0x00, 0x00, 0x00)) ==
+          Left(ReadFailure.OtherEncoding("UTF-32")),
+        Utf8.decode(bytes(0x00, 0x00, 0xfe, 0xff, 0x00, 0x00, 0x00, 0x61)) ==
+          Left(ReadFailure.OtherEncoding("UTF-32"))
+      )
+    ,
+    test("after a UTF-8 byte-order mark, positions count from the text"):
+      assertTrue(
+        Utf8.decode(bytes(0xef, 0xbb, 0xbf, 0x61, 0xff)) == Left(ReadFailure.NotUtf8(1, 2))
+      )
     ,
     test("a sequence cut off at the end"):
       assertTrue(

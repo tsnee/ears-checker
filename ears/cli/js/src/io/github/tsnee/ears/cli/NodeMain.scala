@@ -34,7 +34,7 @@ object NodeApp extends ZIOAppDefault:
   private def decoded(read: Task[Uint8Array]): IO[(ReadFailure, String), String] =
     failingAs(read).flatMap(buffer =>
       val bytes = int8Array2ByteArray(Int8Array(buffer.buffer, buffer.byteOffset, buffer.length))
-      ZIO.fromEither(Utf8.decode(bytes)).mapError(_ -> "invalid UTF-8")
+      ZIO.fromEither(Utf8.decode(bytes)).mapError(failure => failure -> failure.decodingError)
     )
 
   /** Any error, uninterpreted (see `ReadFailure`), described whole for the log: a JavaScript

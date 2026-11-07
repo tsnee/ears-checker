@@ -147,10 +147,11 @@ object Cli:
     settings.file
       .fold(reading.standardInput)(reading.file)
       .tapError((failure, error) =>
-        val position = failure match
+        val details = failure match
           case ReadFailure.NotUtf8(line, column) => Map("position" -> s"$line:$column")
+          case ReadFailure.OtherEncoding(name)   => Map("encoding" -> name)
           case ReadFailure.Unreadable            => Map.empty
-        annotated(Map("error" -> error, "exit" -> "2") ++ position)(
+        annotated(Map("error" -> error, "exit" -> "2") ++ details)(
           ZIO.logError("Cannot read input")
         )
       )

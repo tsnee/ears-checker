@@ -37,6 +37,19 @@ object CliSuite extends ZIOSpecDefault:
           ReadFailure.NotUtf8(2, 7).describe("notes.md") ==
             "Cannot read notes.md: not valid UTF-8 at line 2, column 7"
         )
+      ,
+      test("the log names each decoding failure"):
+        assertTrue(
+          ReadFailure.NotUtf8(1, 1).decodingError == "invalid UTF-8",
+          ReadFailure.OtherEncoding("UTF-16").decodingError == "UTF-16 byte-order mark",
+          ReadFailure.Unreadable.decodingError == "unreadable"
+        )
+      ,
+      test("an input in another encoding: its name"):
+        assertTrue(
+          ReadFailure.OtherEncoding("UTF-16").describe("standard input") ==
+            "Cannot read standard input: UTF-16, not UTF-8"
+        )
     ),
     suite("program")(
       test("a file is read through the seam"):
@@ -64,6 +77,18 @@ object CliSuite extends ZIOSpecDefault:
             assertTrue(
               outcome.exitCode == 2,
               outcome.stderr == "Cannot read notes.txt: not valid UTF-8 at line 3, column 1\n"
+            )
+          )
+      ,
+      test("a file in UTF-16: status 2, its name, and the encoding"):
+        run(
+          Map("notes.txt" -> ZIO.fail(ReadFailure.OtherEncoding("UTF-16") -> "UTF-16")),
+          "notes.txt"
+        )
+          .map(outcome =>
+            assertTrue(
+              outcome.exitCode == 2,
+              outcome.stderr == "Cannot read notes.txt: UTF-16, not UTF-8\n"
             )
           )
       ,

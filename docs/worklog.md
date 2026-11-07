@@ -88,3 +88,11 @@
   through; the CLI's from 5.08 MB to 1.85 MB, without a map (packed 1.72 MB to 500 KB, installed
   9.4 MB to 1.86 MB). The package checks enforce size limits and the map; the `library/`
   source-path rewrite went, unused without the CLI's map.
+- 2026-11-07: opaque-inline-code implemented (third change in batch-node-cli): the classifier
+  reads a code span (CommonMark's rule; `` \` `` and `` \\ `` are escapes) as one word; the
+  Markdown reader returns code spans with their backticks, escapes other backticks (doubling a
+  backslash before one), joins adjacent code, and doesn't end sentences inside code; a leading
+  UTF-8 byte-order mark is ignored and UTF-16/UTF-32 input named. The three parsers agreed on
+  nine backtick edge cases, now conformance fixtures, and a round-trip property ties the reader
+  to the classifier. The planned token-based article fix proved unnecessary; review found the
+  backslash-before-code bug.

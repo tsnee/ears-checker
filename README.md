@@ -80,18 +80,26 @@ $ echo $?
   messages and log entries, one line each: a timestamp, the level, the message, and details as
   `key=value` pairs. Without `--verbose`, only failures are logged, each with its input, the
   error's type and message, and the exit status.
+- Inline code: in every format, text between backticks is quoted, as in Markdown (a run of
+  backticks up to the next run of the same length; `` \` `` is a plain backtick and `` \\ `` a
+  plain backslash). Its periods, commas, and words don't count, so
+  `` `Cannot read notes.txt. Check the path.` `` is one quoted word, and a requirement whose
+  only `shall` is quoted still lacks one.
 - Encoding: input is read as UTF-8 whatever the locale, and an input that isn't valid UTF-8 is
-  an error giving the line and column of the first bad byte. Output is written as UTF-8. On
-  Linux, the JVM decodes file names on the command line with the locale's charset, so under the
-  C locale (common in Docker images) it can't open a file whose name isn't ASCII; run it under a
-  UTF-8 locale, such as `LC_ALL=C.UTF-8`. The Node build reads file names as UTF-8 regardless.
+  an error giving the line and column of the first bad byte; a leading UTF-8 byte-order mark is
+  ignored, and UTF-16 or UTF-32 input is named by its byte-order mark. Output is written as
+  UTF-8. On Linux, the JVM decodes file names on the command line with the locale's charset, so
+  under the C locale (common in Docker images) it can't open a file whose name isn't ASCII; run
+  it under a UTF-8 locale, such as `LC_ALL=C.UTF-8`. The Node build reads file names as UTF-8
+  regardless.
 - Exit status: 0 when every requirement passes or `--help` is given, 1 when any finding is
   reported, and 2 when the arguments are invalid or an input can't be read or parsed.
 
 ## Library
 
 `io.github.tsnee:ears-checker_3` (and `ears-checker_sjs1_3` for Scala.js) classifies one
-sentence. It has no IO and no effect system. It needs Scala 3.10 or newer. Add it with:
+sentence, reading inline code between backticks as one quoted word, as the command line does.
+It has no IO and no effect system. It needs Scala 3.10 or newer. Add it with:
 
 ```scala
 // Mill (the second :: picks the Scala.js build in a Scala.js module)

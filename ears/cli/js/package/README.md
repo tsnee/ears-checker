@@ -34,8 +34,12 @@ reads each file, or standard input when none is given:
   `classic`.
 - `--output`: `text` (one line per finding) or `json` (one document).
 - `--verbose`: log every step to standard error, not only warnings and errors.
+- Inline code: in every format, text between backticks is quoted, as in Markdown; its periods,
+  commas, and words don't count.
 - Encoding: input is read as UTF-8 whatever the locale, and an input that isn't valid UTF-8 is
-  an error giving the line and column of the first bad byte. Output is written as UTF-8.
+  an error giving the line and column of the first bad byte; a leading UTF-8 byte-order mark is
+  ignored, and UTF-16 or UTF-32 input is named by its byte-order mark. Output is written as
+  UTF-8.
 - Exit status: 0 when every requirement passes or `--help` is given, 1 when any finding is
   reported, and 2 when the arguments are invalid or an input can't be read or parsed.
 

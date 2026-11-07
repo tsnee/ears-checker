@@ -186,6 +186,9 @@ printf '%s\n' 'The scheduler shall list upcoming events.' >"$inputs/secret.txt"
 chmod 000 "$inputs/secret.txt"
 # Invalid UTF-8: "\351" is é in Latin-1.
 printf 'The scheduler shall list \351vents.\nThe scheduler lists \351vents.\n' >"$inputs/latin1.txt"
+# UTF-16 with its byte-order mark ("Sch"), and plain text after a UTF-8 byte-order mark.
+printf '\377\376S\000c\000h\000\n\000' >"$inputs/utf16.txt"
+printf '\357\273\277Scheduler shall list events.\n' >"$inputs/bom.txt"
 
 stdin=/dev/null
 set -f # the lists below are split into arguments but never globbed
@@ -201,6 +204,21 @@ set +f
 compare plain-text 1 "$inputs/plain.txt"
 compare plain-json 1 --output json "$inputs/plain.txt"
 compare invalid-utf-8 2 "$inputs/latin1.txt"
+compare utf-16 2 "$inputs/utf16.txt"
+compare byte-order-mark 1 "$inputs/bom.txt"
+# Both builds agreeing isn't enough here: the fix must not carry the mark.
+if LC_ALL=C grep -q "$(printf '\357\273\277')" "$tmp/node/byte-order-mark.out"; then
+  echo "check-npm-cli: case byte-order-mark: the fix still has the byte-order mark" >&2
+  exit 1
+fi
+# OpenSpec JSON after a UTF-8 byte-order mark: read as if it weren't there.
+set -f
+for spec in $specs; do
+  { printf '\357\273\277'; cat "$spec"; } >"$inputs/bom.json"
+  break
+done
+set +f
+compare openspec-byte-order-mark "0 1" "$inputs/bom.json"
 compare missing 2 "$inputs/missing.txt"
 compare directory 2 "$inputs/notes"
 if [ "$(id -u)" -ne 0 ]; then

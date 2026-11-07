@@ -10,6 +10,7 @@ import zio.IO
 enum ReadFailure derives CanEqual:
   case Unreadable
   case NotUtf8(line: Int, column: Int)
+  case OtherEncoding(name: String)
 
 object ReadFailure:
 
@@ -19,6 +20,13 @@ object ReadFailure:
       case Unreadable            => s"Cannot read $source"
       case NotUtf8(line, column) =>
         s"Cannot read $source: not valid UTF-8 at line $line, column $column"
+      case OtherEncoding(name) => s"Cannot read $source: $name, not UTF-8"
+
+    /** The log's description of a decoding failure, which no platform error describes. */
+    def decodingError: String = failure match
+      case NotUtf8(_, _)       => "invalid UTF-8"
+      case OtherEncoding(name) => s"$name byte-order mark"
+      case Unreadable          => "unreadable"
 
 /** The platform's reading: a file by name, and standard input. Each fails with the kind of failure
   * and the platform's own description of the error, for the log.

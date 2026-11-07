@@ -40,9 +40,11 @@ object Main extends ZIOAppDefault:
         ZIO
           .attemptBlocking(Files.readAllBytes(Paths.get(name)))
           .mapError(error => ReadFailure.Unreadable -> error.toString)
-          .flatMap(bytes => ZIO.fromEither(Utf8.decode(bytes)).mapError(_ -> "invalid UTF-8")),
+          .flatMap(bytes =>
+            ZIO.fromEither(Utf8.decode(bytes)).mapError(failure => failure -> failure.decodingError)
+          ),
       standardInput.mapError {
-        case Undecodable(failure) => failure -> "invalid UTF-8"
+        case Undecodable(failure) => failure -> failure.decodingError
         case error                => ReadFailure.Unreadable -> error.toString
       }
     )

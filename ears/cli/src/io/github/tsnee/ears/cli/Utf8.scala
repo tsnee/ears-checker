@@ -12,8 +12,29 @@ import java.nio.charset.StandardCharsets
   */
 object Utf8:
 
-  /** The text, or `NotUtf8` at the first byte that isn't valid UTF-8. */
+  /** The text, without a leading UTF-8 byte-order mark; `OtherEncoding` when the input starts with
+    * a UTF-16 or UTF-32 byte-order mark; or `NotUtf8` at the first byte that isn't valid UTF-8,
+    * counted from after any UTF-8 mark, as an editor shows it.
+    */
   def decode(bytes: Array[Byte]): Either[ReadFailure, String] =
+    otherEncoding(bytes)
+      .map(ReadFailure.OtherEncoding(_))
+      .toLeft(())
+      .flatMap(_ => decodeUtf8(if starts(bytes, 0xef, 0xbb, 0xbf) then bytes.drop(3) else bytes))
+
+  /** The encoding a UTF-16 or UTF-32 byte-order mark names. UTF-32's are checked first: little-
+    * endian UTF-32's begins with UTF-16's.
+    */
+  private def otherEncoding(bytes: Array[Byte]): Option[String] =
+    if starts(bytes, 0xff, 0xfe, 0x00, 0x00) || starts(bytes, 0x00, 0x00, 0xfe, 0xff) then
+      Some("UTF-32")
+    else if starts(bytes, 0xff, 0xfe) || starts(bytes, 0xfe, 0xff) then Some("UTF-16")
+    else None
+
+  private def starts(bytes: Array[Byte], mark: Int*): Boolean =
+    bytes.length >= mark.length && mark.indices.forall(i => bytes(i) == mark(i).toByte)
+
+  private def decodeUtf8(bytes: Array[Byte]): Either[ReadFailure, String] =
     val decoder = StandardCharsets.UTF_8
       .newDecoder()
       .onMalformedInput(CodingErrorAction.REPORT)
