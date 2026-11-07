@@ -7,7 +7,13 @@ Planned changes, each its own OpenSpec change. Order and scope can change; the s
 
 In this order:
 
-1. **Inline code is opaque to the classifier.** Everything between backticks should count as one
+1. **Shrink the npm packages** (next in the `batch-node-cli` batch). Scala.js minifies only in a
+   Scala-specific way, meant to be followed by a general-purpose minifier we don't run, and the
+   CLI package ships a source map larger than its code. Minify both packages with esbuild
+   (pinned, installed by a Mill task like the Markdown parser); ship the source map only with
+   the library, whose users debug into it. Measured on the CLI: 1.72 MB to download and 9.4 MB
+   installed today, about 0.5 MB and 1.9 MB after.
+2. **Inline code is opaque to the classifier.** Everything between backticks should count as one
    quoted word, whatever periods, commas, spaces, or modal keywords it holds. Today the
    classifier has no notion of code: `` `Cannot read notes.txt. Check the path.` `` ends a
    sentence inside the quote, `` `The calendar shall sync` `` counts as a second modal, and
@@ -19,9 +25,9 @@ In this order:
    byte-order mark, as Markdown input already does (today it stays at the start of the first
    line, and a `missing-article` fix keeps it); and UTF-16 input is reported as UTF-16, not as
    invalid UTF-8 at line 1, column 1.
-2. **The CLI on Scala Native**, with the cmark parser `ears.markdown.native` already has; the
+3. **The CLI on Scala Native**, with the cmark parser `ears.markdown.native` already has; the
    binary links cmark, so its packaging has to say how users get it.
-3. **Publish the npm packages**: the library `@tsnee/ears-checker` and the command line
+4. **Publish the npm packages**: the library `@tsnee/ears-checker` and the command line
    `@tsnee/ears-checker-cli`. Publish them from the release workflow with npm's trusted
    publishing, in their own job behind its own approval, after the Central Portal deployment is
    published. The plan is in the archived `add-npm-package` change's design (Decision 9). npm
@@ -31,10 +37,6 @@ In this order:
 ## Later
 
 - **The CLI as a Coursier app**, and **GraalVM native binaries** of it.
-- **A smaller npm package.** Scala.js doesn't minify ES modules (only Closure minifies, and it
-  isn't used for them), so the library's `main.js` ships unminified at 1.57 MB, 243 kB gzipped,
-  and the CLI's at 5.04 MB, 748 kB gzipped. Revisit when Scala.js or Mill can minify an ES
-  module, or weigh a separate minifier.
 - **Speed up large Markdown files on Node.** The Node CLI's time grows faster than its input
   does: one Markdown file of 0.7 MB takes 0.55 s, 1.4 MB 1.1 s, 2.8 MB 2.9 s, and 7 MB 12.6 s,
   where the JVM takes about 1 s for any of them. Probably in the Markdown facade's Node path
