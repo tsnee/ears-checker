@@ -42,6 +42,16 @@ them skip it, so the same alias works on any of them.
 alias ears-check="java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow -jar $PWD/out/ears/cli/assembly.dest/out.jar"
 ```
 
+It also runs on Node 22 or newer, with the same output, messages, and exit status, as the npm
+package `@tsnee/ears-checker-cli`. Once that's on npm, `npx @tsnee/ears-checker-cli reqs.txt`
+will run it. Until then, build and pack the package, and install the tarball, which installs its
+dependency too:
+
+```sh
+npm pack "$(./mill show ears.cli.js.npmPackage | jq -r 'sub("^ref:v[0-9]+:[0-9a-f]+:"; "")')"
+npm install -g tsnee-ears-checker-cli-*.tgz
+```
+
 It reads each file, or standard input when none is given, and reports every requirement that
 doesn't fit a template, with a suggested fix where one exists:
 
@@ -70,13 +80,26 @@ $ echo $?
   messages and log entries, one line each: a timestamp, the level, the message, and details as
   `key=value` pairs. Without `--verbose`, only failures are logged, each with its input, the
   error's type and message, and the exit status.
+- Inline code: in every format, text between backticks is quoted, as in Markdown (a run of
+  backticks up to the next run of the same length; `` \` `` is a plain backtick and `` \\ `` a
+  plain backslash). Its periods, commas, and words don't count, so
+  `` `Cannot read notes.txt. Check the path.` `` is one quoted word, and a requirement whose
+  only `shall` is quoted still lacks one.
+- Encoding: input is read as UTF-8 whatever the locale, and an input that isn't valid UTF-8 is
+  an error giving the line and column of the first bad byte; a leading UTF-8 byte-order mark is
+  ignored, and UTF-16 or UTF-32 input is named by its byte-order mark. Output is written as
+  UTF-8. On Linux, the JVM decodes file names on the command line with the locale's charset, so
+  under the C locale (common in Docker images) it can't open a file whose name isn't ASCII; run
+  it under a UTF-8 locale, such as `LC_ALL=C.UTF-8`. The Node build reads file names as UTF-8
+  regardless.
 - Exit status: 0 when every requirement passes or `--help` is given, 1 when any finding is
   reported, and 2 when the arguments are invalid or an input can't be read or parsed.
 
 ## Library
 
 `io.github.tsnee:ears-checker_3` (and `ears-checker_sjs1_3` for Scala.js) classifies one
-sentence. It has no IO and no effect system. It needs Scala 3.10 or newer. Add it with:
+sentence, reading inline code between backticks as one quoted word, as the command line does.
+It has no IO and no effect system. It needs Scala 3.10 or newer. Add it with:
 
 ```scala
 // Mill (the second :: picks the Scala.js build in a Scala.js module)
@@ -142,16 +165,25 @@ JVM; `./mill ears.scoverage.htmlReport` (or `ears.cli`, `ears.npm`, `ears.linkCh
 `ears.markdown`) writes a report under `out/`.
 `./mill __.publishLocal` publishes the next version as a snapshot (`0.2.0-SNAPSHOT`) to
 `~/.ivy2/local`.
-`scripts/check-npm-package` builds the npm package, lints it with publint and Are the Types
-Wrong, installs it into an empty project, and type-checks and runs a TypeScript program that uses
-it; it needs `tsc`, `publint`, and `attw` installed from npm.
+Both npm packages are minified with [esbuild](https://esbuild.github.io), which Mill installs
+from `ears/npm/tools/package-lock.json` (with the network, the first time and after a clean);
+the library keeps a source map that leads back to the Scala sources, and the command line ships
+none. `scripts/check-npm-package` builds the npm package, checks its size and its source map,
+lints it with publint and Are the Types Wrong, installs it into an empty project, and
+type-checks and runs a TypeScript program that uses it; it needs `tsc`, `publint`, and `attw`
+installed from npm.
+`scripts/check-npm-cli` builds the command line's npm package and jar, installs the package into
+an empty project, and runs both on this repository's Markdown and specs and on error cases,
+failing on any difference in output, messages, or exit status; it needs the
+[OpenSpec CLI](https://github.com/Fission-AI/OpenSpec). Like the other scripts, it's for
+working on ears-checker, not part of any package.
 `scripts/check-scalajs-link` publishes the Scala.js library locally, generates a program that
 references every public operation, and links it in release mode against only that artifact,
 the way a user's application gets it; it needs [Scala CLI](https://scala-cli.virtuslab.org).
 GitHub Actions checks formatting, compiles, runs every test, checks each module's coverage
-against its minimum in `build.mill`, checks the npm package on the oldest and newest Node it
-supports, links the Scala.js library as a user gets it, and checks the OpenSpec specs on each
-push to `main` and each pull request.
+against its minimum in `build.mill`, checks both npm packages, and the Node command line
+against the jar, on the oldest and newest Node they support, links the Scala.js library as a
+user gets it, and checks the OpenSpec specs on each push to `main` and each pull request.
 
 ## License
 

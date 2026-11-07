@@ -100,7 +100,7 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
       fixture(
         "a code span across lines has a space for its line ending",
         "The `scheduler\nservice` shall list events. The calendar shall\nsync daily.\n",
-        Sentence(1, "The scheduler service shall list events."),
+        Sentence(1, "The `scheduler service` shall list events."),
         Sentence(2, "The calendar shall sync daily.")
       )
     ),
@@ -108,7 +108,7 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
       fixture(
         "a sentence that starts with inline code is on its own line",
         "# Reminders\n\nIntro paragraph.\n\nMore intro text.\n\n- `ears-checker` shall check every line.\n",
-        Sentence(7, "ears-checker shall check every line.")
+        Sentence(7, "`ears-checker` shall check every line.")
       ),
       fixture(
         "escapes and entities earlier in the paragraph don't move a sentence",
@@ -123,7 +123,7 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
       fixture(
         "a sentence that starts in a code span across lines is on the span's first line",
         "Intro. `The\nscheduler` shall list events.\n",
-        Sentence(1, "The scheduler shall list events.")
+        Sentence(1, "`The scheduler` shall list events.")
       ),
       fixture(
         "several sentences on several lines of one paragraph",
@@ -207,6 +207,44 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
         s"${0xfeff.toChar}The scheduler shall list.\n",
         Sentence(1, "The scheduler shall list.")
       )
+    ),
+    // Inline code comes back as a code span, written as CommonMark writes one; a backtick that
+    // isn't code comes back escaped, so the classifier reads both as Markdown does.
+    suite("inline code")(
+      List(
+        ("double backticks around a backtick", "``a ` b``", "``a ` b``"),
+        ("padding is stripped, and written back", "`` `a ``", "`` `a ``"),
+        ("a lone backtick in code", "`` ` ``", "`` ` ``"),
+        ("escaped backticks are text", "\\`not code\\`", "\\`not code\\`"),
+        ("runs that don't match are text", "``a`", "\\`\\`a\\`"),
+        ("a code span of one space", "` `", "` `"),
+        ("one space of padding is stripped from each side", "`  a  `", "` a `"),
+        ("inline HTML takes precedence over code", "<span title=\"`\">`</span>", "\\`"),
+        ("no escapes inside code", "`a\\`", "`a\\`"),
+        (
+          "a backslash before code is doubled, so the code stays code",
+          "C:\\\\`a. b`",
+          "C:\\\\`a. b`"
+        ),
+        ("a backslash before a backtick in text: both escaped", "\\\\\\`", "\\\\\\`"),
+        ("other backslashes are left as they are", "C:\\\\x", "C:\\x"),
+        ("code, dropped HTML, then code: one code span", "`a`<b></b>`` ` ``", "`` a` ``")
+      ).map((name, written, read) =>
+        fixture(
+          name,
+          s"The scheduler shall print $written now.\n",
+          Sentence(1, s"The scheduler shall print $read now.")
+        )
+      ) ++ List(
+        fixture(
+          "a period inside code ends no sentence",
+          "The checker shall write `Cannot read notes.txt. Check the path.` on failure.\n",
+          Sentence(
+            1,
+            "The checker shall write `Cannot read notes.txt. Check the path.` on failure."
+          )
+        )
+      )*
     ),
     // Parsers limit nesting differently, so the results needn't agree; none may crash.
     suite("deep nesting")(

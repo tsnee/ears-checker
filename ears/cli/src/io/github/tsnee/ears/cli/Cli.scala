@@ -1,9 +1,6 @@
 package io.github.tsnee.ears.cli
 
-import java.io.InputStream
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Paths
+import java.time.Instant
 
 import cats.data.NonEmptyList
 import zio.*
@@ -12,12 +9,15 @@ import zio.*
   * [--verbose] [FILE...]`: reads each FILE in order, or standard input when there is none, and
   * exits with the status described on `Outcome`. The first file that can't be read or parsed ends
   * the run. Log entries go to standard error: warnings and errors, or every level with `--verbose`.
+  *
+  * The program for every platform; each platform's entry point supplies its `Reading`.
   */
-object Main extends ZIOAppDefault:
+object Cli:
 
-  // The application's only logger, replacing ZIO's own format: built once, before the run, from
-  // the command line (for the level) and ZIO's Clock, so it also covers starting and exiting.
-  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = bootstrapWith(writeStandardError)
+  /** The application's only logger, replacing ZIO's own format: built once, before the run, from
+    * the command line (for the level) and ZIO's Clock, so it also covers starting and exiting.
+    */
+  val bootstrap: ZLayer[ZIOAppArgs, Nothing, Unit] = bootstrapWith(writeStandardError)
 
   /** `bootstrap`, with each log line given to `writeLog`. */
   def bootstrapWith(writeLog: String => Unit): ZLayer[ZIOAppArgs, Nothing, Unit] =
@@ -25,20 +25,27 @@ object Main extends ZIOAppDefault:
       .fromZIO(
         for
           arguments <- ZIOAppArgs.getArgs
-          clock <- Clock.javaClock
-        yield loggerFor(arguments.toList, writeLog, clock)
+          clock <- ZIO.clock
+        yield loggerFor(
+          arguments.toList,
+          writeLog,
+          () => Unsafe.unsafe(unsafe ?=> clock.unsafe.instant())
+        )
       )
       .flatMap(built => Runtime.addLogger(built.get))
 
-  def run: ZIO[ZIOAppArgs, Nothing, Unit] =
-    getArgs.flatMap(arguments => cli(arguments.toList, readAll(java.lang.System.in))).flatMap(exit)
+  /** The application's run: the command line's arguments, read through `reading`. The entry point
+    * exits with the code.
+    */
+  def run(reading: Reading): ZIO[ZIOAppArgs, Nothing, ExitCode] =
+    ZIOAppArgs.getArgs.flatMap(arguments => cli(arguments.toList, reading))
 
   /** Runs the checker and writes its outcome to the console; the caller exits with the code. Log
     * entries go to whatever logger is installed (`bootstrap`'s, when run as the application).
     */
-  def cli(arguments: List[String], stdin: Task[String]): UIO[ExitCode] =
+  def cli(arguments: List[String], reading: Reading): UIO[ExitCode] =
     for
-      outcome <- program(arguments, stdin)
+      outcome <- program(arguments, reading)
       _ <- Console.print(outcome.stdout).orDie
       _ <- Console.printError(outcome.stderr).orDie
     yield ExitCode(outcome.exitCode)
@@ -48,18 +55,18 @@ object Main extends ZIOAppDefault:
   def loggerFor(
       arguments: List[String],
       writeLog: String => Unit,
-      clock: java.time.Clock
+      now: () => Instant
   ): ZLogger[String, Unit] =
     val verbose = Settings.parseInvocation(arguments).exists(_.verbose)
-    logger(Logging.minimumLevel(verbose), writeLog, clock)
+    logger(Logging.minimumLevel(verbose), writeLog, now)
 
   /** Each entry at `minimum` or above as one line (see `Logging.line`), with its cause when it has
-    * one, given to `writeLog`, stamped by `clock`.
+    * one, given to `writeLog`, stamped by `now`.
     */
   def logger(
       minimum: LogLevel,
       writeLog: String => Unit,
-      clock: java.time.Clock
+      now: () => Instant
   ): ZLogger[String, Unit] = new ZLogger[String, Unit]:
     def apply(
         trace: Trace,
@@ -73,13 +80,13 @@ object Main extends ZIOAppDefault:
     ): Unit =
       if logLevel >= minimum then
         val details = annotations ++ Option.when(!cause.isEmpty)("cause" -> cause.prettyPrint)
-        writeLog(Logging.line(clock.instant(), logLevel, message(), details))
+        writeLog(Logging.line(now(), logLevel, message(), details))
 
-  /** Everything but the console: `stdin` supplies standard input when no file is given. Every run
-    * ends with an entry giving its findings and exit status.
+  /** Everything but the console: `reading` supplies the files and standard input. Every run ends
+    * with an entry giving its findings and exit status.
     */
-  def program(arguments: List[String], stdin: Task[String]): UIO[Outcome] =
-    check(arguments, stdin).tap(outcome =>
+  def program(arguments: List[String], reading: Reading): UIO[Outcome] =
+    check(arguments, reading).tap(outcome =>
       annotated(Map("findings" -> outcome.findings.toString, "exit" -> outcome.exitCode.toString))(
         ZIO.logInfo("Finished")
       )
@@ -87,7 +94,7 @@ object Main extends ZIOAppDefault:
 
   private def writeStandardError(line: String): Unit = java.lang.System.err.println(line)
 
-  private def check(arguments: List[String], stdin: Task[String]): UIO[Outcome] =
+  private def check(arguments: List[String], reading: Reading): UIO[Outcome] =
     val argumentText = Logging.argumentsDetail(arguments)
     Settings.parseInvocation(arguments) match
       case Left(Usage(text, true, _))        => ZIO.succeed(Outcome(0, s"$text\n", "", 0))
@@ -101,8 +108,8 @@ object Main extends ZIOAppDefault:
         // ZIO.foreach is sequential and stops at the first failure: no later file is read.
         val loaded =
           for
-            first <- load(all.head, stdin)
-            rest <- ZIO.foreach(all.tail)(load(_, stdin))
+            first <- load(all.head, reading)
+            rest <- ZIO.foreach(all.tail)(load(_, reading))
           yield NonEmptyList(first, rest)
         val details =
           Map(
@@ -115,12 +122,12 @@ object Main extends ZIOAppDefault:
   /** One input read and split into requirements, with its details on every entry it logs. */
   private def load(
       settings: Settings,
-      stdin: Task[String]
+      reading: Reading
   ): IO[String, (Settings, List[Candidate])] =
     annotated(Logging.inputDetails(settings)) {
       for
         _ <- ZIO.logDebug("Reading input")
-        content <- read(settings, stdin)
+        content <- read(settings, reading)
         candidates <- ZIO
           .fromEither(Checker.candidates(settings, content))
           .tapError(reason =>
@@ -135,30 +142,20 @@ object Main extends ZIOAppDefault:
     }
 
   /** The input's text, or the message for standard error; the error itself is logged first. */
-  private def read(settings: Settings, stdin: Task[String]): IO[String, String] =
-    val attempt = settings.file match
-      case Some(name) =>
-        ZIO.attemptBlocking(Files.readString(Paths.get(name), StandardCharsets.UTF_8))
-      case None => stdin
+  private def read(settings: Settings, reading: Reading): IO[String, String] =
     val source = settings.file.getOrElse("standard input")
-    attempt
-      .tapError(error =>
-        annotated(Map("error" -> error.getClass.getName, "reason" -> reason(error), "exit" -> "2"))(
+    settings.file
+      .fold(reading.standardInput)(reading.file)
+      .tapError((failure, error) =>
+        val details = failure match
+          case ReadFailure.NotUtf8(line, column) => Map("position" -> s"$line:$column")
+          case ReadFailure.OtherEncoding(name)   => Map("encoding" -> name)
+          case ReadFailure.Unreadable            => Map.empty
+        annotated(Map("error" -> error, "exit" -> "2") ++ details)(
           ZIO.logError("Cannot read input")
         )
       )
-      .mapError(error => s"Cannot read $source: ${describe(error)}")
-
-  private def describe(error: Throwable): String = error match
-    case _: java.nio.file.NoSuchFileException => "no such file"
-    case other                                => reason(other)
-
-  private def reason(error: Throwable): String =
-    Option(error.getMessage).getOrElse(error.toString)
+      .mapError((failure, _) => failure.describe(source))
 
   private def annotated[R, E, A](details: Map[String, String])(effect: ZIO[R, E, A]): ZIO[R, E, A] =
     ZIO.logAnnotate(details.map(LogAnnotation(_, _)).toSet)(effect)
-
-  /** Reads a whole stream as UTF-8. */
-  def readAll(in: InputStream): Task[String] =
-    ZIO.attemptBlocking(new String(in.readAllBytes(), StandardCharsets.UTF_8))

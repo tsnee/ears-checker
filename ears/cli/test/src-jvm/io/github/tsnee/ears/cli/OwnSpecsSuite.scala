@@ -27,9 +27,11 @@ object OwnSpecsSuite extends ZIOSpecDefault:
 
   // This traversal deliberately doesn't reuse MarkdownInput: the suite is an independent check
   // on the specs, so a bug that made MarkdownInput skip statements can't also hide them here.
+  // Inline code keeps its backticks, so the classifier judges the text OpenSpec's JSON gives
+  // scripts/check-openspec.
   private def literal(node: Node): String = node match
     case text: Text       => Option(text.getLiteral).getOrElse("")
-    case code: Code       => Option(code.getLiteral).getOrElse("")
+    case code: Code       => s"`${Option(code.getLiteral).getOrElse("")}`"
     case _: SoftLineBreak => " "
     case _: HardLineBreak => " "
     case other            => siblings(Option(other.getFirstChild)).map(literal).mkString
@@ -72,6 +74,14 @@ object OwnSpecsSuite extends ZIOSpecDefault:
           }
         }
       yield assertTrue(all.size >= 50, failures.isEmpty)
+    ,
+    test("inline code keeps its backticks, as in OpenSpec's JSON"):
+      val markdown = "### Requirement: Done\nThe checker SHALL write `Done.` when it finishes.\n"
+      val read = statements(Paths.get("spec.md"), markdown)
+      assertTrue(
+        read.map(_.text) == List("The checker SHALL write `Done.` when it finishes."),
+        read.forall(statement => Requirement.classify(Profile.OpenSpec, statement.text).isRight)
+      )
     ,
     test("a hard line break inside a statement reads as a space"):
       val markdown =
