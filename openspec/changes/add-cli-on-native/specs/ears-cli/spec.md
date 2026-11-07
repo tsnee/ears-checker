@@ -19,7 +19,7 @@ If the native checker must read a Markdown input and finds no cmark library of r
 
 #### Scenario: No cmark installed
 - **WHEN** the native checker runs as `ears-check notes.md` on a system with no cmark library
-- **THEN** it writes a message that names `brew install cmark` and `apt install libcmark0.30.0` to standard error and exits with status 2
+- **THEN** it writes a message that names `brew install cmark` and `apt install cmark` to standard error and exits with status 2
 
 #### Scenario: Plain text without cmark
 - **WHEN** the native checker runs as `ears-check notes.txt` on a system with no cmark library

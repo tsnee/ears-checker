@@ -57,7 +57,7 @@ instantly (it checks this README in 0.05 s, where the JVM takes about 0.7 s) and
 Node. For Markdown it needs [cmark](https://github.com/commonmark/cmark) 0.30 or later
 installed, which it finds when it runs, whatever release you have, in Homebrew's directory
 (`$HOMEBREW_PREFIX/lib` or the usual ones), MacPorts', or the system's: `brew install cmark` on
-macOS, `apt install libcmark0.30.0` on Debian and Ubuntu, or your system's cmark package. It
+macOS, `apt install cmark` on Debian and Ubuntu, or your system's cmark package. It
 never loads a library from the current directory.
 Without cmark, plain text and OpenSpec JSON still work, and a Markdown file gets a message
 saying what to install. Until releases attach binaries, build it from this repository:

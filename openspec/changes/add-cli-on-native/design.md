@@ -24,8 +24,12 @@ See proposal.md for why. What's in place, and what probes found (2026-11-07, Sca
   - Homebrew installs `libcmark.dylib` (unversioned) and `libcmark.0.31.2.dylib` in
     `/opt/homebrew/lib`, which isn't on macOS's default search path for `dlopen`; it ships no
     static library.
-  - Ubuntu's runtime package `libcmark0.30.0` installs `libcmark.so.0.30.0`; `libcmark-dev`
-    adds `libcmark.so` and `libcmark.a`.
+  - Ubuntu's runtime package is `libcmark0.30.2` on 22.04, 24.04, and 26.04, and installs
+    `libcmark.so.0.30.2`; `libcmark-dev` adds `libcmark.so` and `libcmark.a`. The package's name
+    carries the release, so it differs between distributions, but the `cmark` package (the
+    command line) depends on whichever it is, so `apt install cmark` works on each
+    (packages.ubuntu.com and packages.debian.org, 2026-11-07). The first draft named
+    `libcmark0.30.0`, which CI run 42409556968 on `ubuntu-26.04` showed doesn't exist there.
 - **Loading at run time:** a probe with Scala Native's `scala.scalanative.posix.dlfcn` loaded
   `/opt/homebrew/lib/libcmark.dylib` by path, bound `cmark_version_string` with
   `CFuncPtr.fromPtr`, and printed `0.31.2`; the binary linked only `/usr/lib/libSystem.B.dylib`.
@@ -101,7 +105,7 @@ See proposal.md for why. What's in place, and what probes found (2026-11-07, Sca
   error entry for a missing cmark lists every library tried.
 - **Failure reaches the user** as a parse failure of that input:
   `notes.md: Markdown needs the cmark library (0.30 or later), which isn't installed; install it
-  with brew install cmark, or apt install libcmark0.30.0 on Debian and Ubuntu` (exit 2).
+  with brew install cmark, or apt install cmark on Debian and Ubuntu` (exit 2).
   - So `Markdown.sentences` returns `Either[String, List[Sentence]]` (always `Right` on the
     JVM and Node). The conformance suite's `fixture` helper and the CLI's round-trip suite
     compare with `Right(...)`: changes to existing tests, to ask the owner about in apply.

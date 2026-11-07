@@ -145,7 +145,10 @@ jobs:
             "$binary" "$@" >"$dir/out" 2>&1 || status=$?
             cat "$dir/out"
           }
-          runtime=$(dpkg-query -W -f '${Package}\n' 'libcmark0*')
+          # Installed packages only: dpkg also knows packages that were never installed.
+          runtime=$(dpkg-query -W -f '${db:Status-Abbrev}${Package}\n' 'libcmark0*' |
+            sed -n 's/^ii *//p')
+          [ -n "$runtime" ] || fail "no cmark runtime package is installed"
           sudo apt-get remove -y -q libcmark-dev
           if libraries | grep -q -E '/libcmark\.so$'; then
             fail "an unversioned libcmark.so is still installed: $(libraries)"
@@ -161,7 +164,7 @@ jobs:
           fi
           run "$dir/notes.md"
           if [ "$status" != 2 ] || ! grep -q "brew install cmark" "$dir/out" ||
-            ! grep -q "apt install libcmark0.30.0" "$dir/out" ||
+            ! grep -q "apt install cmark" "$dir/out" ||
             ! grep -q "attempts=" "$dir/out"; then
             fail "without cmark, Markdown didn't fail with the message (status $status)"
           fi

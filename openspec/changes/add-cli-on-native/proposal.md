@@ -25,7 +25,7 @@ This is the first change in the `batch-release-0.2.0` batch.
   compatible release is installed, and only when a Markdown input needs it: plain text and
   OpenSpec JSON need no cmark at all.
   - If no cmark is installed (or one older than 0.30), checking a Markdown file fails with a
-    message naming what to install: `brew install cmark`, or `apt install libcmark0.30.0` on
+    message naming what to install: `brew install cmark`, or `apt install cmark` on
     Debian and Ubuntu.
   - The build no longer needs cmark to link (`pkg-config` goes); the native tests need it to
     run, as before.

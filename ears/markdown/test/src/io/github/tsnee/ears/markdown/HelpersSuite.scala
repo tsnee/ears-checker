@@ -227,7 +227,7 @@ object HelpersSuite extends ZIOSpecDefault:
       test("the messages say what to install, and which release was found"):
         assertTrue(
           CmarkLibrary.notFound.contains("brew install cmark"),
-          CmarkLibrary.notFound.contains("apt install libcmark0.30.0"),
+          CmarkLibrary.notFound.contains("apt install cmark"),
           CmarkLibrary.tooOld(0x001d00).contains("0.29.0"),
           CmarkLibrary.tooOld(0x001d00).contains("brew install cmark"),
           CmarkLibrary

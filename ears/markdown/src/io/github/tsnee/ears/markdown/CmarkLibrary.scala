@@ -116,7 +116,7 @@ private[markdown] object CmarkLibrary:
   def supported(version: Int): Boolean = version >= oldest
 
   private val install =
-    "install it with brew install cmark, or apt install libcmark0.30.0 on Debian and Ubuntu"
+    "install it with brew install cmark, or apt install cmark on Debian and Ubuntu"
 
   /** The message when no cmark library loads. */
   val notFound: String =

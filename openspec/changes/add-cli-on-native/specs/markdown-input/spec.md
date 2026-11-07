@@ -8,16 +8,16 @@ When the Markdown reader on Scala Native first reads a document, the Markdown re
 - **THEN** it loads that cmark and reads the document
 
 #### Scenario: Ubuntu's runtime package only
-- **WHEN** the reader runs natively on Ubuntu with `libcmark0.30.0` installed, which has `libcmark.so.0.30.0` and no `libcmark.so`
-- **THEN** it loads `libcmark.so.0.30.0` and reads the document
+- **WHEN** the reader runs natively on Ubuntu with only cmark's runtime package `libcmark0.30.2` installed, which has `libcmark.so.0.30.2` and no `libcmark.so`
+- **THEN** it loads `libcmark.so.0.30.2` and reads the document
 
 #### Scenario: A newer release
 - **WHEN** the reader runs natively where the installed cmark is a release newer than any the conformance suite has run on
 - **THEN** it loads that cmark and reads the document
 
 #### Scenario: An older release earlier in the search
-- **WHEN** the reader runs natively on Linux where `/usr/local/lib/libcmark.so` is cmark 0.29 and `/usr/lib/x86_64-linux-gnu/libcmark.so.0.30.0` is installed
-- **THEN** it loads `libcmark.so.0.30.0` and reads the document
+- **WHEN** the reader runs natively on Linux where `/usr/local/lib/libcmark.so` is cmark 0.29 and `/usr/lib/x86_64-linux-gnu/libcmark.so.0.30.2` is installed
+- **THEN** it loads `libcmark.so.0.30.2` and reads the document
 
 ### Requirement: No library from the current directory
 The Markdown reader on Scala Native SHALL load cmark only by an absolute path, apart from the bare name `libcmark.so` on Linux, which the system loader resolves from its own library directories.

@@ -14,6 +14,11 @@ In this order:
    macOS runner is added; each needs cmark 0.30 or later at run time, which the notes say), a
    `SHA256SUMS` file, and GitHub's build-provenance attestations. The owner publishes the draft
    when publishing the Central Portal deployment.
+   Each native binary is built in its own job on a runner of its platform (`ubuntu-latest`,
+   `ubuntu-24.04-arm`, `macos-latest`) and passes `scripts/check-native-cli` there before it's
+   attached. The Linux binaries also run in an older distribution's container (such as
+   `debian:bookworm` with its `libcmark0.30.2`), since a binary needs at least the glibc it was
+   built with; the notes give the oldest glibc and macOS release each binary supports.
    Backfill the releases for `v0.1.0` and `v0.1.1` by hand.
 2. **Document the JSON output.** A `docs/json-output.md` reference (fields, an example per
    location type, what's stable), a short README section, requirements in the `ears-cli` spec,
