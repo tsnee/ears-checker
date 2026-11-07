@@ -52,6 +52,21 @@ npm pack "$(./mill show ears.cli.js.npmPackage | jq -r 'sub("^ref:v[0-9]+:[0-9a-
 npm install -g tsnee-ears-checker-cli-*.tgz
 ```
 
+It also builds as a native binary with [Scala Native](https://scala-native.org), which starts
+instantly (it checks this README in 0.05 s, where the JVM takes about 0.7 s) and needs no JVM or
+Node. For Markdown it needs [cmark](https://github.com/commonmark/cmark) 0.30 or later
+installed, which it finds when it runs, whatever release you have, in Homebrew's directory
+(`$HOMEBREW_PREFIX/lib` or the usual ones), MacPorts', or the system's: `brew install cmark` on
+macOS, `apt install libcmark0.30.0` on Debian and Ubuntu, or your system's cmark package. It
+never loads a library from the current directory.
+Without cmark, plain text and OpenSpec JSON still work, and a Markdown file gets a message
+saying what to install. Until releases attach binaries, build it from this repository:
+
+```sh
+./mill ears.cli.native.nativeLink
+alias ears-check="$PWD/out/ears/cli/native/nativeLink.dest/out"
+```
+
 It reads each file, or standard input when none is given, and reports every requirement that
 doesn't fit a template, with a suggested fix where one exists:
 
@@ -157,10 +172,11 @@ The package's [README](ears/npm/package/README.md) describes the results and opt
 
 ## Building
 
-`./mill __.test` runs every test on the JVM and, for the library, the npm package, and the
-Markdown reader, on Node; the Markdown reader's conformance suite also runs natively with Scala
-Native, which needs [cmark](https://github.com/commonmark/cmark) installed (`brew install
-cmark`, or `apt-get install libcmark-dev`) and a C compiler. It measures test coverage on the
+`./mill __.test` runs every test on the JVM and, for the library, the npm package, the Markdown
+reader, and the command line, on Node; the library, the Markdown reader, and the command line
+also run natively with Scala Native, which needs a C compiler, and, to run the Markdown tests,
+[cmark](https://github.com/commonmark/cmark) installed (`brew install cmark`, or `apt-get
+install libcmark-dev`); nothing links it. It measures test coverage on the
 JVM; `./mill ears.scoverage.htmlReport` (or `ears.cli`, `ears.npm`, `ears.linkCheck`, or
 `ears.markdown`) writes a report under `out/`.
 `./mill __.publishLocal` publishes the next version as a snapshot (`0.2.0-SNAPSHOT`) to
@@ -175,15 +191,17 @@ installed from npm.
 `scripts/check-npm-cli` builds the command line's npm package and jar, installs the package into
 an empty project, and runs both on this repository's Markdown and specs and on error cases,
 failing on any difference in output, messages, or exit status; it needs the
-[OpenSpec CLI](https://github.com/Fission-AI/OpenSpec). Like the other scripts, it's for
-working on ears-checker, not part of any package.
+[OpenSpec CLI](https://github.com/Fission-AI/OpenSpec). `scripts/check-native-cli` does the same
+for the native binary, on the same cases (`scripts/cli-cases`), after checking it links no cmark.
+Like the other scripts, they're for working on ears-checker, not part of any package.
 `scripts/check-scalajs-link` publishes the Scala.js library locally, generates a program that
 references every public operation, and links it in release mode against only that artifact,
 the way a user's application gets it; it needs [Scala CLI](https://scala-cli.virtuslab.org).
 GitHub Actions checks formatting, compiles, runs every test, checks each module's coverage
 against its minimum in `build.mill`, checks both npm packages, and the Node command line
-against the jar, on the oldest and newest Node they support, links the Scala.js library as a
-user gets it, and checks the OpenSpec specs on each push to `main` and each pull request.
+against the jar, on the oldest and newest Node they support, checks the native binary against
+the jar (and with less cmark installed), links the Scala.js library as a user gets it, and
+checks the OpenSpec specs on each push to `main` and each pull request.
 
 ## License
 

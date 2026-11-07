@@ -42,13 +42,13 @@ jobs:
       # Dependencies, Mill's JDK, and the Mill launcher.
       - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
 
-      # cmark, which ears.markdown.native's tests link against (Scala Native's clang is on the
-      # runner already).
+      # cmark, which the native Markdown reader loads when it runs, in the native tests and the
+      # native CLI check (Scala Native's clang is on the runner already; nothing links cmark).
       - name: Install cmark
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends libcmark-dev
-          pkg-config --modversion libcmark
+          dpkg-query -W 'libcmark*'
 
       # The OpenSpec CLI, and the TypeScript compiler and linters the npm package check uses.
       - name: Install the npm tools
@@ -71,6 +71,10 @@ jobs:
       # The Node CLI, installed from its packed package, against the JVM jar on the same inputs.
       - name: Check the Node CLI
         run: scripts/check-npm-cli
+
+      # The native binary, against the JVM jar on the same inputs; and that it links no cmark.
+      - name: Check the native CLI
+        run: scripts/check-native-cli
 
       # scala-cli links the Scala.js library's link-check program against the published artifact;
       # it uses the runner's Java from setup-java.
@@ -115,6 +119,59 @@ jobs:
 
       - name: Check OpenSpec
         run: scripts/check-openspec
+
+      # Last, since it removes cmark from the runner. With only the runtime package, which has
+      # just a versioned libcmark.so.*, the native binary still reads Markdown; with no cmark, it
+      # says what to install, and plain text still works. It also shows what the binary does
+      # with a non-ASCII file name under the C locale (printed, not checked).
+      - name: Check the native binary with less cmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail() { echo "$1" >&2; exit 1; }
+          # Every directory CmarkLibrary searches on Linux.
+          searched=(/usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu /usr/lib64 /usr/lib
+            /usr/local/lib)
+          libraries() { find "${searched[@]}" -maxdepth 1 -name 'libcmark.so*' 2>/dev/null || true; }
+          shown=$(./mill --ticker false show ears.cli.native.nativeLink)
+          binary=$(printf '%s' "$shown" | jq -r 'if type == "object" then .path else . end |
+            sub("^ref:v[0-9]+:[0-9a-f]+:"; "")')
+          [ -x "$binary" ] || fail "Mill printed no usable binary: $binary"
+          dir=$(mktemp -d)
+          printf '%s\n' '- When an order arrives the scheduler shall list events.' >"$dir/notes.md"
+          printf '%s\n' 'The scheduler lists events.' >"$dir/notes.txt"
+          run() {
+            status=0
+            "$binary" "$@" >"$dir/out" 2>&1 || status=$?
+            cat "$dir/out"
+          }
+          runtime=$(dpkg-query -W -f '${Package}\n' 'libcmark0*')
+          sudo apt-get remove -y -q libcmark-dev
+          if libraries | grep -q -E '/libcmark\.so$'; then
+            fail "an unversioned libcmark.so is still installed: $(libraries)"
+          fi
+          run --verbose "$dir/notes.md"
+          if [ "$status" != 1 ] || ! grep -q missing-comma "$dir/out" ||
+            ! grep -q 'parser="cmark 0\.' "$dir/out"; then
+            fail "with only $runtime, Markdown wasn't read through it (status $status)"
+          fi
+          sudo apt-get remove -y -q "$runtime"
+          if [ -n "$(libraries)" ] || ldconfig -p | grep -q libcmark; then
+            fail "a cmark library is still installed: $(libraries)"
+          fi
+          run "$dir/notes.md"
+          if [ "$status" != 2 ] || ! grep -q "brew install cmark" "$dir/out" ||
+            ! grep -q "apt install libcmark0.30.0" "$dir/out" ||
+            ! grep -q "attempts=" "$dir/out"; then
+            fail "without cmark, Markdown didn't fail with the message (status $status)"
+          fi
+          run "$dir/notes.txt"
+          if [ "$status" != 1 ] || ! grep -q missing-modal "$dir/out"; then
+            fail "without cmark, plain text wasn't checked as usual (status $status)"
+          fi
+          name=$(printf 'r\303\251sum\303\251.txt')
+          cp "$dir/notes.txt" "$dir/$name"
+          (cd "$dir" && LC_ALL=C LANG=C "$binary" "$name") || true
 
   # The oldest supported runtimes: the OpenSpec check again with JDK 17, the oldest JDK the jar
   # supports, starting it; and the npm package and Node CLI checks on Node 22, the oldest Node the

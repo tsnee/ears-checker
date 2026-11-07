@@ -2,7 +2,8 @@
 # The Node CLI's check: build @tsnee/ears-checker-cli and the JVM jar, install the packed package
 # into an empty project, then run both builds of ears-check on the same inputs and require the
 # same standard output, the same messages on standard error (log lines aside), and the same exit
-# status. A development check, run by contributors and CI; it isn't part of either package.
+# status, on the cases in scripts/cli-cases. A development check, run by contributors and CI; it
+# isn't part of either package.
 # Needs node, npm, java, jq, git, and openspec on the PATH.
 set -e
 
@@ -103,142 +104,8 @@ if ! (cd "$project" && npm exec --cache "$cache" --offline -- ears-check --help)
 fi
 
 node_cli() { "$project/node_modules/.bin/ears-check" "$@"; }
-# Scala 3's runtime uses sun.misc.Unsafe, which JDK 23 and newer warn about on every start
-# unless --sun-misc-unsafe-memory-access=allow. JDK 17 through 22 don't know that flag and
-# won't start with it, so -XX:+IgnoreUnrecognizedVMOptions makes them skip it.
-jvm_cli() {
-  java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow -jar "$jar" "$@"
-}
 
-# Inputs: plain text, a passing file, a directory, every spec as OpenSpec JSON.
-inputs="$tmp/inputs"
-mkdir -p "$inputs/notes"
-printf '%s\n' 'The scheduler shall list upcoming events.' 'The scheduler lists events.' \
-  'When a payment fails the billing service SHALL notify the account owner.' >"$inputs/plain.txt"
-printf '%s\n' 'The scheduler shall list upcoming events.' >"$inputs/passing.txt"
-for spec in $(openspec list --specs --json | jq -r '.specs[].id'); do
-  openspec show "$spec" --type spec --json >"$inputs/spec-$spec.json"
-done
-
-# Runs one build on a case, with $stdin piped to it: <build>/<case>.out, .err (with log lines
-# removed), and .status. Log lines start with an ISO timestamp and a level; their details differ
-# by platform, by design.
-run() {
-  build=$1 name=$2
-  shift 2
-  mkdir -p "$tmp/$build"
-  # The pipeline's status is the CLI's, the last command's.
-  status=0
-  cat "$stdin" | "${build}_cli" "$@" >"$tmp/$build/$name.out" 2>"$tmp/$build/$name.log" ||
-    status=$?
-  echo "$status" >"$tmp/$build/$name.status"
-  grep -v -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z (TRACE|DEBUG|INFO|WARN|ERROR|FATAL) ' \
-    "$tmp/$build/$name.log" >"$tmp/$build/$name.err" || true
-}
-
-# Runs both builds on a case and stops at the first difference, showing both sides. EXPECTED is
-# the exit statuses the case may end with, separated by spaces: agreeing isn't enough, since both
-# builds failing the same way would hide every other difference.
-compare() {
-  name=$1 expected=$2
-  shift 2
-  run node "$name" "$@"
-  run jvm "$name" "$@"
-  for part in status out err; do
-    if ! cmp -s "$tmp/node/$name.$part" "$tmp/jvm/$name.$part"; then
-      echo "check-npm-cli: case $name: the Node CLI's $part differs from the JVM CLI's" >&2
-      echo "(< Node, > JVM)" >&2
-      diff "$tmp/node/$name.$part" "$tmp/jvm/$name.$part" | head -40 >&2 || true
-      exit 1
-    fi
-  done
-  status=$(cat "$tmp/node/$name.status")
-  for allowed in $expected; do
-    if [ "$status" = "$allowed" ]; then
-      echo "check-npm-cli: $name: the same (exit status $status)"
-      return
-    fi
-  done
-  echo "check-npm-cli: case $name: both builds exited with $status, not $expected:" >&2
-  cat "$tmp/node/$name.err" >&2
-  exit 1
-}
-
-# Every tracked Markdown file, which must exist (a deletion not yet staged is still tracked) and
-# have no space or glob character in its path: the list is split into arguments below.
-markdown=$(git ls-files '*.md')
-for file in $markdown; do
-  case $file in
-    *[[:space:]*?[]*)
-      echo "check-npm-cli: $file: a path with a space or glob character can't be passed" >&2
-      exit 1
-      ;;
-  esac
-  if [ ! -f "$file" ]; then
-    echo "check-npm-cli: $file is tracked but missing; restore or stage its deletion" >&2
-    exit 1
-  fi
-done
-specs=$(ls "$inputs"/spec-*.json)
-
-# A file the user may not read; root reads it anyway, so the case is skipped for root.
-printf '%s\n' 'The scheduler shall list upcoming events.' >"$inputs/secret.txt"
-chmod 000 "$inputs/secret.txt"
-# Invalid UTF-8: "\351" is é in Latin-1.
-printf 'The scheduler shall list \351vents.\nThe scheduler lists \351vents.\n' >"$inputs/latin1.txt"
-# UTF-16 with its byte-order mark ("Sch"), and plain text after a UTF-8 byte-order mark.
-printf '\377\376S\000c\000h\000\n\000' >"$inputs/utf16.txt"
-printf '\357\273\277Scheduler shall list events.\n' >"$inputs/bom.txt"
-
-stdin=/dev/null
-set -f # the lists below are split into arguments but never globbed
-# shellcheck disable=SC2086
-compare markdown-text "0 1" $markdown
-# shellcheck disable=SC2086
-compare markdown-json "0 1" --output json $markdown
-# shellcheck disable=SC2086
-compare openspec-text "0 1" $specs
-# shellcheck disable=SC2086
-compare openspec-json "0 1" --output json $specs
-set +f
-compare plain-text 1 "$inputs/plain.txt"
-compare plain-json 1 --output json "$inputs/plain.txt"
-compare invalid-utf-8 2 "$inputs/latin1.txt"
-compare utf-16 2 "$inputs/utf16.txt"
-compare byte-order-mark 1 "$inputs/bom.txt"
-# Both builds agreeing isn't enough here: the fix must not carry the mark.
-if LC_ALL=C grep -q "$(printf '\357\273\277')" "$tmp/node/byte-order-mark.out"; then
-  echo "check-npm-cli: case byte-order-mark: the fix still has the byte-order mark" >&2
-  exit 1
-fi
-# OpenSpec JSON after a UTF-8 byte-order mark: read as if it weren't there.
-set -f
-for spec in $specs; do
-  { printf '\357\273\277'; cat "$spec"; } >"$inputs/bom.json"
-  break
-done
-set +f
-compare openspec-byte-order-mark "0 1" "$inputs/bom.json"
-compare missing 2 "$inputs/missing.txt"
-compare directory 2 "$inputs/notes"
-if [ "$(id -u)" -ne 0 ]; then
-  compare unreadable 2 "$inputs/secret.txt"
-else
-  echo "check-npm-cli: unreadable: skipped, since root can read any file"
-fi
-compare help 0 --help
-compare bad-arguments 2 --format yaml
-compare empty-file-name 2 "$inputs/plain.txt" ""
-compare verbose 0 --verbose "$inputs/passing.txt"
-# Non-ASCII output under the C locale, whose charset is ASCII: both write UTF-8 regardless (the
-# JVM's own streams would write é as ?). In a subshell, so the locale applies to this case only.
-printf 'When an order is placed the caf\303\251 shall print a receipt.\n' >"$inputs/accents.txt"
-(
-  export LC_ALL=C LANG=C
-  compare c-locale 1 "$inputs/accents.txt"
-)
-printf '%s\n' 'The scheduler shall list upcoming events.' 'The scheduler lists events.' \
-  >"$inputs/piped.txt"
-stdin="$inputs/piped.txt"
-compare standard-input 1
+# The cases, shared with check-native-cli.
+check=check-npm-cli subject=node label="the Node CLI"
+. "$root/scripts/cli-cases"
 echo "check-npm-cli: the Node CLI installs and matches the JVM CLI on every case"

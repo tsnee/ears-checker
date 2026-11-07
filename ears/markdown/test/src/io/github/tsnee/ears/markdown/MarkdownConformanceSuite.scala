@@ -9,7 +9,7 @@ import zio.test.*
 object MarkdownConformanceSuite extends ZIOSpecDefault:
 
   private def fixture(name: String, content: String, expected: Sentence*) =
-    test(name)(assertTrue(Markdown.sentences(content) == expected.toList))
+    test(name)(assertTrue(Markdown.sentences(content) == Right(expected.toList)))
 
   def spec = suite("Markdown conformance")(
     suite("what's read")(
@@ -250,10 +250,14 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
     suite("deep nesting")(
       test("5,000 levels of emphasis: the sentence is still read"):
         val content = "*a " * 5000 + "The scheduler shall list." + " a*" * 5000 + "\n"
-        assertTrue(Markdown.sentences(content).exists(_.text.contains("The scheduler shall list.")))
+        assertTrue(
+          Markdown.sentences(content).exists(_.exists(_.text.contains("The scheduler shall list.")))
+        )
       ,
       test("10,000 nested block quotes: no crash"):
         val content = "> " * 10000 + "The scheduler shall list.\n"
-        assertTrue(Markdown.sentences(content).size <= 1)
-    )
+        assertTrue(Markdown.sentences(content).exists(_.size <= 1))
+    ),
+    test("the platform's parser is found and named"):
+      assertTrue(Markdown.parser().exists(_.nonEmpty))
   )

@@ -34,8 +34,11 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
   index pin is there because Mill's default index can predate the pinned JDK; raise it with the
   JDK.
 - `ears.js`, `ears.npm.js`, `ears.markdown.js`, and `ears.cli.js` tests run on Node;
-  `ears.markdown.native`'s run natively (Scala Native 0.5), linked with the system's cmark
-  through `pkg-config` (`brew install cmark`; CI installs `libcmark-dev`).
+  `ears.native`'s, `ears.markdown.native`'s, and `ears.cli.native`'s run natively (Scala Native
+  0.5). Nothing links cmark: the native Markdown reader loads an installed cmark (0.30 or later)
+  when it runs, choosing the file with the pure `CmarkLibrary`, so the native Markdown tests need
+  it installed (`brew install cmark`; CI installs `libcmark-dev`). `ears/src-jvm` and
+  `ears/cli/src-jvm` serve the JVM and Scala Native: every Java API they use works on both.
 - Markdown is read only through the facade in `ears/markdown` (`Markdown.sentences`), never with
   a parser directly. Its conformance suite runs every fixture on the JVM, Node, and Scala Native;
   a case where the parsers could differ gets a fixture. The Node tests' npm parser is pinned by
@@ -74,7 +77,10 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
   `scripts/check-npm-cli` packs it, checks that it has no map and that `main.js` is within its
   size limit, installs it, then runs it and the jar on this repository's Markdown, its specs as
   OpenSpec JSON, and the error cases, and fails on any difference in standard output, messages
-  (log lines aside), or exit status; it needs `openspec`.
+  (log lines aside), or exit status; it needs `openspec`. `./mill ears.cli.native.nativeLink`
+  builds the native binary (full release mode), and `scripts/check-native-cli` checks it links
+  no cmark and compares it with the jar on the same cases, which both scripts source from
+  `scripts/cli-cases`.
 - The library must link on Scala.js with only its declared dependencies. zio-test brings
   scala-java-locales into every Scala.js test, which hides a missing class such as
   `java.util.Locale`. `scripts/check-scalajs-link` catches it: it publishes `ears.js` locally,
@@ -91,15 +97,16 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
   with `ears.js.test`.
 
 Run `./mill __.test`, every module's `validateCoverageMinimums`, `scripts/check-npm-package`,
-`scripts/check-npm-cli`, and `scripts/check-scalajs-link` before calling any change done, and
-report the coverage.
+`scripts/check-npm-cli`, `scripts/check-native-cli`, and `scripts/check-scalajs-link` before
+calling any change done, and report the coverage.
 Warnings are errors.
 
 CI (`.github/workflows/ci.yml`) runs the same checks on every push to `main` and every pull
 request: `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`,
-`scripts/check-npm-package`, `scripts/check-npm-cli`, `scripts/check-scalajs-link`, the
-coverage minimums (with each module's percentages on the run's summary page), and
-`scripts/check-openspec`. A second job, `check-jdk17`, runs on the oldest supported runtimes:
+`scripts/check-npm-package`, `scripts/check-npm-cli`, `scripts/check-native-cli`,
+`scripts/check-scalajs-link`, the coverage minimums (with each module's percentages on the run's
+summary page), `scripts/check-openspec`, and, last, the native binary with less cmark
+installed. A second job, `check-jdk17`, runs on the oldest supported runtimes:
 `scripts/check-openspec` with JDK 17 starting the jar, and `scripts/check-npm-package` and
 `scripts/check-npm-cli` on the oldest Node the packages declare. It publishes nothing.
 
@@ -167,11 +174,12 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
   - `ears/src` holds the sources for both platforms; `ears/src-jvm` and `ears/js/src` hold the
     few that differ (`LetterCase`)
   - `ears.js` — the same sources and tests built with Scala.js and run on Node
+  - `ears.native` — the same sources (with `ears/src-jvm`) and tests built with Scala Native
   - `ears/cli/` — the `ears-check` command (ZIO, decline, zio-json, commonmark-java), package
     `io.github.tsnee.ears.cli`: `src` is the shared program (`Cli`, `Reading`), `src-jvm` the
-    JVM's entry point (`Main`), and `js/src` Node's (`NodeMain`), with `js/package/` the npm
-    package's README; `test/src` runs on both platforms, `test/src-jvm` only on the JVM, where
-    `OwnSpecsSuite` checks this repository's own specs
+    entry point (`Main`) of the JVM and Scala Native, and `js/src` Node's (`NodeMain`), with
+    `js/package/` the npm package's README; `test/src` runs on every platform, `test/src-jvm`
+    only on the JVM, where `OwnSpecsSuite` checks this repository's own specs
   - `ears/npm/` — the npm package, package `io.github.tsnee.ears.npm`: `src` is the pure core
     (`Api`, built and measured on the JVM), `js/src` the Scala.js export (`Facade`), `package/`
     the hand-written `index.d.ts` and README, `smoke/` the TypeScript consumer, and `tools/`
@@ -191,6 +199,6 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
   Actions workflow), `release-publishing` (the Maven Central release workflow), `test-coverage`
   (the coverage minimums), and the archived changes that built them
 - `scripts/` — `check-openspec` and the Claude Code hook that runs it, `check-npm-package`,
-  `check-npm-cli`, and `check-scalajs-link`
+  `check-npm-cli`, `check-native-cli` (both sourcing `cli-cases`), and `check-scalajs-link`
 - `.github/` — the CI and release workflows, and Dependabot's weekly updates to their action pins
 - `docs/worklog.md` — dated work log; `docs/roadmap.md` — planned changes

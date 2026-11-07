@@ -40,8 +40,10 @@ object InlineCodeRoundTripSuite extends ZIOSpecDefault:
         val middle = pairs.map((t, c) => writeText(t) + writeCode(c)).mkString + writeText(last)
         val sentences = Markdown.sentences(s"The scheduler shall print x$middle now.\n")
         assertTrue(
-          sentences.size == 1,
-          sentences.forall(sentence => Requirement.classify(Profile.Classic, sentence.text).isRight)
+          sentences.map(_.size) == Right(1),
+          sentences.exists(
+            _.forall(sentence => Requirement.classify(Profile.Classic, sentence.text).isRight)
+          )
         )
       }
   )

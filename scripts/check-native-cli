@@ -1,0 +1,56 @@
+#!/usr/bin/env sh
+# The native CLI's check: build the native binary and the JVM jar, check that the binary links no
+# cmark (it loads cmark when it runs), then run both on the cases in scripts/cli-cases and require
+# the same standard output, the same messages on standard error (log lines aside), and the same
+# exit status. A development check, run by contributors and CI.
+# Needs java, jq, git, openspec, and cmark (to read Markdown) on the PATH; otool on macOS, ldd on
+# Linux.
+set -e
+
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+root=$(pwd)
+
+# Mill runs on its own (not in a pipeline) so a failed build stops the script with Mill's errors.
+built() {
+  if ! shown=$(./mill --ticker false show "$1"); then
+    echo "check-native-cli: building $1 failed (see the Mill output above)" >&2
+    exit 1
+  fi
+  printf '%s' "$shown" | jq -r 'if type == "object" then .path else . end |
+    sub("^ref:v[0-9]+:[0-9a-f]+:"; "")'
+}
+binary=$(built ears.cli.native.nativeLink)
+if [ ! -x "$binary" ]; then
+  echo "check-native-cli: Mill printed no usable binary: $binary" >&2
+  exit 1
+fi
+jar=$(built ears.cli.assembly)
+if [ -z "$jar" ] || [ ! -f "$jar" ]; then
+  echo "check-native-cli: Mill printed no usable assembly path" >&2
+  exit 1
+fi
+
+# Only the platform's system libraries are linked; cmark is found when the binary runs.
+if [ "$(uname -s)" = Darwin ]; then
+  linked=$(otool -L "$binary" | sed 1d)
+else
+  linked=$(ldd "$binary")
+fi
+if printf '%s\n' "$linked" | grep -q -i cmark; then
+  echo "check-native-cli: the binary links cmark, which it should load when it runs:" >&2
+  printf '%s\n' "$linked" >&2
+  exit 1
+fi
+
+tmp=$(mktemp -d)
+# sh runs the EXIT trap on exit, but not when interrupted; the INT and TERM traps exit, which
+# runs it.
+trap 'rm -rf "$tmp"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+native_cli() { "$binary" "$@"; }
+
+check=check-native-cli subject=native label="the native CLI"
+. "$root/scripts/cli-cases"
+echo "check-native-cli: the native CLI matches the JVM CLI on every case"

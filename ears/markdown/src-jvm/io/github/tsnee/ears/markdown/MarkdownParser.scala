@@ -19,7 +19,13 @@ private[markdown] object MarkdownParser:
   private val parser =
     Parser.builder().includeSourceSpans(IncludeSourceSpans.BLOCKS_AND_INLINES).build()
 
-  def paragraphs(content: String): List[Paragraph] =
+  /** The parser's name, for the log; it's part of the program, so always there. */
+  def name(): Either[MarkdownUnavailable, String] = Right("commonmark-java")
+
+  /** The paragraphs; always found, since this parser is part of the program. */
+  def paragraphs(content: String): Either[String, List[Paragraph]] = Right(parsed(content))
+
+  private def parsed(content: String): List[Paragraph] =
     Walk.preorder(parser.parse(content), children).collect {
       case paragraph: org.commonmark.node.Paragraph =>
         Paragraph(

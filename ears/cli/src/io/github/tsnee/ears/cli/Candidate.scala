@@ -22,8 +22,10 @@ object Candidate:
       case (line, i) if !line.isBlank => Candidate(Location.Line(file, i + 1), line.strip)
     }
 
-  /** Each sentence outside code, in a paragraph or list item, that contains the modal keyword. */
-  def fromMarkdown(file: String, content: String): List[Candidate] =
+  /** Each sentence outside code, in a paragraph or list item, that contains the modal keyword; or,
+    * on Scala Native without cmark, what to install.
+    */
+  def fromMarkdown(file: String, content: String): Either[String, List[Candidate]] =
     MarkdownInput.candidates(file, content)
 
   /** Requirements from `openspec show --json` for a change (added and modified only) or a spec. */

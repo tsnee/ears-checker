@@ -55,7 +55,7 @@ object Checker:
   def candidates(settings: Settings, content: String): Either[String, List[Candidate]] =
     settings.inputFormat match
       case InputFormat.PlainText    => Right(Candidate.fromPlainText(settings.sourceName, content))
-      case InputFormat.Markdown     => Right(Candidate.fromMarkdown(settings.sourceName, content))
+      case InputFormat.Markdown     => Candidate.fromMarkdown(settings.sourceName, content)
       case InputFormat.OpenSpecJson => Candidate.fromOpenSpec(content)
 
   private def findingsFor(profile: Profile, candidate: Candidate): List[Finding] =

@@ -22,7 +22,13 @@ private[markdown] object MarkdownParser:
 
   private val lineEnding = "\r\n|\r|\n"
 
-  def paragraphs(content: String): List[Paragraph] =
+  /** The parser's name, for the log; it's part of the program, so always there. */
+  def name(): Either[MarkdownUnavailable, String] = Right("mdast-util-from-markdown")
+
+  /** The paragraphs; always found, since this parser is part of the program. */
+  def paragraphs(content: String): Either[String, List[Paragraph]] = Right(parsed(content))
+
+  private def parsed(content: String): List[Paragraph] =
     Walk
       .preorder(fromMarkdown(content), children)
       .filter(kind(_) == "paragraph")

@@ -8,7 +8,8 @@ import io.github.tsnee.ears.markdown.Markdown
   */
 private[cli] object MarkdownInput:
 
-  def candidates(file: String, content: String): List[Candidate] =
+  /** The candidates, or why the Markdown couldn't be read (only on Scala Native, without cmark). */
+  def candidates(file: String, content: String): Either[String, List[Candidate]] =
     Markdown
       .sentences(content)
-      .map(sentence => Candidate(Location.Line(file, sentence.line), sentence.text))
+      .map(_.map(sentence => Candidate(Location.Line(file, sentence.line), sentence.text)))

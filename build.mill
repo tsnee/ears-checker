@@ -10,6 +10,7 @@ import mill.scalajslib.*
 import mill.scalajslib.api.ESModuleImportMapping
 import mill.scalajslib.api.ModuleKind
 import mill.scalanativelib.*
+import mill.scalanativelib.api.ReleaseMode
 import mill.scalalib.*
 import mill.scalalib.publish.*
 import mill.scalalib.scalafmt.ScalafmtModule
@@ -294,6 +295,20 @@ object ears extends Base with Published with Covered {
     }
   }
 
+  /** The same sources and tests on Scala Native, for the native CLI. `ears/src-jvm` serves it
+    * too: Scala Native's `java.util.Locale` gives `LetterCase` the JVM's results. Not published.
+    */
+  object native extends Base with ScalaNativeModule {
+    def scalaNativeVersion = markdown.native.scalaNativeVersion()
+    override def warts = pureWarts
+    def sources = Task(ears.sharedSources() ++ ears.jvmSources())
+    def mvnDeps = ears.mvnDeps
+
+    object test extends ScalaNativeTests with ZioSpecs {
+      def sources = ears.test.sources
+    }
+  }
+
   /** The npm package `@tsnee/ears-checker`. This module is its pure core, every decision behind
     * `classify`, compiled and measured on the JVM; `js` adds the Scala.js export. Neither is
     * published to Maven Central: top-level exports in a Scala.js library would be exported from
@@ -430,36 +445,17 @@ object ears extends Base with Published with Covered {
       }
     }
 
-    /** The shared sources and the cmark parser, for Scala Native. Its tests run the conformance
-      * suite natively, linked with the system's cmark.
+    /** The shared sources and the cmark parser, for Scala Native. Nothing links cmark: the parser
+      * finds an installed cmark when it runs (`CmarkLibrary`), so the build needs none, and the
+      * tests, which run the conformance suite natively, need one installed.
       */
     object native extends Base with ScalaNativeModule {
       def scalaNativeVersion = "0.5.12"
       override def warts = pureWarts
       def sources = Task(markdown.sharedSources() ++ super.sources())
 
-      /** cmark's linker flags, from `pkg-config`: read on every run (an input), so a change of
-        * the system library is noticed.
-        */
-      def cmarkLinking = Task.Input {
-        val missing = "cmark isn't installed, or pkg-config can't find it: install them " +
-          "(`brew install cmark pkg-config`, or `apt-get install libcmark-dev pkg-config`) " +
-          "to link ears.markdown.native"
-        // os-lib throws when the program itself isn't there.
-        scala.util.Try(os.proc("pkg-config", "--libs", "libcmark").call(check = false)).toOption
-          .filter(_.exitCode == 0) match {
-          case Some(found) => found.out.trim().split("\\s+").toSeq.filter(_.nonEmpty)
-          case None => Task.fail(missing)
-        }
-      }
-
-      // cmark's flags first, so its -L comes before Mill's defaults (such as Homebrew's lib
-      // directory) and the library pkg-config names is the one linked.
-      def nativeLinkingOptions = Task(cmarkLinking() ++ super.nativeLinkingOptions())
-
       object test extends ScalaNativeTests with ZioSpecs {
         def sources = markdown.test.sources
-        def nativeLinkingOptions = Task(cmarkLinking() ++ super.nativeLinkingOptions())
       }
     }
   }
@@ -508,6 +504,30 @@ object ears extends Base with Published with Covered {
       def forkEnv = Task {
         super.forkEnv() ++
           Map("OPENSPEC_DIR" -> (mill.api.BuildCtx.workspaceRoot / "openspec").toString)
+      }
+    }
+
+    /** The same program as a native binary: the shared sources, the JVM's entry point and
+      * reading (`src-jvm`: every Java API it uses works on Scala Native), and the Markdown
+      * facade's cmark parser. Linked with Scala Native's full release optimizations; its tests,
+      * which only need to run, in debug mode, which links much faster.
+      */
+    object native extends Base with ScalaNativeModule {
+      def scalaNativeVersion = markdown.native.scalaNativeVersion()
+      def moduleDeps = Seq(ears.native)
+      // markdown.native's sources include the facade's shared ones.
+      def sources = Task(cli.sharedSources() ++ cli.jvmSources() ++ markdown.native.sources())
+      def mainClass = Some("io.github.tsnee.ears.cli.Main")
+      def releaseMode = Task(ReleaseMode.ReleaseFull)
+      def mvnDeps = Seq(
+        mvn"dev.zio::zio::$zioVersion",
+        mvn"com.monovore::decline::$declineVersion",
+        mvn"dev.zio::zio-json::$zioJsonVersion"
+      )
+
+      object test extends ScalaNativeTests with ZioSpecs {
+        def sources = cli.test.sharedSources
+        def releaseMode = Task(ReleaseMode.Debug)
       }
     }
 

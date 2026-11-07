@@ -96,3 +96,20 @@
   nine backtick edge cases, now conformance fixtures, and a round-trip property ties the reader
   to the classifier. The planned token-based article fix proved unnecessary; review found the
   backslash-before-code bug.
+- 2026-11-07: add-cli-on-native implemented (first change in batch-release-0.2.0): the CLI and
+  the classifier build with Scala Native (`ears.native`, `ears.cli.native`, reusing `src-jvm`);
+  the release binary is 26.7 MB, links in about 23 s, and checks the README in 0.05 s. The
+  native Markdown reader loads cmark (0.30 or later) when it runs instead of linking it, since
+  cmark names its library by full release; `pkg-config` is gone from the build.
+  `scripts/check-native-cli` compares the binary with the jar on the cases now shared in
+  `scripts/cli-cases`. The roadmap was reordered (GraalVM dropped). A stale Mill daemon ran out
+  of class space and had to be killed by hand (`kill -9`, outside the sandbox).
+- 2026-11-07: add-cli-on-native reviewed. The security review found that on macOS a bare
+  `dlopen("libcmark.dylib")` also searches the current directory, so a repository could plant a
+  library that runs as the user; now every candidate is an absolute path (apart from Linux's
+  bare `libcmark.so`, which glibc never resolves from there), `$HOMEBREW_PREFIX/lib` is
+  searched, and a planted file is ignored. The code review found the missing-cmark CI step
+  couldn't fail (`-e` skips tests inside `&&`) and expected a finding from a file with none; also
+  fixed: each candidate is tried until one binds, and the log names the parser or every library
+  tried. Coverage: ears 95.91/92.04, ears.cli 96.87/98.67, ears.npm 100/100, ears.linkCheck
+  97.28/100, ears.markdown 100/100 (statement/branch %).
