@@ -32,4 +32,4 @@ Scala.js and npm, `show`, the coverage check, and the final CI-equivalent run go
 
 - [x] 5.1 Run `./mill __.checkFormat`, `./mill __.test`, every module's `validateCoverageMinimums`, `scripts/check-npm-package`, `scripts/check-npm-cli`, `scripts/check-scalajs-link`, and `scripts/check-openspec`. Verify all pass, and report the coverage and both packages' sizes. Add a dated line to `docs/worklog.md`
 - [x] 5.2 Run `/code-review` in a subagent on the branch's diff, and let the owner choose which findings to fix
-- [ ] 5.3 Commit; the owner pushes. Open the pull request with `gh`, recommending squash merge. Report the CI run's result and minutes. After CI passes, archive the change on the same branch (creating `cli-npm-package`, syncing `ears-cli` and `continuous-integration`) for the owner to push and merge
+- [x] 5.3 Commit; the owner pushes. Open the pull request with `gh`, recommending squash merge. Report the CI run's result and minutes. After CI passes, archive the change on the same branch (creating `cli-npm-package`, syncing `ears-cli` and `continuous-integration`) for the owner to push and merge
