@@ -284,7 +284,7 @@ When the checker runs on Node, the EARS checker SHALL read its arguments from th
 - **THEN** the checker reads `notes.md` with the OpenSpec profile and writes JSON
 
 ### Requirement: Input that isn't UTF-8
-If an input is not valid UTF-8, then the EARS checker SHALL write the line and column of its first invalid byte to standard error and exit with status 2.
+If an input is not valid UTF-8, then the EARS checker SHALL write to standard error the encoding that the input's byte-order mark names, or else the line and column of its first invalid byte, and exit with status 2.
 
 #### Scenario: A Latin-1 file
 - **WHEN** the checker is given "notes.txt", whose second line starts with `l` followed by the Latin-1 byte for `é`
@@ -292,7 +292,11 @@ If an input is not valid UTF-8, then the EARS checker SHALL write the line and c
 
 #### Scenario: Standard input in UTF-16
 - **WHEN** text in UTF-16 with a byte-order mark is piped into the checker
-- **THEN** it writes `Cannot read standard input: not valid UTF-8 at line 1, column 1` to standard error and exits with status 2
+- **THEN** it writes `Cannot read standard input: UTF-16, not UTF-8` to standard error and exits with status 2
+
+#### Scenario: A UTF-32 file
+- **WHEN** the checker is given "notes.txt", which starts with a UTF-32 byte-order mark
+- **THEN** it writes `Cannot read notes.txt: UTF-32, not UTF-8` to standard error and exits with status 2
 
 ### Requirement: Empty file name
 If a file argument is empty, then the EARS checker SHALL reject the arguments with the usage text and exit status 2 before reading any input.
@@ -307,3 +311,14 @@ The EARS checker SHALL write standard output and standard error as UTF-8, whatev
 #### Scenario: The C locale
 - **WHEN** the checker runs under `LC_ALL=C` and reports a fix that contains `café`
 - **THEN** standard output holds `é` as the bytes C3 A9
+
+### Requirement: UTF-8 byte-order mark
+When an input starts with a UTF-8 byte-order mark, the EARS checker SHALL read the input as if the mark were absent.
+
+#### Scenario: Plain text with a byte-order mark
+- **WHEN** the checker is given "notes.txt", which starts with a UTF-8 byte-order mark and then `Scheduler shall list events.`
+- **THEN** the missing-article fix it reports is `The scheduler shall list events.`, with no byte-order mark in it
+
+#### Scenario: OpenSpec JSON with a byte-order mark
+- **WHEN** the checker is given "spec.json", OpenSpec JSON that starts with a UTF-8 byte-order mark
+- **THEN** it checks the requirements in it, as it would without the mark

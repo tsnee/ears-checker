@@ -27,7 +27,7 @@ shared suites, Scala.js and Scala Native, the coverage check, and the final run 
 - [x] 4.2 Run `./mill __.checkFormat`, `./mill __.test`, every module's `validateCoverageMinimums`, `scripts/check-npm-package`, `scripts/check-npm-cli`, `scripts/check-scalajs-link`, and `scripts/check-openspec`. Verify all pass, report the coverage, and add a dated line to `docs/worklog.md`
 - [x] 4.3 Run `/code-review` in a subagent on this change's commits, and let the owner choose which findings to fix
 - [x] 4.4 Run `/security-review` in a subagent on this change's commits, and let the owner choose which findings to fix
-- [ ] 4.5 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes on pull request #16
+- [x] 4.5 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes on pull request #16
 
 ## Workflow follow-up
 
