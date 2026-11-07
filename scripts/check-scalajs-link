@@ -57,8 +57,10 @@ mkdir "$tmp/fixture"
 if ! ./mill --ticker false ears.linkCheck.run "$fixture" "$tmp/fixture/LinkCheck.scala" >/dev/null; then
   fail "generating the fixture's program failed (see the messages above)"
 fi
+# --workspace keeps scala-cli's build directory (.scala-build) in the temporary directory, not in
+# ears/linkCheck/fixture/src, its first input.
 if ! scala-cli compile ears/linkCheck/fixture/src "$tmp/fixture/LinkCheck.scala" \
-  --scala "$scala" --server=false; then
+  --scala "$scala" --server=false --workspace "$tmp/fixture"; then
   fail "the program generated from ears.linkCheck.fixture doesn't compile (see scala-cli's output above)"
 fi
 
