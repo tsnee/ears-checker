@@ -111,12 +111,14 @@ tag (`EARS_RELEASE_VERSION`). Every other build is the next minor version as a s
 `build.mill`). Bump it after each minor release; a patch release doesn't change it.
 
 1. Merge everything for the release to `main`; CI must pass.
-2. The owner pushes a tag `v<major>.<minor>.<patch>` on `main` (only admins may create `v*` tags).
-3. The `tag` job checks the tag is a version on `main`, and `checks` runs the whole CI workflow
+2. Run `/security-review` on the changes since the last release tag, and fix or knowingly accept
+   each finding before tagging. (Each batch is also reviewed before it merges.)
+3. The owner pushes a tag `v<major>.<minor>.<patch>` on `main` (only admins may create `v*` tags).
+4. The `tag` job checks the tag is a version on `main`, and `checks` runs the whole CI workflow
    (`ci.yml`) on it; then `publish` waits for the owner's approval (the `release` environment,
    which holds the Sonatype token and signing key). It builds with no secrets, then signs and
    uploads.
-4. `publish` uploads to the Central Portal for review (`--shouldRelease false`); the owner
+5. `publish` uploads to the Central Portal for review (`--shouldRelease false`); the owner
    inspects the deployment there and clicks Publish, or Drop to discard it.
 
 Published versions can't be deleted or reused; fix a bad release with a new patch version.
