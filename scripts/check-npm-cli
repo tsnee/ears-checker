@@ -47,8 +47,16 @@ if [ ! -f "$tarball" ]; then
 fi
 
 # No file may name a path on this machine, such as a source map entry the build failed to make
-# relative.
-if tar -xOzf "$tarball" | grep -q -F -e "$root" -e "$HOME"; then
+# relative. The repository's path may appear nowhere. The home directory may appear anywhere but
+# the source map's list of sources: there, libraries keep the file: URIs of the machines that
+# built them, and GitHub's runners build ZIO and others under /home/runner, which is also $HOME
+# on a runner. (The build fails on a file: URI in this repository; see embedProjectSources.)
+unpacked="$tmp/unpacked"
+mkdir "$unpacked"
+tar -xzf "$tarball" -C "$unpacked"
+if grep -r -q -F "$root" "$unpacked" ||
+  grep -r -q -F --exclude=main.js.map "$HOME" "$unpacked" ||
+  jq 'del(.sources)' "$unpacked/package/main.js.map" | grep -q -F "$HOME"; then
   echo "check-npm-cli: the package names a path on this machine ($root or $HOME)" >&2
   exit 1
 fi

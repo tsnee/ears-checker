@@ -194,7 +194,10 @@ A POSIX `sh` script in the style of `check-npm-package`:
    difference fails the script, naming the case and showing both sides. Each case also names
    the statuses it may end with, so both builds failing the same way fails too; and every
    tracked Markdown file must exist.
-5. Fails if any packed file contains the repository path or `$HOME`.
+5. Fails if any packed file contains the repository path, or `$HOME` anywhere but the source
+   map's list of sources, where libraries' own `file:` URIs (Decision 4) are kept. The first
+   CI run showed why: GitHub's runners build ZIO and others under `/home/runner`, which is also
+   `$HOME` on a runner.
 
 CI runs it in `check` (Node 26) after the npm package check, and in `check-jdk17` (Node 22,
 the oldest the package declares). It needs the network only to install from the registry.
@@ -251,7 +254,8 @@ dropped by the Markdown facade.
   Java launcher decodes the command line with the locale's charset before `main` runs, so
   `résumé.txt` arrives as `r��sum��.txt` and can't be opened (`InvalidPathException`, exit 2).
   Nothing in the program can recover the name; the README tells JVM users to run under a UTF-8
-  locale. Node decodes the command line as UTF-8 (to be confirmed on Linux).
+  locale. Node decodes the command line as UTF-8 whatever the locale: checked in Docker
+  (Node 22 and 26, C and C.UTF-8), it reads `résumé.txt` and writes `café` in all four runs.
 - **[Standard input closed by the caller]** With file descriptor 0 closed (`<&-`), the JVM
   reads whatever file it opened first as descriptor 0, usually one of its own, which strict
   decoding then rejects; Node reads nothing. It takes a caller that closes standard input on
