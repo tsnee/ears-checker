@@ -89,7 +89,12 @@ object Checker:
           s"$location: ${kindName(finding)}: ${finding.diagnostic.message}$fix\n"
         }.mkString
       case OutputFormat.Json =>
+        // The format version (docs/json-output.md): it changes only when a field is removed,
+        // renamed, or changes meaning or type, or a location type is added. Then the release
+        // that wrote it, since findings can change between releases within a format version.
         val document = Json.Obj(
+          "version" -> Json.Num(1),
+          "checker" -> Json.Str(CheckerBuild.version),
           "checked" -> Json.Num(checked),
           "findings" -> Json.Arr(findings.map(findingJson)*)
         )

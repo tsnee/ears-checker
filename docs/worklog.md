@@ -136,3 +136,14 @@
   macos-arm64 273 s; rechecks 64 s, 69 s, 71 s. Both Linux binaries need glibc 2.34; the macOS
   binary declares `minos 15.0`. The conformance suite passed on Ubuntu 22.04's cmark 0.30.2
   (Ubuntu 26.04 ships 0.30.2 too; macos-15's Homebrew has 0.31.2). No release-* artifacts.
+- 2026-11-07: document-json-output applied locally: `"version": 1` first in the JSON document,
+  docs/json-output.md (every example compared with the jar's output), and whole-document tests.
+  Every local check passed; coverage (statement/branch %): ears 95.91/92.04, ears.cli
+  97.26/100 (was 96.87/98.67), ears.npm 100/100, ears.linkCheck 97.28/100, ears.markdown
+  100/100, ears.releaseNotes 96.60/100. `--help` after another option fails with status 2; it's
+  on the roadmap.
+- 2026-11-07: document-json-output's review fixes, and a `"checker"` field (the release that
+  wrote the document, from a generated `CheckerBuild.version`; `BuildInfo` clashed with
+  zio-json's under `import zio.json.*` and gave `1.1.1`). Version 1 covers the document's shape;
+  how text is derived and what spans cover can change within it (the owner's choice, as SARIF
+  and ESLint do). Every local check passed; ears.cli coverage 97.08/100.

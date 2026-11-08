@@ -231,4 +231,7 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
   npm tools from (`npm ci --ignore-scripts`)
 - `CHANGELOG.md` — what changed in each release; `docs/release-files.md` — the files
   description every release's notes end with
+- `docs/json-output.md` — the reference for `--output json`; a change to the document updates it,
+  and removing or renaming a field, changing its type or meaning, or adding a location type
+  bumps the document's `version`
 - `docs/worklog.md` — dated work log; `docs/roadmap.md` — planned changes

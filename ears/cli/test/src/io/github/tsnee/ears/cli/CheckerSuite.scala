@@ -28,6 +28,9 @@ object CheckerSuite extends ZIOSpecDefault:
 
   private def lines(text: String): List[String] = text.linesIterator.filter(_.nonEmpty).toList
 
+  /** How every JSON document starts: the format version, then the release that wrote it. */
+  private val head = "{\"version\":1,\"checker\":\"" + CheckerBuild.version + "\","
+
   private val changeMissingModal =
     """{"id": "add-reminders", "deltas": [
       |  {"spec": "reminders", "operation": "ADDED",
@@ -191,5 +194,118 @@ object CheckerSuite extends ZIOSpecDefault:
       ,
       test("candidates reports malformed JSON as an error"):
         assertTrue(Checker.candidates(file("change.json", None), "{not json").isLeft)
+    ),
+    suite("the JSON document, whole (docs/json-output.md)")(
+      test("no findings: the version, the checker, the count, and an empty list"):
+        val outcome = Checker.outcome(
+          settings(None, None, None, Some(OutputFormat.Json)),
+          Right("The scheduler shall list upcoming events.")
+        )
+        assertTrue(outcome.stdout == head + "\"checked\":1,\"findings\":[]}\n")
+      ,
+      test("a finding on a line"):
+        val outcome = Checker.outcome(
+          file("reqs.txt", Some(OutputFormat.Json)),
+          Right(
+            "The scheduler shall list upcoming events.\nThe scheduler should list upcoming events.\n"
+          )
+        )
+        assertTrue(
+          outcome.stdout ==
+            head + """"checked":2,"findings":[{"location":{"type":"line","file":"reqs.txt","line":2},""" +
+            """"requirement":"The scheduler should list upcoming events.","kind":"weak-modal",""" +
+            """"message":"Use shall instead of \"should\".","span":{"start":14,"end":20},""" +
+            """"fix":"The scheduler shall list upcoming events."}]}""" + "\n"
+        )
+      ,
+      test("a finding in a change requirement, without a fix"):
+        val outcome = Checker.outcome(
+          settings(None, Some(InputFormat.OpenSpecJson), None, Some(OutputFormat.Json)),
+          Right(changeMissingModal)
+        )
+        assertTrue(
+          outcome.stdout ==
+            head + """"checked":1,"findings":[{"location":{"type":"change",""" +
+            """"change":"add-reminders","capability":"reminders","requirement":"Reminder sent"},""" +
+            """"requirement":"The scheduler sends a notice.","kind":"missing-modal",""" +
+            """"message":"State the response with SHALL.","span":{"start":0,"end":28},"fix":null}]}""" +
+            "\n"
+        )
+      ,
+      test("a finding in a spec requirement, without a fix"):
+        val spec =
+          """{"id": "reminders", "requirements": [
+            |  {"name": "Upcoming", "text": "The scheduler lists upcoming events."}
+            |]}""".stripMargin
+        val outcome = Checker.outcome(
+          settings(None, Some(InputFormat.OpenSpecJson), None, Some(OutputFormat.Json)),
+          Right(spec)
+        )
+        assertTrue(
+          outcome.stdout ==
+            head + """"checked":1,"findings":[{"location":{"type":"spec","spec":"reminders",""" +
+            """"requirement":"Upcoming"},"requirement":"The scheduler lists upcoming events.",""" +
+            """"kind":"missing-modal","message":"State the response with SHALL.",""" +
+            """"span":{"start":0,"end":35},"fix":null}]}""" + "\n"
+        )
+      ,
+      test("the checker is this build's version: a release, or the next one as a snapshot"):
+        assertTrue(CheckerBuild.version.matches("""\d+\.\d+\.\d+(-SNAPSHOT)?"""))
+      ,
+      test("plain text without a fix: the fix is null"):
+        val outcome = Checker.outcome(
+          settings(None, None, None, Some(OutputFormat.Json)),
+          Right("The scheduler lists upcoming events.")
+        )
+        assertTrue(
+          outcome.stdout.contains("\"kind\":\"missing-modal\""),
+          outcome.stdout.contains("\"fix\":null}")
+        )
+      ,
+      test("standard input: a line location named <stdin>"):
+        val outcome = Checker.outcome(
+          settings(None, None, None, Some(OutputFormat.Json)),
+          Right("The scheduler lists upcoming events.")
+        )
+        assertTrue(
+          outcome.stdout.contains(
+            "\"location\":{\"type\":\"line\",\"file\":\"<stdin>\",\"line\":1}"
+          )
+        )
+      ,
+      test("several inputs: one document, followed by one line break"):
+        val outcome = combined(
+          file("a.txt", Some(OutputFormat.Json)) -> "The scheduler shall list upcoming events.",
+          file("b.txt", Some(OutputFormat.Json)) -> "The scheduler shall hide past events."
+        )
+        assertTrue(outcome.stdout == head + "\"checked\":2,\"findings\":[]}\n")
+      ,
+      test("a span counts UTF-16 code units: an emoji counts as two"):
+        val outcome = Checker.outcome(
+          settings(None, None, None, Some(OutputFormat.Json)),
+          Right("The 📅 scheduler should list upcoming events.")
+        )
+        assertTrue(outcome.stdout.contains("\"span\":{\"start\":17,\"end\":23}"))
+      ,
+      test("every document is one line that starts with the version and the checker"):
+        val sentences = Gen.elements(
+          "The scheduler shall list upcoming events.",
+          "The scheduler should list upcoming events.",
+          "The scheduler lists upcoming events.",
+          "When an order arrives the scheduler shall list events.",
+          "  ",
+          "The scheduler shall list upcoming events."
+        )
+        check(Gen.listOfBounded(0, 4)(sentences)) { picked =>
+          val outcome = Checker.outcome(
+            settings(None, None, None, Some(OutputFormat.Json)),
+            Right(picked.mkString("\n"))
+          )
+          assertTrue(
+            outcome.stdout.startsWith(head + "\"checked\":"),
+            outcome.stdout.endsWith("}\n"),
+            outcome.stdout.count(_ == '\n') == 1
+          )
+        }
     )
   )

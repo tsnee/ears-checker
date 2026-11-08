@@ -112,6 +112,25 @@ $ echo $?
 - Exit status: 0 when every requirement passes or `--help` is given, 1 when any finding is
   reported, and 2 when the arguments are invalid or an input can't be read or parsed.
 
+### JSON output
+
+`--output json` writes one document for the whole run, for programs to read. It names the
+ears-checker release that wrote it, and has a format version that changes when a field is
+removed, renamed, or changes type or meaning, or a new location type appears. With the
+`reqs.txt` above:
+
+```text
+$ ears-check --output json reqs.txt | jq -c '.version, .checked, (.findings[] | [.location.line, .kind, .fix])'
+1
+3
+[1,"missing-comma","When a customer submits an order, the checkout service shall send a confirmation email."]
+[2,"weak-modal","The scheduler shall list upcoming events."]
+```
+
+[docs/json-output.md](docs/json-output.md) describes every field, the location types for
+Markdown and OpenSpec input, what spans count, what can change within a version, and when there's
+no document.
+
 ## Releases
 
 What changed in each version is in [CHANGELOG.md](CHANGELOG.md). From 0.2.0, each version's

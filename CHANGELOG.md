@@ -20,6 +20,9 @@ release renames Unreleased to its version and date.
 
 ### Changed
 
+- JSON output starts with a format version, `"version": 1`, and the release that wrote it,
+  `"checker"`, and is documented field by field in `docs/json-output.md`, with what can change
+  within a version.
 - Markdown is read the same way on every platform: commonmark-java on the JVM,
   mdast-util-from-markdown on Node, and cmark natively, checked against one conformance suite.
 - Inline code in a Markdown requirement reads as one quoted word, as OpenSpec's JSON gives it.
