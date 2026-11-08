@@ -19,7 +19,7 @@ owner pushes from their own shell; Claude reads runs with `gh`.
 
 - [x] 3.1 Run `./mill __.checkFormat`, `./mill __.test`, every module's `validateCoverageMinimums`, `scripts/check-npm-package`, `scripts/check-npm-cli`, `scripts/check-native-cli`, `scripts/check-scalajs-link`, and `scripts/check-openspec`. Verify all pass, report the coverage, and add a dated line to `docs/worklog.md`
 - [x] 3.2 Run `/code-review` in a subagent on this change, and let the owner choose which findings to fix
-- [ ] 3.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes
+- [x] 3.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes
 
 ## Workflow follow-up
 

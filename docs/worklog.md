@@ -147,3 +147,6 @@
   zio-json's under `import zio.json.*` and gave `1.1.1`). Version 1 covers the document's shape;
   how text is derived and what spans cover can change within it (the owner's choice, as SARIF
   and ESLint do). Every local check passed; ears.cli coverage 97.08/100.
+- 2026-11-07: document-json-output's CI run 42432940033 passed on 7ecd44b, 1,906 job-seconds:
+  check 472 s, check-jdk17 154 s; native builds linux-x64 391 s, linux-arm64 323 s,
+  macos-arm64 367 s; rechecks 62 s, 65 s, 72 s.
