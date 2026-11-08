@@ -131,3 +131,8 @@
   declares `minos 15.0`, runs the Markdown conformance suite against Ubuntu 22.04's cmark 0.30,
   and keeps its artifacts 7 days; `check-native-cli --out` keeps the jar too; the docs give the
   full attestation check.
+- 2026-11-07: add-release-notes' CI run 42428531488 passed on ebcb225, 1,636 job-seconds:
+  check 440 s, check-jdk17 159 s; native builds linux-x64 238 s, linux-arm64 322 s,
+  macos-arm64 273 s; rechecks 64 s, 69 s, 71 s. Both Linux binaries need glibc 2.34; the macOS
+  binary declares `minos 15.0`. The conformance suite passed on Ubuntu 22.04's cmark 0.30.2
+  (Ubuntu 26.04 ships 0.30.2 too; macos-15's Homebrew has 0.31.2). No release-* artifacts.

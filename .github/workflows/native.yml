@@ -69,7 +69,7 @@ jobs:
         run: scripts/check-native-cli --out kept
 
       # The Markdown conformance suite through this runner's cmark: on Ubuntu 22.04 that's 0.30,
-      # the oldest the binaries support (the check job runs it with a newer one).
+      # the oldest the binaries support (Ubuntu 26.04 has the same release; Homebrew has 0.31).
       - name: Run the Markdown conformance suite natively
         if: runner.os == 'Linux'
         run: ./mill ears.markdown.native.test

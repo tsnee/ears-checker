@@ -19,7 +19,7 @@ owner pushes from their own shell; Claude reads runs with `gh`.
 
 - [x] 3.1 Add `native.yml` (decision 5) and call it from `ci.yml`; move the native CLI check and the step with less cmark into it; set `EARS_RELEASE_VERSION` from a release tag in every job and upload the kept files only then (decision 4); add the changelog check to `check`. Verify with `yq` and `actionlint` if installed (say so if not), and that every action is pinned by commit
 - [x] 3.2 Add the notes to `release.yml`'s `tag` job and the `draft-release` job (decision 6), with its permissions and no checkout. Verify with `yq`
-- [ ] 3.3 After the push, verify on the pull request's run that all six native jobs pass, record their times and the Linux binaries' newest `GLIBC_` symbol version, and confirm nothing is uploaded as a release file. If a platform can't build, report it to the owner before going on
+- [x] 3.3 After the push, verify on the pull request's run that all six native jobs pass, record their times and the Linux binaries' newest `GLIBC_` symbol version, and confirm nothing is uploaded as a release file. If a platform can't build, report it to the owner before going on
 
 ## 4. A release rehearsal
 
@@ -32,7 +32,7 @@ owner pushes from their own shell; Claude reads runs with `gh`.
 - [x] 5.3 Run `./mill __.checkFormat`, `./mill __.test`, every module's `validateCoverageMinimums`, `scripts/check-npm-package`, `scripts/check-npm-cli`, `scripts/check-native-cli`, `scripts/check-scalajs-link`, and `scripts/check-openspec`. Verify all pass, report the coverage, and add a dated line to `docs/worklog.md`
 - [x] 5.4 Run `/code-review` in a subagent on this change, and let the owner choose which findings to fix
 - [x] 5.5 Run `/security-review` in a subagent on this change (the new write token in particular), and let the owner choose which findings to fix
-- [ ] 5.6 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes
+- [x] 5.6 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes
 
 ## Workflow follow-up
 

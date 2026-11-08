@@ -129,7 +129,8 @@ Observations (2026-11-07):
   `nativeLinkingOptions`, on macOS only): `macos-15` is the oldest supported runner, so 15.0 is
   the oldest release that's checked. The build fails unless `otool -l` shows `minos 15.0`.
 - The Linux build jobs also run the Markdown conformance suite natively, against Ubuntu 22.04's
-  cmark 0.30.2, the oldest the binaries support; `check` runs it against a newer cmark.
+  cmark 0.30.2, the oldest the binaries support. (Run 42428531488 showed Ubuntu 26.04 ships
+  0.30.2 too; macos-15's Homebrew installed 0.31.2.)
 
 ### 6. The release workflow
 
