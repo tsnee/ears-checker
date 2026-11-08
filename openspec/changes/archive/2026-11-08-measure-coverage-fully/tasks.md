@@ -11,7 +11,7 @@ All work is on branch `batch-release-0.2.0`, the seventh change in the "release 
 
 - [x] 2.1 Run the full gate as documented, the clean step included: `./mill __.checkFormat`, `./mill clean __.scoverage`, `./mill __.test`, every module's `validateCoverageMinimums`, and the five check scripts. Report coverage, and add a dated line to `docs/worklog.md`
 - [x] 2.2 Run `/code-review` in a subagent on this change, and let the owner choose which findings to fix
-- [ ] 2.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes
+- [x] 2.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes
 
 ## Workflow follow-up
 
