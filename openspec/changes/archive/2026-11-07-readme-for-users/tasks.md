@@ -18,7 +18,7 @@ All work is on branch `batch-release-0.2.0`, the fourth change in the "release 0
 
 - [x] 3.1 Run `scripts/check-openspec` and `./mill __.checkFormat` (no code changes, so the full gate isn't needed), and add a dated line to `docs/worklog.md`
 - [x] 3.2 Run `/code-review` in a subagent on this change (accuracy of every claim against the code), and let the owner choose which findings to fix
-- [ ] 3.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes
+- [x] 3.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes
 
 ## Workflow follow-up
 

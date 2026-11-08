@@ -164,6 +164,8 @@ $ echo $?
   [JSON output](#json-output)).
 - `--verbose`: log every step to standard error (the arguments, each input read, and the
   outcome), not only warnings and errors.
+- `--help`: print the usage and these options. For now it works only as the first argument;
+  elsewhere it's an unexpected option (exit status 2).
 - Exit status: 0 when every requirement passes, or for `--help` as the first argument; 1 when any
   finding is reported; 2 when the arguments are invalid or an input can't be read or parsed.
 - Standard output carries only the findings or the usage text. Standard error carries error
@@ -193,7 +195,9 @@ $ echo $?
 ### OpenSpec
 
 Check an OpenSpec change or spec through the JSON the OpenSpec CLI prints; OpenSpec input uses the
-`openspec` profile (uppercase `SHALL`) unless `--profile` says otherwise:
+`openspec` profile (uppercase `SHALL`) unless `--profile` says otherwise. `--type` and
+`--json` below are options of `openspec show`; `ears-check` needs only the file, or
+`--format openspec` for standard input:
 
 ```sh
 openspec show add-reminders --type change --json > add-reminders.json

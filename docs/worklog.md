@@ -157,3 +157,7 @@
   an empty or relative `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH` entry lets the loader search the
   current directory: the docs say so, and the loader fix is on the roadmap before 0.2.0. Format,
   OpenSpec, and both npm checks passed.
+- 2026-11-07: readme-for-users' CI run 42437105542 passed on 8e20e65, 1,864 job-seconds: check
+  586 s, check-jdk17 147 s; native builds linux-x64 305 s, linux-arm64 306 s, macos-arm64 316 s;
+  rechecks 70 s, 65 s, 69 s. The archive adds a `--help` bullet to both command-line READMEs and
+  says `--type` belongs to `openspec show`.

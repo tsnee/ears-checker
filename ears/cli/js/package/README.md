@@ -36,6 +36,8 @@ reads each file, or standard input when none is given:
 - `--output`: `text` (one line per finding) or `json` (one document, described in
   [JSON output](https://github.com/tsnee/ears-checker/blob/main/docs/json-output.md)).
 - `--verbose`: log every step to standard error, not only warnings and errors.
+- `--help`: print the usage and these options. For now it works only as the first argument;
+  elsewhere it's an unexpected option (exit status 2).
 - Inline code: in every format, text between backticks is quoted, as in Markdown; its periods,
   commas, and words don't count.
 - Encoding: input is read as UTF-8 whatever the locale, and an input that isn't valid UTF-8 is
