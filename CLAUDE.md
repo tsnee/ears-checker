@@ -57,8 +57,11 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
   (or `htmlReport`) shows it, and `./mill ears.cli.scoverage.validateCoverageMinimums` checks the
   module's `statementCoverageMin` and `branchCoverageMin` in `build.mill`. Each test run clears
   the last run's measurements, so a report covers only the latest run (all of it after
-  `__.test`). Scoverage can't measure Scala.js-only code, so keep it thin: decisions go in code
-  that also builds for the JVM.
+  `__.test`). Measure from a clean slate, as CI does: `./mill clean __.scoverage` first removes
+  the instrumented copies and their coverage data (seconds to rebuild, not minutes), so no statement list
+  left missing or damaged by an earlier build can make a report count part of a module.
+  Scoverage can't measure Scala.js-only code, so keep it thin: decisions go in code that also
+  builds for the JVM.
 - The npm package: `./mill ears.npm.npmPackage` builds its directory, with `main.js` minified
   by esbuild after Scala.js (`minify` in `build.mill`) and a source map that leads back to the
   Scala sources. esbuild is pinned in `ears/npm/tools/package-lock.json` and installed by
@@ -100,8 +103,8 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
   runner doesn't pass `forkEnv`. Metals can't run the library's suites either: they're shared
   with `ears.js.test`.
 
-Run `./mill __.checkFormat`, `./mill __.test`, every module's `validateCoverageMinimums`,
-`scripts/check-npm-package`, `scripts/check-npm-cli`, `scripts/check-native-cli`,
+Run `./mill __.checkFormat`, `./mill clean __.scoverage` then `./mill __.test`, every module's
+`validateCoverageMinimums`, `scripts/check-npm-package`, `scripts/check-npm-cli`, `scripts/check-native-cli`,
 `scripts/check-scalajs-link`, and `scripts/check-openspec` before calling any change done (as
 CONTRIBUTING.md says), and report the coverage.
 Warnings are errors.

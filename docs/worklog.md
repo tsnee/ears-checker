@@ -200,3 +200,14 @@
   three; no unsafe value ran it; on Linux every unsafe value (semicolons included) loaded
   `/usr/lib/<arch>/libcmark.so` by absolute path; on macOS `.`, `lib`, and `/opt/homebrew/lib:.`
   were declined with status 2; neither Linux binary has RPATH or RUNPATH.
+- 2026-11-08: measure-coverage-fully: an override making the instrumented compile
+  non-incremental was tried (it counted every statement, about 1 s a module) and reviewed. By the
+  review's reading of the compiler, Scala 3.10 merges each compile's statements into the previous
+  list, so the 12-statement report needs that list to have been missing or damaged, and a missing
+  list with unchanged sources still reports 100% of 0. Dropped for the owner's simpler rule:
+  measure from a clean slate, `./mill clean __.scoverage` before `./mill __.test` (10 s to
+  rebuild; ears.cli then counts 512), now in CLAUDE.md and CONTRIBUTING.md. The test-coverage
+  spec now names `ears.releaseNotes` and starts its scenario with the clean step. The documented
+  gate, clean step included, passed: ears 684 statements, 95.91% / 92.04%; ears.cli 512, 97.27% /
+  100%; ears.npm 56, 100% / 100%; ears.linkCheck 294, 97.28% / 100%; ears.markdown 558, 100% /
+  100%; ears.releaseNotes 235, 96.60% / 100%; all five scripts passed.

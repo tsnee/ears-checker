@@ -36,7 +36,8 @@ in an issue.
 - It measures test coverage on the JVM. `./mill ears.scoverage.htmlReport` (or `ears.cli`,
   `ears.npm`, `ears.linkCheck`, `ears.markdown`, or `ears.releaseNotes`) writes a report under
   `out/`, and `./mill <module>.scoverage.validateCoverageMinimums` checks the module's minimums,
-  `statementCoverageMin` and `branchCoverageMin` in `build.mill`.
+  `statementCoverageMin` and `branchCoverageMin` in `build.mill`. Run `./mill clean __.scoverage`
+  before the tests whose coverage you report, so it's measured from a clean slate, as CI does.
 - `./mill ears.cli.assembly` builds the command line's jar (`out/ears/cli/assembly.dest/out.jar`),
   `./mill ears.cli.native.nativeLink` its native binary (`out/ears/cli/native/nativeLink.dest/out`),
   and `./mill ears.cli.js.npmPackage` and `./mill ears.npm.npmPackage` the two npm packages'
@@ -78,7 +79,8 @@ These are for working on ears-checker, not part of any package.
   text made from this repository's specs, at several sizes, and prints a table; add a run to
   [docs/performance.md](docs/performance.md) when a change could affect speed.
 
-Before calling a change done, run `./mill __.checkFormat`, `./mill __.test`, every module's
+Before calling a change done, run `./mill __.checkFormat`, then `./mill clean __.scoverage` and
+`./mill __.test` (measuring coverage from a clean slate, as CI does), every module's
 `validateCoverageMinimums`, and all five scripts.
 
 ## Continuous integration
