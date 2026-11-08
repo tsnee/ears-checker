@@ -14,7 +14,7 @@ PR #17). The owner pushes from their own shell; Claude reads runs with `gh`.
 
 ## 3. CI
 
-- [ ] 3.1 Add the planted-library step to `native.yml`'s recheck jobs (decision 5). Verify with `actionlint`; after the push, that it passes on all three platforms (it repeats the design's probes on the runners, x64 and arm64)
+- [x] 3.1 Add the planted-library step to `native.yml`'s recheck jobs (decision 5). Verify with `actionlint`; after the push, that it passes on all three platforms (it repeats the design's probes on the runners, x64 and arm64)
 - [x] 3.2 Confirm on Linux, with the owner's colima probe, that glibc reads `;` as a separator: a planted library loads by bare name with `LD_LIBRARY_PATH` set to `/opt/lib;`, `/opt/lib;.`, and `;/opt/lib`, and never by absolute path. Record the results in the design
 
 ## 4. Docs, checks, review, commits
@@ -22,7 +22,7 @@ PR #17). The owner pushes from their own shell; Claude reads runs with `gh`.
 - [x] 4.1 Update SECURITY.md and the README (the caveat goes; what the binary does instead), CLAUDE.md if it describes the loader, CHANGELOG (Fixed), and take the item off the roadmap. Verify with `mq`
 - [x] 4.2 Run the full gate: `./mill __.checkFormat`, `./mill __.test`, every module's `validateCoverageMinimums`, and the five check scripts. Report coverage and add a dated line to `docs/worklog.md`
 - [x] 4.3 Run `/code-review` in a subagent on this change, and `/security-review` in a subagent (it's a security fix), and let the owner choose which findings to fix
-- [ ] 4.4 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes
+- [x] 4.4 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes
 
 ## Workflow follow-up
 

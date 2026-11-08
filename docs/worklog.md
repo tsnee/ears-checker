@@ -194,3 +194,9 @@
   planted library by bare name), now handled on Linux; the CI step gains a preload control, a
   check for versioned cmark files, a `readelf -d` check for RPATH/RUNPATH, and the semicolon
   cases; the docs claim only that cmark is never loaded from the current directory.
+- 2026-11-08: load-cmark-safely's CI run 42482560093 passed on 1cf081e, 1,666 job-seconds: check
+  491 s, check-jdk17 87 s; native builds linux-x64 353 s, linux-arm64 291 s, macos-arm64 263 s;
+  rechecks 69 s, 54 s, 58 s. The planted-library step: the preload control ran the marker on all
+  three; no unsafe value ran it; on Linux every unsafe value (semicolons included) loaded
+  `/usr/lib/<arch>/libcmark.so` by absolute path; on macOS `.`, `lib`, and `/opt/homebrew/lib:.`
+  were declined with status 2; neither Linux binary has RPATH or RUNPATH.
