@@ -74,6 +74,9 @@ These are for working on ears-checker, not part of any package.
   the way a user's application gets it.
 - `scripts/check-openspec` validates every OpenSpec file strictly and checks every requirement
   with this repository's own checker.
+- `scripts/time-cli` times the jar, the Node package, and the native binary on Markdown and plain
+  text made from this repository's specs, at several sizes, and prints a table; add a run to
+  [docs/performance.md](docs/performance.md) when a change could affect speed.
 
 Before calling a change done, run `./mill __.checkFormat`, `./mill __.test`, every module's
 `validateCoverageMinimums`, and all five scripts.

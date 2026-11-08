@@ -161,3 +161,18 @@
   586 s, check-jdk17 147 s; native builds linux-x64 305 s, linux-arm64 306 s, macos-arm64 316 s;
   rechecks 70 s, 65 s, 69 s. The archive adds a `--help` bullet to both command-line READMEs and
   says `--type` belongs to `openspec show`.
+- 2026-11-07: speed-up-node-markdown applied locally. The classifier rebuilt a 65,536-character
+  set per inline code span (`Skeleton.scala`); building it once took the native binary from 88 s
+  to 2.7 s and the JVM from 4.2 s to 1.5 s on 7 MB of Markdown. Node reads Markdown with
+  commonmark.js instead of mdast (micromark grew faster than its input): 42.9 s to 1.9 s. Lines
+  come from `SourceLines`; `check-npm-cli` caught escaped table rows placed early, fixed with
+  escape-aware matching and breaks moving the search. `LineEndings` removed (owner approved).
+  Runs in docs/performance.md. Every local check passed; coverage (statement/branch %): ears
+  95.91/92.04, ears.cli 97.08/100, ears.npm 100/100, ears.linkCheck 97.28/100, ears.markdown
+  100/100, ears.releaseNotes 96.60/100.
+- 2026-11-07: speed-up-node-markdown's review fixes: `SourceLines` searches only to the end of
+  the next line (an entity on each of 8,000 lines took 78 s on Node, now 1.07 s), joins only true
+  sibling text (not across inline HTML), never moves past the paragraph's last line, and reads
+  `\\` in text as an escape; two conformance fixtures added. `time-cli` validates JSON output,
+  dates runs locally, and marks dirty trees. One full `./mill __.test` run exited 1 with no failed
+  test (its log was deleted unread); five later runs passed.

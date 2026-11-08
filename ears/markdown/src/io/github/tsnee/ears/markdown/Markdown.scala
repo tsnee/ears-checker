@@ -33,8 +33,9 @@ object Markdown:
   def sentences(content: String): Either[String, List[Sentence]] =
     MarkdownParser.paragraphs(withoutByteOrderMark(content)).map(_.flatMap(Extraction.sentences))
 
-  /** A leading byte-order mark (U+FEFF) isn't text: mdast and cmark drop it, commonmark-java
-    * doesn't. Written as a code point, since scalafmt would turn the escape into the character.
+  /** A leading byte-order mark (U+FEFF) isn't text: commonmark.js and cmark drop it,
+    * commonmark-java doesn't. Written as a code point, since scalafmt would turn the escape into
+    * the character.
     */
   private def withoutByteOrderMark(content: String): String =
     if content.headOption.exists(_.toInt == 0xfeff) then content.drop(1) else content

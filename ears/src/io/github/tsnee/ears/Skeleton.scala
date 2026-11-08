@@ -90,10 +90,14 @@ private[ears] object SkeletonParser:
 
   private val escapedBackslash: Parser[Unit] = (Parser.char('\\') ~ Parser.char('\\')).void
 
+  // Built once: charWhere tests every Char to build its set, which inside the flatMap below cost
+  // every code span about a millisecond on Scala.js and more natively.
+  private val notBacktick: Parser[Unit] = Parser.charWhere(_ != '`').void
+
   private val codeSpanOrBackticks: Parser[Unit] = backtickRun.flatMap { open =>
     val content = Parser.oneOf(
       List(
-        Parser.charWhere(_ != '`').void,
+        notBacktick,
         backtickRun.filter(_.length != open.length).backtrack.void
       )
     )

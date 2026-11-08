@@ -3,8 +3,8 @@ package io.github.tsnee.ears.markdown
 import zio.test.*
 
 /** The same fixtures, with the same expected sentences and lines, on every platform: the JVM
-  * (commonmark-java), Node (mdast), and Scala Native (cmark). The expected results are what the
-  * CLI's Markdown reader gave before the facade, checked against CommonMark.
+  * (commonmark-java), Node (commonmark.js), and Scala Native (cmark). The expected results are what
+  * the CLI's Markdown reader gave before the facade, checked against CommonMark.
   */
 object MarkdownConformanceSuite extends ZIOSpecDefault:
 
@@ -164,6 +164,28 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
         "> [r]: /u\n> The scheduler shall list.\n> The calendar shall\n> sync.\n",
         Sentence(2, "The scheduler shall list."),
         Sentence(3, "The calendar shall sync.")
+      ),
+      fixture(
+        "escapes on every line of a paragraph keep each sentence on its line",
+        "Intro.\n\nThe \\<system\\> shall \\<a\\>.\nThe \\<system\\> shall \\<b\\>.\n" +
+          "The \\<system\\> shall \\<c\\>.\n",
+        Sentence(3, "The <system> shall <a>."),
+        Sentence(4, "The <system> shall <b>."),
+        Sentence(5, "The <system> shall <c>.")
+      ),
+      fixture(
+        "inline HTML across lines keeps the text on each side apart",
+        "The <span\nclass=x> a SHALL b. The c SHALL d.\nThe e SHALL f.\n",
+        Sentence(1, "The  a SHALL b."),
+        Sentence(2, "The c SHALL d."),
+        Sentence(3, "The e SHALL f.")
+      ),
+      fixture(
+        "text decoded from an entity, then the same text written plainly, later",
+        "Tom &amp; Jerry SHALL run.\nThe x SHALL y.\nTom & Jerry SHALL run.\n",
+        Sentence(1, "Tom & Jerry SHALL run."),
+        Sentence(2, "The x SHALL y."),
+        Sentence(3, "Tom & Jerry SHALL run.")
       ),
       fixture(
         "a reference definition, then a code span across lines",

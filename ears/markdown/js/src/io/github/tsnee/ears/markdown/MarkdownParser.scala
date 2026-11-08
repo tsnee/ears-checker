@@ -3,82 +3,83 @@ package io.github.tsnee.ears.markdown
 import scala.scalajs.js
 import scala.scalajs.js.annotation.JSImport
 
-/** mdast's parser, from the npm package `mdast-util-from-markdown`. */
+/** commonmark.js's parser, from the npm package `commonmark`. */
 @js.native
-@JSImport("mdast-util-from-markdown", "fromMarkdown")
-private object fromMarkdown extends js.Object:
-  def apply(markdown: String): js.Dynamic = js.native
+@JSImport("commonmark", "Parser")
+private class CommonmarkParser() extends js.Object:
+  def parse(markdown: String): js.Dynamic = js.native
 
-/** Node's Markdown parser, mdast: every paragraph, list items included, as the same pieces
-  * commonmark-java gives on the JVM. mdast differs in four ways, each undone here:
-  *   - it keeps a paragraph's line endings inside `text` values, so a text run is split into one
-  *     piece per line, at the line endings that are in the source (`LineEndings`: a decoded `&#10;`
-  *     isn't one);
-  *   - it keeps a line ending inside inline code, which CommonMark reads as a space;
-  *   - it gives an image's alt text, for `image` and `imageReference` alike, as an attribute;
-  *   - it gives inline HTML tags as nodes of their own, which are dropped.
+/** Node's Markdown parser, commonmark.js: every paragraph, list items and block quotes included, as
+  * the same pieces commonmark-java gives on the JVM. commonmark.js gives source positions only for
+  * blocks, so each piece's line is found in the paragraph's source (`SourceLines`). Its tree is
+  * otherwise CommonMark's, like the JVM's: text, code with a space for each line ending, soft and
+  * hard breaks as nodes, an image's alt text as its children, and inline HTML (dropped) as nodes.
+  * It splits text at each escape, so text right after its previous sibling is joined
+  * (`SourceLines.joined`).
   */
 private[markdown] object MarkdownParser:
 
-  private val lineEnding = "\r\n|\r|\n"
-
   /** The parser's name, for the log; it's part of the program, so always there. */
-  def name(): Either[MarkdownUnavailable, String] = Right("mdast-util-from-markdown")
+  def name(): Either[MarkdownUnavailable, String] = Right("commonmark.js")
 
   /** The paragraphs; always found, since this parser is part of the program. */
   def paragraphs(content: String): Either[String, List[Paragraph]] = Right(parsed(content))
 
   private def parsed(content: String): List[Paragraph] =
+    val starts = lineStarts(content)
     Walk
-      .preorder(fromMarkdown(content), children)
+      .preorder(CommonmarkParser().parse(content), children)
       .filter(kind(_) == "paragraph")
-      .map(paragraph =>
-        Paragraph(
-          startLine(paragraph),
-          Walk.preorder(paragraph, children).flatMap(piece(content, _))
+      .map { paragraph =>
+        val first = line(paragraph, 0)
+        val last = line(paragraph, 1).max(first)
+        SourceLines.paragraph(
+          source(content, starts, first, last),
+          first,
+          SourceLines.joined(
+            Walk.preorder(paragraph, children).flatMap(node => piece(node).map(_ -> node)),
+            (earlier, later) => later.prev eq earlier
+          )
         )
-      )
+      }
 
-  /** A node's own pieces; containers (emphasis, links) have none, only their children. */
-  private def piece(content: String, node: js.Dynamic): List[Piece] = kind(node) match
-    case "text" =>
-      split(LineEndings.lines(source(content, node), text(node, "value")), startLine(node))
-    case "inlineCode" =>
-      List(Piece(text(node, "value").replaceAll(lineEnding, " "), true, Some(startLine(node))))
-    case "image" | "imageReference" =>
-      split(text(node, "alt").split(lineEnding, -1).toList, startLine(node))
-    case "break" => List(Piece(" ", false, None))
-    case _       => Nil
+  /** A node's own piece; containers (emphasis, links, images) have none, only their children. */
+  private def piece(node: js.Dynamic): List[SourcePiece] = kind(node) match
+    case "text"                    => List(SourcePiece.Inline(literal(node), false))
+    case "code"                    => List(SourcePiece.Inline(literal(node), true))
+    case "softbreak" | "linebreak" => List(SourcePiece.Break)
+    case _                         => Nil
 
-  /** One piece per line, on successive lines, with a line break between each. */
-  private def split(lines: List[String], first: Int): List[Piece] =
-    lines.zipWithIndex.flatMap((line, i) =>
-      Option.when(i > 0)(Piece(" ", false, None)).toList :+ Piece(line, false, Some(first + i))
-    )
+  /** The offset each line starts at: 0, then after each `\r\n`, `\r`, or `\n`. */
+  private def lineStarts(content: String): Vector[Int] =
+    0 +: content.indices
+      .filter { i =>
+        content.charAt(i) == '\n' || (content.charAt(i) == '\r' &&
+          (i + 1 >= content.length || content.charAt(i + 1) != '\n'))
+      }
+      .map(_ + 1)
+      .toVector
 
-  /** The node's text in the document, from its offsets. */
-  private def source(content: String, node: js.Dynamic): String =
-    (number(node.position.start.offset), number(node.position.end.offset)) match
-      case (Some(from), Some(to)) if 0 <= from && from <= to && to <= content.length =>
-        content.substring(from, to)
-      case _ => ""
+  /** Lines `first` to `last` (1-based) of the document, whole. */
+  private def source(content: String, starts: Vector[Int], first: Int, last: Int): String =
+    val from = starts.lift(first - 1).getOrElse(content.length)
+    val to = starts.lift(last).getOrElse(content.length)
+    content.substring(from.min(to), to)
 
-  private def kind(node: js.Dynamic): String = text(node, "type")
+  /** The start (`end` 0) or end (`end` 1) line of a block, from its `sourcepos`. */
+  private def line(node: js.Dynamic, end: Int): Int =
+    (node.sourcepos.selectDynamic(end.toString).selectDynamic("0"): Matchable) match
+      case found: Int => found
+      case _          => 1
 
-  /** A string field, or empty when it's missing (an image without alt text, say). */
-  private def text(node: js.Dynamic, field: String): String =
-    (node.selectDynamic(field): Matchable) match
-      case value: String => value
-      case _             => ""
+  private def kind(node: js.Dynamic): String = string(node.selectDynamic("type"))
 
-  private def number(value: js.Dynamic): Option[Int] = (value: Matchable) match
-    case found: Int => Some(found)
-    case _          => None
+  /** A text or code node's literal, or empty when it has none. */
+  private def literal(node: js.Dynamic): String = string(node.literal)
 
-  private def startLine(node: js.Dynamic): Int = number(node.position.start.line).getOrElse(1)
+  private def string(value: js.Dynamic): String = (value: Matchable) match
+    case found: String => found
+    case _             => ""
 
   private def children(node: js.Dynamic): List[js.Dynamic] =
-    (node.children: Matchable) match
-      case array: js.Array[?] =>
-        List.range(0, array.length).map(i => node.children.selectDynamic(i.toString))
-      case _ => Nil
+    List.unfold(Option(node.firstChild))(child => child.map(c => (c, Option(c.next))))

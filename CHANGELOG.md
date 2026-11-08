@@ -26,8 +26,10 @@ release renames Unreleased to its version and date.
 - JSON output starts with a format version, `"version": 1`, and the release that wrote it,
   `"checker"`, and is documented field by field in `docs/json-output.md`, with what can change
   within a version.
-- Markdown is read the same way on every platform: commonmark-java on the JVM,
-  mdast-util-from-markdown on Node, and cmark natively, checked against one conformance suite.
+- Markdown is read the same way on every platform: commonmark-java on the JVM, commonmark.js on
+  Node, and cmark natively, checked against one conformance suite.
+- Checking is much faster on Node and natively: a 7 MB Markdown file takes about 2 to 3 s on
+  every build, where Node took 43 s and the native binary 88 s (`docs/performance.md`).
 - Inline code in a Markdown requirement reads as one quoted word, as OpenSpec's JSON gives it.
 - Input must be UTF-8: a file with a bad byte is an error naming its line and column. Output
   is UTF-8 whatever the locale.

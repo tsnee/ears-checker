@@ -3,7 +3,7 @@ package io.github.tsnee.ears.markdown
 import zio.test.*
 
 /** The pure helpers behind the parsers, on every platform: `CmarkLines` (cmark's lines, which only
-  * the native parser uses), `LineEndings` (mdast's, which only the Node parser uses), and `Walk`.
+  * the native parser uses) and `Walk`; `SourceLinesSuite` tests the Node parser's helper.
   */
 object HelpersSuite extends ZIOSpecDefault:
 
@@ -48,29 +48,6 @@ object HelpersSuite extends ZIOSpecDefault:
       test("a break before any text starts a stretch of its own"):
         val found = CmarkLines.paragraph(List(CmarkPiece.Break, textAt("x", 1, 1)), 2)
         assertTrue(found.line == 1, lines(found) == List(None, Some(2)))
-    ),
-    suite("LineEndings")(
-      test("every line ending in the source is real"):
-        assertTrue(
-          LineEndings.lines("a\nb\r\nc", "a\nb\r\nc") == List("a", "b", "c"),
-          LineEndings.lines("one", "one") == List("one")
-        )
-      ,
-      test("a line ending decoded from &#10; stays in its line"):
-        assertTrue(LineEndings.lines("Intro.&#10;The", "Intro.\nThe") == List("Intro.\nThe"))
-      ,
-      test("decoded and real line endings together"):
-        assertTrue(LineEndings.lines("x&#10;y\nz", "x\ny\nz") == List("x\ny", "z"))
-      ,
-      test("hexadecimal, carriage-return, and named references"):
-        assertTrue(
-          LineEndings.lines("a&#x0D;b", "a\rb") == List("a\rb"),
-          LineEndings.lines("a&#13;b\nc", "a\rb\nc") == List("a\rb", "c"),
-          LineEndings.lines("a&NewLine;b", "a\nb") == List("a\nb")
-        )
-      ,
-      test("a source and a value that don't line up: every line ending in the value counts"):
-        assertTrue(LineEndings.lines("a\nb\nc", "a\nb") == List("a", "b"))
     ),
     suite("Walk")(
       test("every node, root first, in document order"):

@@ -1,0 +1,138 @@
+#!/usr/bin/env sh
+# Times ears-check on growing inputs, on each build: the JVM jar, the Node package (packed and
+# installed into an empty project, as a user gets it), and the native binary. The inputs are made
+# from this repository's specs: Markdown, every openspec/specs/*/spec.md concatenated, and plain
+# text, their requirements one per line, each repeated --copies times. Each run writes JSON
+# (--output json), which must be a valid document, so a crash is never timed as a run. Prints a
+# Markdown table with the date, commit (marked -dirty when uncommitted), machine, and runtimes, for
+# docs/performance.md. One wall-clock run per cell, so small differences are noise. A development tool, not part of any package.
+# Needs java, node, npm, jq, git, openspec, and cmark (for the native binary's Markdown).
+#
+# --copies <n,n,...> (default 8,16,32,76) sets the input sizes; --builds <jvm,node,native>
+# (default all three) which builds to time.
+set -e
+
+usage() {
+  echo "Usage: time-cli [--copies <n,n,...>] [--builds <jvm,node,native>]" >&2
+  exit 2
+}
+copies=8,16,32,76
+builds=jvm,node,native
+while [ $# -gt 0 ]; do
+  [ $# -ge 2 ] || usage
+  case $1 in
+    --copies) copies=$2 ;;
+    --builds) builds=$2 ;;
+    *) usage ;;
+  esac
+  shift 2
+done
+case $copies in *[!0-9,]* | "" | ,* | *, | *,,*) usage ;; esac
+for build in $(printf '%s' "$builds" | tr ',' ' '); do
+  case $build in jvm | node | native) ;; *) usage ;; esac
+done
+wanted() { case ",$builds," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
+
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+
+# Mill runs on its own (not in a pipeline) so a failed build stops the script with Mill's errors.
+built() {
+  if ! shown=$(./mill --ticker false show "$1"); then
+    echo "time-cli: building $1 failed (see the Mill output above)" >&2
+    exit 1
+  fi
+  printf '%s' "$shown" | jq -r 'if type == "object" then .path else . end |
+    sub("^ref:v[0-9]+:[0-9a-f]+:"; "")'
+}
+
+tmp=$(mktemp -d)
+# sh runs the EXIT trap on exit, but not when interrupted; the INT and TERM traps exit, which
+# runs it.
+trap 'rm -rf "$tmp"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+if wanted jvm; then jar=$(built ears.cli.assembly); fi
+if wanted native; then binary=$(built ears.cli.native.nativeLink); fi
+if wanted node; then
+  package=$(built ears.cli.js.npmPackage)
+  npm pack "$package" --pack-destination "$tmp" --cache "$tmp/cache" --silent >/dev/null
+  mkdir "$tmp/project"
+  printf '{"name": "timing", "private": true}\n' >"$tmp/project/package.json"
+  (cd "$tmp/project" && npm install "$tmp"/tsnee-ears-checker-cli-*.tgz --cache "$tmp/cache" \
+    --no-audit --no-fund --silent)
+fi
+
+# The units: the specs as Markdown, and their requirements as plain text.
+cat openspec/specs/*/spec.md >"$tmp/unit.md"
+for spec in $(openspec list --specs --json | jq -r '.specs[].id'); do
+  openspec show "$spec" --type spec --json | jq -r '.requirements[].text | gsub("\n"; " ")'
+done >"$tmp/unit.txt"
+# Both units must have content: a failed openspec or jq above leaves the plain text empty.
+if [ ! -s "$tmp/unit.md" ] || [ ! -s "$tmp/unit.txt" ]; then
+  echo "time-cli: no specs to time (is openspec installed?)" >&2
+  exit 1
+fi
+
+# Seconds of wall-clock time for one build on one input, writing JSON; the run must exit 0 or 1
+# (findings) and write a valid document, or the script fails. /usr/bin/time runs a program, so each
+# build is spelled out.
+seconds() {
+  status=0
+  case $1 in
+    jvm)
+      /usr/bin/time -p java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow \
+        -jar "$jar" --output json "$2" >"$tmp/out" 2>"$tmp/time" || status=$?
+      ;;
+    node)
+      /usr/bin/time -p "$tmp/project/node_modules/.bin/ears-check" --output json "$2" >"$tmp/out" \
+        2>"$tmp/time" ||
+        status=$?
+      ;;
+    native)
+      /usr/bin/time -p "$binary" --output json "$2" >"$tmp/out" 2>"$tmp/time" || status=$?
+      ;;
+  esac
+  if [ "$status" -gt 1 ]; then
+    echo "time-cli: $1 on $2 exited $status:" >&2
+    cat "$tmp/time" >&2
+    exit 1
+  fi
+  if ! jq -e '.version == 1 and (.findings | type == "array")' "$tmp/out" >/dev/null 2>&1; then
+    echo "time-cli: $1 on $2 wrote no valid JSON document:" >&2
+    head -c 2000 "$tmp/out" "$tmp/time" >&2
+    exit 1
+  fi
+  awk '$1 == "real" { print $2 }' "$tmp/time"
+}
+
+java_version=$(java -version 2>&1 | head -n 1)
+echo "$(date +%Y-%m-%d) at $(git describe --always --dirty), $(uname -sm), Node $(node --version),"
+echo "$java_version; one run per cell, --output json, wall-clock seconds."
+echo
+header="| Input | Bytes |"
+rule="|---|---|"
+for build in jvm node native; do
+  if wanted "$build"; then
+    header="$header $build |"
+    rule="$rule---|"
+  fi
+done
+echo "$header"
+echo "$rule"
+for kind in md txt; do
+  for n in $(printf '%s' "$copies" | tr ',' ' '); do
+    input="$tmp/input-$n.$kind"
+    : >"$input"
+    i=0
+    while [ "$i" -lt "$n" ]; do
+      cat "$tmp/unit.$kind" >>"$input"
+      i=$((i + 1))
+    done
+    row="| $kind x$n | $(wc -c <"$input" | tr -d ' ') |"
+    for build in jvm node native; do
+      if wanted "$build"; then row="$row $(seconds "$build" "$input") |"; fi
+    done
+    echo "$row"
+  done
+done

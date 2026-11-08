@@ -11,30 +11,24 @@ theme is done.
 ### Release 0.2.0 (branch `batch-release-0.2.0`, PR #17)
 
 Already in it: the CLI on Scala Native, release notes and GitHub Releases, the JSON output
-reference, and the README for users.
+reference, the README for users, and faster Markdown on Node.
 
-1. **Speed up large Markdown files on Node.** The Node CLI's time grows faster than its input
-   does: one Markdown file of 0.7 MB takes 0.55 s, 1.4 MB 1.1 s, 2.8 MB 2.9 s, and 7 MB 12.6 s,
-   where the JVM takes about 1 s for any of them. Probably in the Markdown facade's Node path
-   (mdast, or the facade's line mapping); not yet investigated, so this starts with a timeboxed
-   look at the cause.
-2. **The CLI as a Coursier app**: an app description, with a channel file in this repository,
+1. **The CLI as a Coursier app**: an app description, with a channel file in this repository,
    so `cs install` sets up `ears-check`.
-
-3. **Load cmark only from absolute directories.** The native binary keeps only absolute
+2. **Load cmark only from absolute directories.** The native binary keeps only absolute
    directories, but the system's loader can still search the current directory: on Linux, the
    bare-name `dlopen("libcmark.so")` follows `LD_LIBRARY_PATH`, where an empty or relative entry
    means the current directory; on macOS, dyld searches `DYLD_LIBRARY_PATH` first even for an
    absolute path. Skip the bare-name load, and the variable, when it has such an entry, so no
    setting makes the binary load a library from the current directory; then SECURITY.md and the
    README can drop their caveat. Found by the README review, 2026-11-07.
-4. **Release 0.2.0**, after a security review of the whole repository (CLAUDE.md's Releasing
+3. **Release 0.2.0**, after a security review of the whole repository (CLAUDE.md's Releasing
    steps). It's a minor release: inline code changes some of the classifier's verdicts. The
    pull request merges just before the tag, since a release is tagged on `main`.
 
 ### npm
 
-5. **Publish the npm packages**: the library `@tsnee/ears-checker` and the command line
+4. **Publish the npm packages**: the library `@tsnee/ears-checker` and the command line
    `@tsnee/ears-checker-cli`. The owner (npm account `tsnee`, created 2026-11-07) publishes
    0.2.0 by hand, since npm wants a package to exist before a trusted publisher can be set up.
    Later versions are published from the release workflow with npm's trusted publishing, in
@@ -47,7 +41,7 @@ reference, and the README for users.
 
 ### A general Scala.js link checker
 
-6. **A general Scala.js link checker**, extracted from `ears.linkCheck`. It writes a program
+5. **A general Scala.js link checker**, extracted from `ears.linkCheck`. It writes a program
    that references every public operation of a Scala.js library from its SemanticDB, and
    `scripts/check-scalajs-link` links it against only the published artifact; it caught
    0.1.0's `java.util.Locale` bug, which the tests hid (zio-test brings in scala-java-locales).

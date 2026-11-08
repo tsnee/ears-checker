@@ -42,11 +42,13 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
 - The checker reads Markdown only through the facade in `ears/markdown` (`Markdown.sentences`),
   never with a parser directly. (Developer tools that need more than sentences, such as
   `ears.releaseNotes` with headings and source text, may use commonmark-java directly, at the
-  facade's version, `commonmarkVersion` in `build.mill`.) Its conformance suite runs every fixture on the JVM, Node, and Scala Native;
-  a case where the parsers could differ gets a fixture. The Node tests' npm parser is pinned by
+  facade's version, `commonmarkVersion` in `build.mill`.) Its conformance suite runs every
+  fixture on the JVM, Node, and Scala Native; a case where the parsers could differ gets a
+  fixture. Node's parser is commonmark.js (`commonmark`), pinned by
   `ears/markdown/js/package-lock.json` and installed (with the network, the first time and after
-  a clean) by the Mill task
-  `ears.markdown.js.npmDependencies`; Mill's import map points the tests' import at it.
+  a clean) by the Mill task `ears.markdown.js.npmDependencies`; Mill's import map points the
+  tests' import at it. commonmark.js gives no inline positions, so `SourceLines` finds each
+  piece's line in the paragraph's source.
 - Coverage: `./mill __.test` measures `ears`, `ears.cli`, `ears.npm`, `ears.linkCheck`,
   `ears.markdown`, and `ears.releaseNotes` (scoverage, on the JVM only; the Scala.js and Scala Native modules compile the
   same sources). `ears.cli` compiles the facade's sources in and excludes them from its own
@@ -214,9 +216,9 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
     writes the program; `Main` reads SemanticDB and writes the file; `fixture/` has one
     operation of every shape it references
   - `ears/markdown/` — the Markdown facade, package `io.github.tsnee.ears.markdown`: `src` is
-    shared (`Markdown`, `Extraction`), and each platform has its `MarkdownParser`: `src-jvm`
-    (commonmark-java), `js/src` (mdast), `native/src` (cmark); `test/src` is the conformance
-    suite. Not published: `ears.cli` compiles the shared and JVM sources in
+    shared (`Markdown`, `Extraction`, and the line helpers `CmarkLines` and `SourceLines`), and each
+    platform has its `MarkdownParser`: `src-jvm` (commonmark-java), `js/src` (commonmark.js),
+    `native/src` (cmark); `test/src` is the conformance suite. Not published: `ears.cli` compiles the shared and JVM sources in
   - `ears/releaseNotes/` — the release-notes tool (ZIO, commonmark-java), package
     `io.github.tsnee.ears.releasenotes`: `Changelog` checks `CHANGELOG.md`'s form and writes a
     version's notes; `Main` is `check` and `notes`. Not published
@@ -228,7 +230,8 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
   (the changelog and the draft GitHub Release), `test-coverage` (the coverage minimums), and the
   archived changes that built them
 - `scripts/` — `check-openspec` and the Claude Code hook that runs it, `check-npm-package`,
-  `check-npm-cli`, `check-native-cli` (both sourcing `cli-cases`), and `check-scalajs-link`
+  `check-npm-cli`, `check-native-cli` (both sourcing `cli-cases`), `check-scalajs-link`, and
+  `time-cli`, which times the three builds on generated inputs for `docs/performance.md`
 - `.github/` — the CI workflow and the native one it calls (`native.yml`), the release workflow,
   Dependabot's weekly updates to their action pins, and `tools/`, the lockfile CI installs its
   npm tools from (`npm ci --ignore-scripts`)
@@ -236,6 +239,7 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
   `SECURITY.md` — how to report a vulnerability (GitHub's private reporting) and what's in scope
 - `CHANGELOG.md` — what changed in each release; `docs/release-files.md` — the files
   description every release's notes end with
+- `docs/performance.md` — every `scripts/time-cli` run, newest first, with its commit and machine
 - `docs/json-output.md` — the reference for `--output json`; a change to the document updates it,
   and removing or renaming a field, changing its type or meaning, or adding a location type
   bumps the document's `version`

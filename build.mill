@@ -413,8 +413,8 @@ object ears extends Base with Published with Covered {
   }
 
   /** Requirement sentences from Markdown: shared extraction over a small parser facade, with one
-    * parser per platform (commonmark-java here; mdast on Node in `js`; cmark in `native`). Not
-    * published: `cli` compiles the shared and JVM sources into itself.
+    * parser per platform (commonmark-java here; commonmark.js on Node in `js`; cmark in
+    * `native`). Not published: `cli` compiles the shared and JVM sources into itself.
     */
   object markdown extends Base with Covered {
     override def warts = pureWarts
@@ -429,7 +429,9 @@ object ears extends Base with Published with Covered {
     /** The conformance suite, which every platform's test module compiles. */
     object test extends CoveredTests with ZioSpecs
 
-    /** The shared sources and the mdast parser, for Node. Its tests run the conformance suite. */
+    /** The shared sources and the commonmark.js parser, for Node. Its tests run the conformance
+      * suite.
+      */
     object js extends Base with ScalaJSModule with NpmInstalled {
       def scalaJSVersion = ears.js.scalaJSVersion()
       override def warts = pureWarts
@@ -442,8 +444,8 @@ object ears extends Base with Published with Covered {
         // Node resolves a bare import only from `node_modules` above the importing file, and the
         // tests are linked under `out/`: the map points the import at the installed package.
         def scalaJSImportMap = Task {
-          val entry = npmDependencies().path / "mdast-util-from-markdown" / "index.js"
-          Seq(ESModuleImportMapping.Prefix("mdast-util-from-markdown", entry.toNIO.toUri.toString))
+          val entry = npmDependencies().path / "commonmark" / "lib" / "index.js"
+          Seq(ESModuleImportMapping.Prefix("commonmark", entry.toNIO.toUri.toString))
         }
       }
     }
@@ -618,7 +620,7 @@ object ears extends Base with Published with Covered {
         )
         os.copy(packageFiles().path / "README.md", out / "README.md")
         os.copy(npm.license().path, out / "LICENSE")
-        val parser = "mdast-util-from-markdown"
+        val parser = "commonmark"
         val lockfile = markdown.js.npmManifest().map(_.path).filter(_.last == "package-lock.json")
         val pinned = lockfile.headOption
           .flatMap(file => ujson.read(os.read(file))("packages").obj.get(s"node_modules/$parser"))
