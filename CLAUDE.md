@@ -39,14 +39,16 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
   when it runs, choosing the file with the pure `CmarkLibrary`, so the native Markdown tests need
   it installed (`brew install cmark`; CI installs `libcmark-dev`). `ears/src-jvm` and
   `ears/cli/src-jvm` serve the JVM and Scala Native: every Java API they use works on both.
-- Markdown is read only through the facade in `ears/markdown` (`Markdown.sentences`), never with
-  a parser directly. Its conformance suite runs every fixture on the JVM, Node, and Scala Native;
+- The checker reads Markdown only through the facade in `ears/markdown` (`Markdown.sentences`),
+  never with a parser directly. (Developer tools that need more than sentences, such as
+  `ears.releaseNotes` with headings and source text, may use commonmark-java directly, at the
+  facade's version, `commonmarkVersion` in `build.mill`.) Its conformance suite runs every fixture on the JVM, Node, and Scala Native;
   a case where the parsers could differ gets a fixture. The Node tests' npm parser is pinned by
   `ears/markdown/js/package-lock.json` and installed (with the network, the first time and after
   a clean) by the Mill task
   `ears.markdown.js.npmDependencies`; Mill's import map points the tests' import at it.
-- Coverage: `./mill __.test` measures `ears`, `ears.cli`, `ears.npm`, `ears.linkCheck`, and
-  `ears.markdown` (scoverage, on the JVM only; the Scala.js and Scala Native modules compile the
+- Coverage: `./mill __.test` measures `ears`, `ears.cli`, `ears.npm`, `ears.linkCheck`,
+  `ears.markdown`, and `ears.releaseNotes` (scoverage, on the JVM only; the Scala.js and Scala Native modules compile the
   same sources). `ears.cli` compiles the facade's sources in and excludes them from its own
   coverage (`-coverage-exclude-files`), since `ears.markdown` measures them.
   `./mill ears.cli.scoverage.consoleReport`
@@ -102,31 +104,51 @@ calling any change done, and report the coverage.
 Warnings are errors.
 
 CI (`.github/workflows/ci.yml`) runs the same checks on every push to `main` and every pull
-request: `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`,
-`scripts/check-npm-package`, `scripts/check-npm-cli`, `scripts/check-native-cli`,
-`scripts/check-scalajs-link`, the coverage minimums (with each module's percentages on the run's
-summary page), `scripts/check-openspec`, and, last, the native binary with less cmark
-installed. A second job, `check-jdk17`, runs on the oldest supported runtimes:
-`scripts/check-openspec` with JDK 17 starting the jar, and `scripts/check-npm-package` and
-`scripts/check-npm-cli` on the oldest Node the packages declare. It publishes nothing.
+request: `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`, the changelog's form
+(`ears.releaseNotes.run check CHANGELOG.md`), `scripts/check-npm-package`,
+`scripts/check-npm-cli`, `scripts/check-scalajs-link`, the coverage minimums (with each module's
+percentages on the run's summary page), and `scripts/check-openspec`. A second job,
+`check-jdk17`, runs on the oldest supported runtimes: `scripts/check-openspec` with JDK 17
+starting the jar, and `scripts/check-npm-package` and `scripts/check-npm-cli` on the oldest Node
+the packages declare. The reusable `native.yml` builds the native binary for linux-x64,
+linux-arm64, and macos-arm64, each on its platform's oldest runner (`ubuntu-22.04`,
+`ubuntu-22.04-arm`, `macos-15`) with `scripts/check-native-cli --out`, then checks the same
+binary and jar again on the newest (`ubuntu-26.04`, `ubuntu-26.04-arm`, `macos-26`) with
+`--binary --jar`, and on linux-x64 with less cmark installed. It publishes nothing. On a release
+tag every job builds at the tag's version and keeps the files it checked as `release-*`
+artifacts for the release.
 
 ## Releasing
 
-Releases go to Maven Central from `.github/workflows/release.yml`; the version comes from the
-tag (`EARS_RELEASE_VERSION`). Every other build is the next minor version as a snapshot:
-`-SNAPSHOT` for Maven and `-dev` for npm (`publishVersion` and `ears.npm.npmVersion` in
-`build.mill`). Bump it after each minor release; a patch release doesn't change it.
+Releases go to Maven Central and GitHub Releases from `.github/workflows/release.yml`; the
+version comes from the tag (`EARS_RELEASE_VERSION`). Every other build is the next minor version
+as a snapshot: `-SNAPSHOT` for Maven and `-dev` for npm (`publishVersion` and
+`ears.npm.npmVersion` in `build.mill`). Bump it after each minor release; a patch release doesn't
+change it.
 
-1. Merge everything for the release to `main`; CI must pass.
+`CHANGELOG.md` says what changed: `## Unreleased`, then one `## <major>.<minor>.<patch> -
+<YYYY-MM-DD>` per release, newest first, each with `### Added`, `### Changed`, and `### Fixed` as
+needed. Each change adds its lines under Unreleased in its implementation commit. A release's
+notes are its section, followed by `docs/release-files.md` (what each attached file needs and
+how to check it), with `{version}` replaced.
+
+1. Rename `Unreleased` to the version and date, open a new empty `Unreleased`, and merge
+   everything for the release to `main`; CI must pass.
 2. Run `/security-review` on the changes since the last release tag, and fix or knowingly accept
    each finding before tagging. (Each batch is also reviewed before it merges.)
 3. The owner pushes a tag `v<major>.<minor>.<patch>` on `main` (only admins may create `v*` tags).
-4. The `tag` job checks the tag is a version on `main`, and `checks` runs the whole CI workflow
-   (`ci.yml`) on it; then `publish` waits for the owner's approval (the `release` environment,
-   which holds the Sonatype token and signing key). It builds with no secrets, then signs and
-   uploads.
-5. `publish` uploads to the Central Portal for review (`--shouldRelease false`); the owner
-   inspects the deployment there and clicks Publish, or Drop to discard it.
+4. The `tag` job checks the tag is a version on `main` and writes the release notes (a missing
+   section fails here), and `checks` runs the whole CI workflow (`ci.yml`) on it; then `publish`
+   waits for the owner's approval (the `release` environment, which holds the Sonatype token and
+   signing key). It builds with no secrets, then signs and uploads.
+5. `publish` uploads to the Central Portal for review (`--shouldRelease false`); then
+   `draft-release`, the only job with a write token, creates a draft GitHub Release with the
+   notes, the files the checks passed on, `SHA256SUMS`, and an attestation for each file.
+6. The owner inspects the deployment on the Central Portal and clicks Publish (or Drop to
+   discard it), then publishes the draft release (or deletes it). A release that exists for the
+   tag fails `draft-release` untouched; delete the draft and rerun the job to redo it. Once
+   `publish` has succeeded, rerun only failed or single jobs, never the whole run: that reruns
+   `publish`, which uploads to the Central Portal again.
 
 Published versions can't be deleted or reused; fix a bad release with a new patch version.
 
@@ -192,13 +214,21 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
     shared (`Markdown`, `Extraction`), and each platform has its `MarkdownParser`: `src-jvm`
     (commonmark-java), `js/src` (mdast), `native/src` (cmark); `test/src` is the conformance
     suite. Not published: `ears.cli` compiles the shared and JVM sources in
+  - `ears/releaseNotes/` — the release-notes tool (ZIO, commonmark-java), package
+    `io.github.tsnee.ears.releasenotes`: `Changelog` checks `CHANGELOG.md`'s form and writes a
+    version's notes; `Main` is `check` and `notes`. Not published
 - `openspec/` — specs `ears-classifier`, `ears-cli`, `markdown-input` (the Markdown facade, the
   same on every platform), `npm-package`, `cli-npm-package` (the CLI's npm package),
   `cli-native-binary` (the native binary), `openspec-check` (the OpenSpec gate:
   `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub
-  Actions workflow), `release-publishing` (the Maven Central release workflow), `test-coverage`
-  (the coverage minimums), and the archived changes that built them
+  Actions workflow), `release-publishing` (the Maven Central release workflow), `github-release`
+  (the changelog and the draft GitHub Release), `test-coverage` (the coverage minimums), and the
+  archived changes that built them
 - `scripts/` — `check-openspec` and the Claude Code hook that runs it, `check-npm-package`,
   `check-npm-cli`, `check-native-cli` (both sourcing `cli-cases`), and `check-scalajs-link`
-- `.github/` — the CI and release workflows, and Dependabot's weekly updates to their action pins
+- `.github/` — the CI workflow and the native one it calls (`native.yml`), the release workflow,
+  Dependabot's weekly updates to their action pins, and `tools/`, the lockfile CI installs its
+  npm tools from (`npm ci --ignore-scripts`)
+- `CHANGELOG.md` — what changed in each release; `docs/release-files.md` — the files
+  description every release's notes end with
 - `docs/worklog.md` — dated work log; `docs/roadmap.md` — planned changes

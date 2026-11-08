@@ -60,7 +60,9 @@ installed, which it finds when it runs, whatever release you have, in Homebrew's
 macOS, `apt install cmark` on Debian and Ubuntu, or your system's cmark package. It
 never loads a library from the current directory.
 Without cmark, plain text and OpenSpec JSON still work, and a Markdown file gets a message
-saying what to install. Until releases attach binaries, build it from this repository:
+saying what to install. From 0.2.0, each [release](#releases) has a binary for Linux on x64 and
+Arm (glibc 2.35 or later: Ubuntu 22.04, Debian 12, or newer) and for macOS on Apple silicon
+(macOS 15 or later). Or build it from this repository:
 
 ```sh
 ./mill ears.cli.native.nativeLink
@@ -109,6 +111,27 @@ $ echo $?
   such a file under any locale.
 - Exit status: 0 when every requirement passes or `--help` is given, 1 when any finding is
   reported, and 2 when the arguments are invalid or an input can't be read or parsed.
+
+## Releases
+
+What changed in each version is in [CHANGELOG.md](CHANGELOG.md). From 0.2.0, each version's
+[GitHub release](https://github.com/tsnee/ears-checker/releases) has those notes and the files
+its release run built and checked: the CLI jar, both npm packages' tarballs, the native
+binaries, a `SHA256SUMS` file, and a build-provenance attestation for each file, showing this
+repository's release workflow built it for that version's tag:
+
+```sh
+gh attestation verify <file> --repo tsnee/ears-checker \
+  --signer-workflow tsnee/ears-checker/.github/workflows/release.yml \
+  --source-ref refs/tags/v<version>
+```
+
+The notes end with what each file needs and how to check it
+([docs/release-files.md](docs/release-files.md)). Check a file before running it.
+
+The macOS binary isn't signed, so macOS won't open it after a browser downloads it ("Apple could
+not verify…"). Download it with `curl -fLO <its URL>`, or, once it's checked, clear the
+browser's quarantine mark with `xattr -d com.apple.quarantine <file>`.
 
 ## Library
 
@@ -177,8 +200,11 @@ reader, and the command line, on Node; the library, the Markdown reader, and the
 also run natively with Scala Native, which needs a C compiler, and, to run the Markdown tests,
 [cmark](https://github.com/commonmark/cmark) installed (`brew install cmark`, or `apt-get
 install libcmark-dev`); nothing links it. It measures test coverage on the
-JVM; `./mill ears.scoverage.htmlReport` (or `ears.cli`, `ears.npm`, `ears.linkCheck`, or
-`ears.markdown`) writes a report under `out/`.
+JVM; `./mill ears.scoverage.htmlReport` (or `ears.cli`, `ears.npm`, `ears.linkCheck`,
+`ears.markdown`, or `ears.releaseNotes`) writes a report under `out/`.
+`./mill ears.releaseNotes.run check CHANGELOG.md` checks the changelog's form, and
+`./mill ears.releaseNotes.run notes <version> CHANGELOG.md docs/release-files.md` writes a
+version's release notes.
 `./mill __.publishLocal` publishes the next version as a snapshot (`0.2.0-SNAPSHOT`) to
 `~/.ivy2/local`.
 Both npm packages are minified with [esbuild](https://esbuild.github.io), which Mill installs
@@ -192,16 +218,20 @@ installed from npm.
 an empty project, and runs both on this repository's Markdown and specs and on error cases,
 failing on any difference in output, messages, or exit status; it needs the
 [OpenSpec CLI](https://github.com/Fission-AI/OpenSpec). `scripts/check-native-cli` does the same
-for the native binary, on the same cases (`scripts/cli-cases`), after checking it links no cmark.
+for the native binary, on the same cases (`scripts/cli-cases`), after checking it links no cmark;
+`--binary` and `--jar` check a binary and jar built elsewhere. With `--out`, each of the three
+keeps the files it checked, as a release does.
 Like the other scripts, they're for working on ears-checker, not part of any package.
 `scripts/check-scalajs-link` publishes the Scala.js library locally, generates a program that
 references every public operation, and links it in release mode against only that artifact,
 the way a user's application gets it; it needs [Scala CLI](https://scala-cli.virtuslab.org).
 GitHub Actions checks formatting, compiles, runs every test, checks each module's coverage
-against its minimum in `build.mill`, checks both npm packages, and the Node command line
-against the jar, on the oldest and newest Node they support, checks the native binary against
-the jar (and with less cmark installed), links the Scala.js library as a user gets it, and
-checks the OpenSpec specs on each push to `main` and each pull request.
+against its minimum in `build.mill`, checks the changelog's form, checks both npm packages, and
+the Node command line against the jar, on the oldest and newest Node they support, links the
+Scala.js library as a user gets it, and checks the OpenSpec specs on each push to `main` and
+each pull request. It also builds the native binary for Linux on x64 and Arm and for macOS on
+Apple silicon, each on its platform's oldest runner, and checks it against the jar there and
+again on the newest (on Linux x64, also with less cmark installed).
 
 ## License
 

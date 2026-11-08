@@ -1,0 +1,11 @@
+{
+  "name": "ears-ci-tools",
+  "private": true,
+  "description": "The tools CI runs (the OpenSpec CLI, the TypeScript compiler, publint, Are the Types Wrong), installed from this lockfile with npm ci --ignore-scripts; not published.",
+  "dependencies": {
+    "@fission-ai/openspec": "1.16.0",
+    "typescript": "7.0.2",
+    "publint": "0.3.25",
+    "@arethetypeswrong/cli": "0.18.5"
+  }
+}

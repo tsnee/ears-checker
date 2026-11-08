@@ -1,5 +1,7 @@
 # Format, compile, test, and the OpenSpec check, on every push to main and every pull request,
-# and on a release tag when release.yml calls it before publishing. Publishes nothing itself.
+# and on a release tag when release.yml calls it before publishing. Publishes nothing itself. On a
+# release tag every job builds at the tag's version, and the files the checks passed on are kept
+# as artifacts named release-* for release.yml to attach; any other run keeps none.
 name: CI
 
 on:
@@ -26,6 +28,13 @@ jobs:
         with:
           persist-credentials: false
 
+      # On a release tag, everything is built at the tag's version.
+      - name: Set the release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "EARS_RELEASE_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
       # The java that scripts/check-openspec starts the CLI jar with: the newest JDK here, the
       # oldest supported one in check-jdk17. Mill fetches its own JDK 27 for the build.
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
@@ -42,19 +51,22 @@ jobs:
       # Dependencies, Mill's JDK, and the Mill launcher.
       - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
 
-      # cmark, which the native Markdown reader loads when it runs, in the native tests and the
-      # native CLI check (Scala Native's clang is on the runner already; nothing links cmark).
+      # cmark, which the native Markdown reader loads when it runs, in the native tests (Scala
+      # Native's clang is on the runner already; nothing links cmark). The native CLI's checks are
+      # in native.yml.
       - name: Install cmark
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends libcmark-dev
           dpkg-query -W 'libcmark*'
 
-      # The OpenSpec CLI, and the TypeScript compiler and linters the npm package check uses.
+      # The OpenSpec CLI, and the TypeScript compiler and linters the npm package check uses,
+      # with their whole dependency tree pinned by .github/tools/package-lock.json and no install
+      # scripts run: these jobs build files a release attaches.
       - name: Install the npm tools
-        run: >-
-          npm install -g @fission-ai/openspec@1.16.0 typescript@7.0.2 publint@0.3.25
-          @arethetypeswrong/cli@0.18.5
+        run: |
+          npm ci --prefix .github/tools --ignore-scripts --no-audit --no-fund
+          echo "$PWD/.github/tools/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Check formatting
         run: ./mill __.checkFormat
@@ -65,16 +77,31 @@ jobs:
       - name: Test
         run: ./mill __.test
 
+      # The changelog's form: Unreleased, then each release, newest first.
+      - name: Check the changelog
+        run: ./mill ears.releaseNotes.run check CHANGELOG.md
+
+      # Each check keeps the files it passed on in kept/, logging their SHA-256.
       - name: Check the npm package
-        run: scripts/check-npm-package
+        run: scripts/check-npm-package --out kept
 
       # The Node CLI, installed from its packed package, against the JVM jar on the same inputs.
       - name: Check the Node CLI
-        run: scripts/check-npm-cli
+        run: scripts/check-npm-cli --out kept
 
-      # The native binary, against the JVM jar on the same inputs; and that it links no cmark.
-      - name: Check the native CLI
-        run: scripts/check-native-cli
+      # On a release tag, the jar and both tarballs, as checked, for the release.
+      - name: Name the jar for the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          mv kept/ears-check.jar "kept/ears-check-$EARS_RELEASE_VERSION.jar"
+          ls -l kept
+
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-jvm
+          path: kept/
+          if-no-files-found: error
 
       # scala-cli links the Scala.js library's link-check program against the published artifact;
       # it uses the runner's Java from setup-java.
@@ -92,7 +119,7 @@ jobs:
         run: |
           failed=0
           fence="\`\`\`"
-          for module in ears ears.cli ears.npm ears.linkCheck ears.markdown; do
+          for module in ears ears.cli ears.npm ears.linkCheck ears.markdown ears.releaseNotes; do
             if report="$(./mill --ticker false "$module.scoverage.consoleReport" 2>&1)"; then
               lines="$(printf '%s\n' "$report" | grep -E '^(Statement|Branch) coverage' || true)"
             else
@@ -116,65 +143,15 @@ jobs:
           + ears.npm.scoverage.validateCoverageMinimums
           + ears.linkCheck.scoverage.validateCoverageMinimums
           + ears.markdown.scoverage.validateCoverageMinimums
+          + ears.releaseNotes.scoverage.validateCoverageMinimums
 
       - name: Check OpenSpec
         run: scripts/check-openspec
 
-      # Last, since it removes cmark from the runner. With only the runtime package, which has
-      # just a versioned libcmark.so.*, the native binary still reads Markdown; with no cmark, it
-      # says what to install, and plain text still works. It also shows what the binary does
-      # with a non-ASCII file name under the C locale (printed, not checked).
-      - name: Check the native binary with less cmark
-        shell: bash
-        run: |
-          set -euo pipefail
-          fail() { echo "$1" >&2; exit 1; }
-          # Every directory CmarkLibrary searches on Linux.
-          searched=(/usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu /usr/lib64 /usr/lib
-            /usr/local/lib)
-          libraries() { find "${searched[@]}" -maxdepth 1 -name 'libcmark.so*' 2>/dev/null || true; }
-          shown=$(./mill --ticker false show ears.cli.native.nativeLink)
-          binary=$(printf '%s' "$shown" | jq -r 'if type == "object" then .path else . end |
-            sub("^ref:v[0-9]+:[0-9a-f]+:"; "")')
-          [ -x "$binary" ] || fail "Mill printed no usable binary: $binary"
-          dir=$(mktemp -d)
-          printf '%s\n' '- When an order arrives the scheduler shall list events.' >"$dir/notes.md"
-          printf '%s\n' 'The scheduler lists events.' >"$dir/notes.txt"
-          run() {
-            status=0
-            "$binary" "$@" >"$dir/out" 2>&1 || status=$?
-            cat "$dir/out"
-          }
-          # Installed packages only: dpkg also knows packages that were never installed.
-          runtime=$(dpkg-query -W -f '${db:Status-Abbrev}${Package}\n' 'libcmark0*' |
-            sed -n 's/^ii *//p')
-          [ -n "$runtime" ] || fail "no cmark runtime package is installed"
-          sudo apt-get remove -y -q libcmark-dev
-          if libraries | grep -q -E '/libcmark\.so$'; then
-            fail "an unversioned libcmark.so is still installed: $(libraries)"
-          fi
-          run --verbose "$dir/notes.md"
-          if [ "$status" != 1 ] || ! grep -q missing-comma "$dir/out" ||
-            ! grep -q 'parser="cmark 0\.' "$dir/out"; then
-            fail "with only $runtime, Markdown wasn't read through it (status $status)"
-          fi
-          sudo apt-get remove -y -q "$runtime"
-          if [ -n "$(libraries)" ] || ldconfig -p | grep -q libcmark; then
-            fail "a cmark library is still installed: $(libraries)"
-          fi
-          run "$dir/notes.md"
-          if [ "$status" != 2 ] || ! grep -q "brew install cmark" "$dir/out" ||
-            ! grep -q "apt install cmark" "$dir/out" ||
-            ! grep -q "attempts=" "$dir/out"; then
-            fail "without cmark, Markdown didn't fail with the message (status $status)"
-          fi
-          run "$dir/notes.txt"
-          if [ "$status" != 1 ] || ! grep -q missing-modal "$dir/out"; then
-            fail "without cmark, plain text wasn't checked as usual (status $status)"
-          fi
-          name=$(printf 'r\303\251sum\303\251.txt')
-          cp "$dir/notes.txt" "$dir/$name"
-          (cd "$dir" && LC_ALL=C LANG=C "$binary" "$name") || true
+  # The native binary for each released platform, built and checked on its oldest runner and
+  # checked again on its newest.
+  native:
+    uses: ./.github/workflows/native.yml
 
   # The oldest supported runtimes: the OpenSpec check again with JDK 17, the oldest JDK the jar
   # supports, starting it; and the npm package and Node CLI checks on Node 22, the oldest Node the
@@ -189,6 +166,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set the release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "EARS_RELEASE_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
@@ -202,9 +185,9 @@ jobs:
       - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
 
       - name: Install the npm tools
-        run: >-
-          npm install -g @fission-ai/openspec@1.16.0 typescript@7.0.2 publint@0.3.25
-          @arethetypeswrong/cli@0.18.5
+        run: |
+          npm ci --prefix .github/tools --ignore-scripts --no-audit --no-fund
+          echo "$PWD/.github/tools/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Check OpenSpec
         run: scripts/check-openspec

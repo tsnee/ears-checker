@@ -117,3 +117,17 @@
   the native CLI check 154 s). The first run (42409556968) showed `libcmark0.30.0` doesn't exist
   on Ubuntu 26.04 (it's `libcmark0.30.2`), so the message now says `apt install cmark`. On
   Linux under `LC_ALL=C`, the native binary opens a non-ASCII file name.
+- 2026-11-07: add-release-notes applied locally: CHANGELOG.md (0.1.0, 0.1.1, Unreleased), the
+  ears.releaseNotes tool, `--out`/`--binary`/`--jar` on the check scripts, native.yml (oldest and
+  newest runner per platform), release-* artifacts on tags, and release.yml's draft-release job.
+  The macOS binary now declares `minos 15.0` (was the build machine's 27.2). Every local check
+  passed; coverage (statement/branch %): ears 95.91/92.04, ears.cli 96.87/98.67, ears.npm
+  100/100, ears.linkCheck 97.28/100, ears.markdown 100/100, ears.releaseNotes 96.60/100. A local
+  rehearsal of draft-release's SHA256SUMS step on kept snapshot files passed `sha256sum -c` and
+  failed as it should with a file missing or extra.
+- 2026-11-07: the v0.1.0 and v0.1.1 GitHub Releases were backfilled (notes only; v0.1.1 latest).
+  Review fixes: CI's npm tools come from `.github/tools/package-lock.json` with
+  `npm ci --ignore-scripts`; native.yml fails unless the binary needs glibc 2.35 at most and
+  declares `minos 15.0`, runs the Markdown conformance suite against Ubuntu 22.04's cmark 0.30,
+  and keeps its artifacts 7 days; `check-native-cli --out` keeps the jar too; the docs give the
+  full attestation check.

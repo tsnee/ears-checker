@@ -5,7 +5,35 @@
 # status, on the cases in scripts/cli-cases. A development check, run by contributors and CI; it
 # isn't part of either package.
 # Needs node, npm, java, jq, git, and openspec on the PATH.
+#
+# --out <dir> keeps the tarball it installed and the jar it compared it with (as ears-check.jar)
+# in <dir>, for a release to attach.
 set -e
+
+usage() {
+  echo "Usage: check-npm-cli [--out <dir>]" >&2
+  exit 2
+}
+out=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --out)
+      [ $# -ge 2 ] || usage
+      out=$2
+      shift 2
+      ;;
+    *) usage ;;
+  esac
+done
+case $out in
+  "" | /*) ;;
+  *) out=$(pwd)/$out ;;
+esac
+
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi |
+    cut -d ' ' -f 1
+}
 
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 root=$(pwd)
@@ -46,6 +74,8 @@ if [ ! -f "$tarball" ]; then
   echo "check-npm-cli: npm pack wrote no tarball" >&2
   exit 1
 fi
+echo "check-npm-cli: checking $(basename "$tarball"), sha256 $(sha256 "$tarball")"
+echo "check-npm-cli: against $jar, sha256 $(sha256 "$jar")"
 
 # No file may name a path on this machine, such as the repository's path compiled into the
 # code.
@@ -108,4 +138,12 @@ node_cli() { "$project/node_modules/.bin/ears-check" "$@"; }
 # The cases, shared with check-native-cli.
 check=check-npm-cli subject=node label="the Node CLI"
 . "$root/scripts/cli-cases"
+if [ -n "$out" ]; then
+  mkdir -p "$out"
+  cp "$tarball" "$out/"
+  cp "$jar" "$out/ears-check.jar"
+  for kept in "$out/$(basename "$tarball")" "$out/ears-check.jar"; do
+    echo "check-npm-cli: kept $kept, sha256 $(sha256 "$kept")"
+  done
+fi
 echo "check-npm-cli: the Node CLI installs and matches the JVM CLI on every case"

@@ -43,6 +43,9 @@ val zioVersion = "2.1.27"
 val declineVersion = "2.6.2"
 val zioJsonVersion = "1.1.1"
 
+/** commonmark-java, for the Markdown facade on the JVM and the release-notes tool. */
+val commonmarkVersion = "0.31.0"
+
 def wartOptions(warts: Seq[String]): Seq[String] =
   warts.map(w => s"-P:wartremover:traverser:org.wartremover.warts.$w")
 
@@ -418,7 +421,7 @@ object ears extends Base with Published with Covered {
     def sharedSources = Task.Sources("src")
     def jvmSources = Task.Sources("src-jvm")
     def sources = Task(sharedSources() ++ jvmSources())
-    def mvnDeps = Seq(mvn"org.commonmark:commonmark:0.31.0")
+    def mvnDeps = Seq(mvn"org.commonmark:commonmark:$commonmarkVersion")
 
     def statementCoverageMin = Some(100.0)
     def branchCoverageMin = Some(100.0)
@@ -487,7 +490,7 @@ object ears extends Base with Published with Covered {
       mvn"dev.zio::zio:$zioVersion",
       mvn"com.monovore::decline:$declineVersion",
       mvn"dev.zio::zio-json:$zioJsonVersion",
-      mvn"org.commonmark:commonmark:0.31.0"
+      mvn"org.commonmark:commonmark:$commonmarkVersion"
     )
 
     def statementCoverageMin = Some(96.0)
@@ -519,6 +522,14 @@ object ears extends Base with Published with Covered {
       def sources = Task(cli.sharedSources() ++ cli.jvmSources() ++ markdown.native.sources())
       def mainClass = Some("io.github.tsnee.ears.cli.Main")
       def releaseMode = Task(ReleaseMode.ReleaseFull)
+
+      // On macOS, the oldest release the binary runs on, the oldest GitHub's runners have;
+      // otherwise clang declares the build machine's own release.
+      private def macosMinimum =
+        if (scala.util.Properties.isMac) Seq("-mmacosx-version-min=15.0") else Nil
+      def nativeCompileOptions = Task(super.nativeCompileOptions() ++ macosMinimum)
+      def nativeLinkingOptions = Task(super.nativeLinkingOptions() ++ macosMinimum)
+
       def mvnDeps = Seq(
         mvn"dev.zio::zio::$zioVersion",
         mvn"com.monovore::decline::$declineVersion",
@@ -644,5 +655,21 @@ object ears extends Base with Published with Covered {
       * program generated from it. Not published.
       */
     object fixture extends Base
+  }
+
+  /** Checks `CHANGELOG.md`'s form and writes a version's release notes from its section. Reads
+    * Markdown with commonmark-java directly: it needs headings and source text, which the
+    * checker's facade doesn't give. Not published.
+    */
+  object releaseNotes extends Base with Covered {
+    def mvnDeps = Seq(
+      mvn"dev.zio::zio:$zioVersion",
+      mvn"org.commonmark:commonmark:$commonmarkVersion"
+    )
+
+    def statementCoverageMin = Some(96.0)
+    def branchCoverageMin = Some(100.0)
+
+    object test extends CoveredTests with ZioSpecs
   }
 }

@@ -3,7 +3,34 @@
 # and Are the Types Wrong, install it into an empty project, and use it from TypeScript: type-check
 # ears/npm/smoke/consumer.ts under Node and bundler module resolution, then run it on Node.
 # Needs node, npm, jq, tsc, publint, and attw on the PATH; CI installs pinned versions.
+#
+# --out <dir> keeps the tarball it checked in <dir>, for a release to attach.
 set -e
+
+usage() {
+  echo "Usage: check-npm-package [--out <dir>]" >&2
+  exit 2
+}
+out=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --out)
+      [ $# -ge 2 ] || usage
+      out=$2
+      shift 2
+      ;;
+    *) usage ;;
+  esac
+done
+case $out in
+  "" | /*) ;;
+  *) out=$(pwd)/$out ;;
+esac
+
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi |
+    cut -d ' ' -f 1
+}
 
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 root=$(pwd)
@@ -36,6 +63,7 @@ if [ ! -f "$tarball" ]; then
   echo "check-npm-package: npm pack wrote no tarball" >&2
   exit 1
 fi
+echo "check-npm-package: checking $(basename "$tarball"), sha256 $(sha256 "$tarball")"
 
 # No file may name a path on this machine, such as a source map entry the build failed to make
 # relative.
@@ -130,4 +158,10 @@ typecheck() {
 typecheck nodenext nodenext
 typecheck esnext bundler
 node consumer.ts
+if [ -n "$out" ]; then
+  mkdir -p "$out"
+  cp "$tarball" "$out/"
+  kept="$out/$(basename "$tarball")"
+  echo "check-npm-package: kept $kept, sha256 $(sha256 "$kept")"
+fi
 echo "check-npm-package: the npm package builds, lints, installs, type-checks, and runs"
