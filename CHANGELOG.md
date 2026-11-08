@@ -20,6 +20,9 @@ release renames Unreleased to its version and date.
 
 ### Changed
 
+- The README is written for users, with a quick start for each way to get ears-checker and its
+  limits; building and contributing moved to `CONTRIBUTING.md`, and `SECURITY.md` says how to
+  report a vulnerability privately.
 - JSON output starts with a format version, `"version": 1`, and the release that wrote it,
   `"checker"`, and is documented field by field in `docs/json-output.md`, with what can change
   within a version.

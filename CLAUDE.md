@@ -98,9 +98,10 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
   runner doesn't pass `forkEnv`. Metals can't run the library's suites either: they're shared
   with `ears.js.test`.
 
-Run `./mill __.test`, every module's `validateCoverageMinimums`, `scripts/check-npm-package`,
-`scripts/check-npm-cli`, `scripts/check-native-cli`, and `scripts/check-scalajs-link` before
-calling any change done, and report the coverage.
+Run `./mill __.checkFormat`, `./mill __.test`, every module's `validateCoverageMinimums`,
+`scripts/check-npm-package`, `scripts/check-npm-cli`, `scripts/check-native-cli`,
+`scripts/check-scalajs-link`, and `scripts/check-openspec` before calling any change done (as
+CONTRIBUTING.md says), and report the coverage.
 Warnings are errors.
 
 CI (`.github/workflows/ci.yml`) runs the same checks on every push to `main` and every pull
@@ -132,8 +133,10 @@ needed. Each change adds its lines under Unreleased in its implementation commit
 notes are its section, followed by `docs/release-files.md` (what each attached file needs and
 how to check it), with `{version}` replaced.
 
-1. Rename `Unreleased` to the version and date, open a new empty `Unreleased`, and merge
-   everything for the release to `main`; CI must pass.
+1. Rename `Unreleased` to the version and date, open a new empty `Unreleased`, update every
+   release version the README names (its current release, quick start, download URLs, and
+   library coordinates; not "0.1.1 or newer", which is a minimum), and merge everything for the
+   release to `main`; CI must pass.
 2. Run `/security-review` on the changes since the last release tag, and fix or knowingly accept
    each finding before tagging. (Each batch is also reviewed before it merges.)
 3. The owner pushes a tag `v<major>.<minor>.<patch>` on `main` (only admins may create `v*` tags).
@@ -229,6 +232,8 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
 - `.github/` — the CI workflow and the native one it calls (`native.yml`), the release workflow,
   Dependabot's weekly updates to their action pins, and `tools/`, the lockfile CI installs its
   npm tools from (`npm ci --ignore-scripts`)
+- `CONTRIBUTING.md` — building, testing, and how changes are made, for contributors;
+  `SECURITY.md` — how to report a vulnerability (GitHub's private reporting) and what's in scope
 - `CHANGELOG.md` — what changed in each release; `docs/release-files.md` — the files
   description every release's notes end with
 - `docs/json-output.md` — the reference for `--output json`; a change to the document updates it,

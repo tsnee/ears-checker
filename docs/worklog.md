@@ -150,3 +150,10 @@
 - 2026-11-07: document-json-output's CI run 42432940033 passed on 7ecd44b, 1,906 job-seconds:
   check 472 s, check-jdk17 154 s; native builds linux-x64 391 s, linux-arm64 323 s,
   macos-arm64 367 s; rechecks 62 s, 65 s, 72 s.
+- 2026-11-07: readme-for-users applied: the README rewritten for users (quick start per route,
+  limits, OpenSpec through its JSON), CONTRIBUTING.md and SECURITY.md (private vulnerability
+  reporting, turned on by the owner), and package READMEs that describe the published packages
+  with scoped names only. The review found that Markdown tables are read as paragraphs and that
+  an empty or relative `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH` entry lets the loader search the
+  current directory: the docs say so, and the loader fix is on the roadmap before 0.2.0. Format,
+  OpenSpec, and both npm checks passed.
