@@ -215,6 +215,83 @@ object HelpersSuite extends ZIOSpecDefault:
             .contains("brew install cmark")
         )
     ),
+    suite("library path safety")(
+      test("unsafeEntries: unset, empty, and all-absolute values are safe on both platforms"):
+        val safe = List(None, Some(""), Some("/opt/lib"), Some("/opt/lib:/usr/local/lib"))
+        assertTrue(
+          safe.forall(value =>
+            CmarkLibrary.unsafeEntries(Platform.Linux, value).isEmpty &&
+              CmarkLibrary.unsafeEntries(Platform.MacOs, value).isEmpty
+          )
+        )
+      ,
+      test("unsafeEntries on Linux: relative entries and empty ones, each once"):
+        assertTrue(
+          CmarkLibrary.unsafeEntries(Platform.Linux, Some(":/opt/lib")) == List(""),
+          CmarkLibrary.unsafeEntries(Platform.Linux, Some("/opt/lib:")) == List(""),
+          CmarkLibrary.unsafeEntries(Platform.Linux, Some(":")) == List(""),
+          CmarkLibrary.unsafeEntries(Platform.Linux, Some(".")) == List("."),
+          CmarkLibrary.unsafeEntries(Platform.Linux, Some("lib::/opt/lib:lib")) == List("lib", "")
+        )
+      ,
+      test("unsafeEntries on Linux: a semicolon separates entries too, as in glibc"):
+        assertTrue(
+          CmarkLibrary.unsafeEntries(Platform.Linux, Some("/opt/lib;")) == List(""),
+          CmarkLibrary.unsafeEntries(Platform.Linux, Some("/opt/lib;.")) == List("."),
+          CmarkLibrary.unsafeEntries(Platform.Linux, Some(";/opt/lib")) == List(""),
+          CmarkLibrary.unsafeEntries(Platform.Linux, Some(";")) == List(""),
+          CmarkLibrary.unsafeEntries(Platform.Linux, Some("/opt/lib;/srv/lib")).isEmpty
+        )
+      ,
+      test("unsafeEntries on macOS: a semicolon is part of a path, as dyld reads it"):
+        assertTrue(CmarkLibrary.unsafeEntries(Platform.MacOs, Some("/opt/lib;.")).isEmpty)
+      ,
+      test("directories on Linux: entries split at semicolons as well as colons"):
+        assertTrue(
+          CmarkLibrary
+            .directories(Platform.Linux, Some("/opt/lib;/srv/lib"), None)
+            .take(2) == List("/opt/lib", "/srv/lib")
+        )
+      ,
+      test("unsafeEntries on macOS: relative entries only, since dyld ignores empty ones"):
+        assertTrue(
+          CmarkLibrary.unsafeEntries(Platform.MacOs, Some(":/opt/lib")).isEmpty,
+          CmarkLibrary.unsafeEntries(Platform.MacOs, Some(":")).isEmpty,
+          CmarkLibrary.unsafeEntries(Platform.MacOs, Some(".")) == List("."),
+          CmarkLibrary.unsafeEntries(Platform.MacOs, Some("/opt/lib:lib:")) == List("lib")
+        )
+      ,
+      test("loadable on Linux: the bare name only while LD_LIBRARY_PATH is safe"):
+        val listing = List("/usr/lib/x86_64-linux-gnu" -> List("libcmark.so.0.30.2"))
+        val all = List("libcmark.so", "/usr/lib/x86_64-linux-gnu/libcmark.so.0.30.2")
+        assertTrue(
+          CmarkLibrary.loadable(Platform.Linux, listing, None) == Right(all),
+          CmarkLibrary.loadable(Platform.Linux, listing, Some("/opt/lib")) == Right(all),
+          CmarkLibrary.loadable(Platform.Linux, listing, Some(":/opt/lib")) ==
+            Right(List("/usr/lib/x86_64-linux-gnu/libcmark.so.0.30.2"))
+        )
+      ,
+      test("loadable on macOS: nothing to try while DYLD_LIBRARY_PATH has a relative entry"):
+        val listing = List("/opt/homebrew/lib" -> List("libcmark.dylib"))
+        val declined = CmarkLibrary.loadable(Platform.MacOs, listing, Some("/opt/lib:."))
+        assertTrue(
+          CmarkLibrary.loadable(Platform.MacOs, listing, Some(":/opt/lib")) ==
+            Right(List("/opt/homebrew/lib/libcmark.dylib")),
+          declined.left.exists(unavailable =>
+            unavailable.attempts.isEmpty &&
+              unavailable.message.contains("DYLD_LIBRARY_PATH") &&
+              unavailable.message.contains("'.'")
+          )
+        )
+      ,
+      test("the macOS message names every relative entry"):
+        val message = CmarkLibrary.relativeLibraryPath(List(".", "lib"))
+        assertTrue(
+          message.contains("'.'"),
+          message.contains("'lib'"),
+          message.contains("relative to the current one")
+        )
+    ),
     suite("Extraction")(
       test("code without backticks: one backtick each side"):
         assertTrue(Extraction.codeSpan("notes.md") == "`notes.md`")

@@ -11,24 +11,17 @@ theme is done.
 ### Release 0.2.0 (branch `batch-release-0.2.0`, PR #17)
 
 Already in it: the CLI on Scala Native, release notes and GitHub Releases, the JSON output
-reference, the README for users, and faster Markdown on Node.
+reference, the README for users, faster Markdown on Node, and loading cmark safely.
 
 1. **The CLI as a Coursier app**: an app description, with a channel file in this repository,
    so `cs install` sets up `ears-check`.
-2. **Load cmark only from absolute directories.** The native binary keeps only absolute
-   directories, but the system's loader can still search the current directory: on Linux, the
-   bare-name `dlopen("libcmark.so")` follows `LD_LIBRARY_PATH`, where an empty or relative entry
-   means the current directory; on macOS, dyld searches `DYLD_LIBRARY_PATH` first even for an
-   absolute path. Skip the bare-name load, and the variable, when it has such an entry, so no
-   setting makes the binary load a library from the current directory; then SECURITY.md and the
-   README can drop their caveat. Found by the README review, 2026-11-07.
-3. **Release 0.2.0**, after a security review of the whole repository (CLAUDE.md's Releasing
+2. **Release 0.2.0**, after a security review of the whole repository (CLAUDE.md's Releasing
    steps). It's a minor release: inline code changes some of the classifier's verdicts. The
    pull request merges just before the tag, since a release is tagged on `main`.
 
 ### npm
 
-4. **Publish the npm packages**: the library `@tsnee/ears-checker` and the command line
+3. **Publish the npm packages**: the library `@tsnee/ears-checker` and the command line
    `@tsnee/ears-checker-cli`. The owner (npm account `tsnee`, created 2026-11-07) publishes
    0.2.0 by hand, since npm wants a package to exist before a trusted publisher can be set up.
    Later versions are published from the release workflow with npm's trusted publishing, in
@@ -41,23 +34,24 @@ reference, the README for users, and faster Markdown on Node.
 
 ### A general Scala.js link checker
 
-5. **A general Scala.js link checker**, extracted from `ears.linkCheck`. It writes a program
+4. **A general Scala.js link checker**, extracted from `ears.linkCheck`. It writes a program
    that references every public operation of a Scala.js library from its SemanticDB, and
    `scripts/check-scalajs-link` links it against only the published artifact; it caught
    0.1.0's `java.util.Locale` bug, which the tests hid (zio-test brings in scala-java-locales).
    Searches on 2026-11-07 found no existing tool that does this. To be general it needs: the
    operation shapes it now refuses by name (overloads, `using` parameters, varargs, givens,
    extension methods, bounded type parameters, constructors that take arguments) or a way to
-   exclude one; a build integration others use (a Mill plugin, and probably an sbt plugin,
-   since most Scala.js libraries build with sbt); a check on Scala 2 libraries' SemanticDB; and
+   exclude one; a build integration others use (a Mill plugin, and an sbt plugin: GitHub's code search on
+   2026-11-08 found about 38,800 `build.sbt` files enabling `ScalaJSPlugin`, against about 300 Mill
+   build files using `ScalaJSModule`); a check on Scala 2 libraries' SemanticDB; and
    its own repository, versions, and documentation. It's already a separate module with no
    dependency on the classifier, so it can be extracted whenever it's proved itself here.
 
 ## Later
 
 - **Skip Markdown tables.** No parser here recognizes GitHub-style tables, so a table is read as
-  one paragraph and a table with `shall` in it gives misleading findings (seen 2026-11-07 on the
-  jar and the native binary). Skip them on every platform, with a conformance fixture; or read
+  one paragraph and a table with `shall` in it gives misleading findings (seen on the jar and the
+  native binary on 2026-11-07, and on Node with commonmark.js on 2026-11-08). Skip them on every platform, with a conformance fixture; or read
   each cell as text.
 - **Coverage on Codecov, with a badge.** CI would upload each module's scoverage XML, in a job
   apart from those that build release files (the uploader is outside code), with a
@@ -70,8 +64,8 @@ reference, the README for users, and faster Markdown on Node.
   where other programs accept it anywhere (the README documents it as the first argument). A
   fix in option parsing, with a test per position.
 - **Lone surrogates in JSON output.** An OpenSpec requirement with an escaped lone surrogate
-  (`"\ud83d"`) is written as `?` by the jar and the native binary (seen 2026-11-07), and
-  probably as U+FFFD by Node, so the platforms' JSON differs. Escape it as `\uXXXX` on every
+  (`"\ud83d"`) is written as `?` by the jar and the native binary, and as U+FFFD (`ef bf bd`) by
+  Node (seen 2026-11-08 in the raw output bytes), so the platforms' JSON differs. Escape it as `\uXXXX` on every
   platform, with a case in `scripts/cli-cases`. OpenSpec's own output can't produce one.
 - **Directories as input** (`ears-check docs/`), and **a CI snippet or GitHub Action** for
   checking requirements in other projects.

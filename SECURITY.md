@@ -28,11 +28,16 @@ it rather than waiting for a fix to an older version.
 - **The native binary loading cmark.** For Markdown, the native binary loads an installed cmark
   0.30 or later when it runs, by absolute path from the absolute entries of
   `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH`, Homebrew's, MacPorts', and the system's library
-  directories (and on Linux, the dynamic loader's own search for `libcmark.so`). It never names
-  the current directory itself, but today the system's loader can still search it when
-  `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` has an empty or relative entry; closing that is on the
-  [roadmap](docs/roadmap.md) for 0.2.0. Any other way to make it load a library from somewhere
-  else is in scope.
+  directories (and on Linux, the dynamic loader's own search for `libcmark.so`). It never loads cmark
+  from the current directory: on Linux it skips the bare name while `LD_LIBRARY_PATH` has a
+  relative or empty entry (separated by `:` or `;`), which glibc would read as the current
+  directory; on macOS it loads no cmark while `DYLD_LIBRARY_PATH` has a relative entry, which dyld
+  searches first even for an absolute path, and says so. CI plants a library in the current
+  directory on Linux and macOS to check it. Any other way to make it load cmark from somewhere
+  else is in scope. Out of scope: on Linux, a relative or empty `LD_LIBRARY_PATH` entry also
+  exposes the libraries every dynamically linked program loads when it starts, this binary
+  included, before any of its code runs; and an absolute entry that points into a repository (as
+  direnv, mise, or a nix shell can set) loads what's there, as the user asked.
 - **The release files.** Each GitHub Release carries the files its release run built and
   checked, a `SHA256SUMS` file, and a build-provenance attestation for each file. Check them as
   [docs/release-files.md](docs/release-files.md) says. A way to get a file into a release that

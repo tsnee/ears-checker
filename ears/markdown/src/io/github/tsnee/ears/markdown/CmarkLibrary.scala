@@ -20,10 +20,12 @@ private[markdown] enum CmarkAttempt derives CanEqual:
   * by full release (`libcmark.0.31.2.dylib`, `libcmark.so.0.30.0`), so it's found when the program
   * runs, whatever release is installed, not recorded when it's linked.
   *
-  * Only absolute paths are loaded, apart from Linux's bare `libcmark.so`: given a bare name,
-  * macOS's loader also searches the current directory, so a `libcmark.dylib` in a checked-out
-  * repository would run as the user. glibc's loader never does, and it resolves the bare name from
-  * the system's own library directories.
+  * Only absolute paths are loaded, apart from Linux's bare `libcmark.so`, which glibc resolves from
+  * the system's own library directories; a library in the current directory would run as the user.
+  * The loader-path variable can still lead the system's loader to the current directory: on Linux,
+  * a relative or empty `LD_LIBRARY_PATH` entry when it resolves the bare name, so then the bare
+  * name isn't tried; on macOS, a relative `DYLD_LIBRARY_PATH` entry even for an absolute path, so
+  * then nothing is loaded (`loadable`).
   */
 private[markdown] object CmarkLibrary:
 
@@ -49,7 +51,7 @@ private[markdown] object CmarkLibrary:
           "/usr/lib",
           "/usr/local/lib"
         )
-    val named = loaderPath.toList.flatMap(_.split(':').toList) ++ homebrewPrefix.map(_ + "/lib")
+    val named = loaderPath.toList.flatMap(entries(platform, _)) ++ homebrewPrefix.map(_ + "/lib")
     (named.filter(_.startsWith("/")) ++ usual).distinct
 
   /** What to try loading, in order: on Linux the bare name (which the loader's cache resolves),
@@ -78,6 +80,43 @@ private[markdown] object CmarkLibrary:
       case Platform.MacOs => Nil
       case Platform.Linux => List(bare)
     (first ++ inDirectories).distinct
+
+  /** The entries of the loader-path variable (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`) that would
+    * let the system's loader search the current directory, each once. On Linux, a relative entry or
+    * an empty one, which glibc reads as the current directory; on macOS, a relative entry only,
+    * since dyld ignores empty ones. An empty value, like no value, is safe: both loaders ignore it.
+    */
+  def unsafeEntries(platform: Platform, value: Option[String]): List[String] =
+    value
+      .filter(_.nonEmpty)
+      .toList
+      .flatMap(entries(platform, _))
+      .filter(entry => !entry.startsWith("/") && (platform == Platform.Linux || entry.nonEmpty))
+      .distinct
+
+  /** The variable's entries, empty ones included: glibc separates them with `:` or `;`, dyld with
+    * `:` only (a `;` is part of a path name there).
+    */
+  private def entries(platform: Platform, value: String): List[String] = platform match
+    case Platform.Linux => value.split("[:;]", -1).toList
+    case Platform.MacOs => value.split(":", -1).toList
+
+  /** What to try loading, given the loader-path variable: `candidates`, except that on Linux, while
+    * the variable is unsafe, the bare name is left out (glibc resolves only a bare name through it,
+    * and opens an absolute path as given); and that on macOS, while it's unsafe, nothing is tried
+    * (dyld searches it first even for an absolute path, and the program can't change that).
+    */
+  def loadable(
+      platform: Platform,
+      listing: List[(String, List[String])],
+      loaderPath: Option[String]
+  ): Either[MarkdownUnavailable, List[String]] =
+    val unsafe = unsafeEntries(platform, loaderPath)
+    val all = candidates(platform, listing)
+    platform match
+      case _ if unsafe.isEmpty => Right(all)
+      case Platform.Linux      => Right(all.filter(_.startsWith("/")))
+      case Platform.MacOs      => Left(MarkdownUnavailable(relativeLibraryPath(unsafe), Nil))
 
   /** The first candidate `attempt` can use, trying no more after it; or every failed attempt. */
   def firstLoaded[A](
@@ -131,6 +170,15 @@ private[markdown] object CmarkLibrary:
   def missingFunction(path: String, function: String): String =
     s"Markdown needs the cmark library (0.30 or later), but $path isn't a usable cmark (it has " +
       s"no $function); $install"
+
+  /** The message when `DYLD_LIBRARY_PATH` has relative entries, so cmark isn't loaded. */
+  def relativeLibraryPath(entries: List[String]): String =
+    val named = entries.map(entry => s"'$entry'").mkString(", ")
+    val (noun, what, fix) =
+      if entries.sizeIs == 1 then ("the entry", "an absolute directory", "remove it or make it")
+      else ("the entries", "absolute directories", "remove them or make them")
+    s"cmark wasn't loaded: DYLD_LIBRARY_PATH has $noun $named, not $what, so macOS would look " +
+      s"for cmark in a directory relative to the current one first; $fix absolute"
 
   private def describe(attempt: CmarkAttempt): String = attempt match
     case CmarkAttempt.Unopened(path, error)           => s"$path: $error"

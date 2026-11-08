@@ -187,10 +187,11 @@ $ echo $?
 - The native binary and cmark: it finds cmark when it runs, whatever release you have (0.30 or
   later), in the absolute directories `LD_LIBRARY_PATH` (`DYLD_LIBRARY_PATH` on macOS) names,
   Homebrew's directory (`$HOMEBREW_PREFIX/lib` or the usual ones), MacPorts', or the system's.
-  It never names the current directory itself, but the system's loader can search it when that
-  variable has an empty or relative entry (as in `LD_LIBRARY_PATH=:/opt/lib`); leave such
-  entries out. Without cmark, plain text and OpenSpec JSON still work, and a Markdown file gets a
-  message saying what to install.
+  It never loads cmark from the current directory. On macOS, while `DYLD_LIBRARY_PATH` has a
+  relative entry such as `.`, it reads no Markdown and says to remove the entry, since macOS would
+  look there first. (On Linux, such an entry in `LD_LIBRARY_PATH` exposes every program's startup
+  libraries, so leave relative and empty entries out.) Without cmark, plain text and OpenSpec JSON still work, and a Markdown file
+  gets a message saying what to install.
 
 ### OpenSpec
 

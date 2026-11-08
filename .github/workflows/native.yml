@@ -159,6 +159,90 @@ jobs:
           chmod +x kept/ears-check
           scripts/check-native-cli --binary kept/ears-check --jar kept/ears-check.jar
 
+      # A cmark planted in the current directory must never run, whatever the library path
+      # variable holds. On Linux the binary skips the bare name libcmark.so while LD_LIBRARY_PATH
+      # has a relative or empty entry, and loads cmark by absolute path; on macOS it loads no cmark
+      # while DYLD_LIBRARY_PATH has a relative entry (dyld would look there first even for an
+      # absolute path). The planted library only prints PLANTED when it loads.
+      - name: Check a library planted in the current directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail() { echo "$1" >&2; exit 1; }
+          binary=$PWD/kept/ears-check
+          dir=$(mktemp -d)
+          cd "$dir"
+          printf '%s\n' '#include <unistd.h>' \
+            '__attribute__((constructor)) static void planted(void) { write(2, "PLANTED\n", 8); }' \
+            >planted.c
+          printf '%s\n' '- The scheduler shall list events.' >notes.md
+          printf '%s\n' 'The scheduler lists events.' >notes.txt
+          # The planted library under every name the binary would look up, and a control that it does
+          # run when the loader is told to load it, so a case that prints nothing proves something.
+          if [ "$RUNNER_OS" = macOS ]; then
+            cc -dynamiclib -o libcmark.dylib planted.c
+            versioned=()
+            while IFS= read -r found; do versioned+=("$found"); done \
+              < <(find /opt/homebrew/lib -maxdepth 1 -name 'libcmark.*.dylib')
+            [ "${#versioned[@]}" -gt 0 ] || fail "no versioned libcmark.*.dylib in /opt/homebrew/lib"
+            for installed in "${versioned[@]}"; do
+              cp libcmark.dylib "$(basename "$installed")"
+            done
+            control=(env "DYLD_INSERT_LIBRARIES=$PWD/libcmark.dylib")
+            variable=DYLD_LIBRARY_PATH
+            unsafe=(. lib /opt/homebrew/lib:.)
+            safe=("" ":" ":/opt/homebrew/lib" "/opt/homebrew/lib;.")
+          else
+            cc -shared -fPIC -o libcmark.so planted.c
+            control=(env "LD_PRELOAD=$PWD/libcmark.so")
+            variable=LD_LIBRARY_PATH
+            unsafe=(":" "." ":/opt/lib" "/opt/lib:" "/opt/lib::/srv/lib" "lib" "/opt/lib;" "/opt/lib;.")
+            safe=("")
+            # The binary must carry no search path of its own, which the bare name would follow too.
+            if readelf -d "$binary" | grep -E '\((RPATH|RUNPATH)\)'; then
+              fail "the binary has an RPATH or RUNPATH"
+            fi
+          fi
+          "${control[@]}" "$binary" notes.txt >out 2>&1 || true
+          grep -q PLANTED out || { cat out; fail "the planted library doesn't run even when preloaded"; }
+          mkdir lib
+          cp libcmark.* lib/
+          ls -l . lib
+          run() {
+            status=0
+            env "$variable=$1" "$binary" --verbose "$2" >out 2>&1 || status=$?
+            parser=$(grep -oE 'parser="[^"]*"|parser=none' out | head -n 1 || true)
+            echo "$variable=\"$1\" on $2: status $status, ${parser:-no parser logged}"
+            if grep -q PLANTED out; then
+              cat out
+              fail "$variable=\"$1\": the library planted in the current directory ran"
+            fi
+          }
+          for value in "${unsafe[@]}"; do
+            run "$value" notes.md
+            if [ "$RUNNER_OS" = macOS ]; then
+              if [ "$status" != 2 ] || ! grep -q 'DYLD_LIBRARY_PATH has the entr' out; then
+                cat out
+                fail "$variable=\"$value\": Markdown wasn't declined with the message"
+              fi
+            elif [ "$status" != 0 ] || ! grep -qE 'parser="cmark [0-9.]+ at /' out; then
+              cat out
+              fail "$variable=\"$value\": cmark wasn't loaded by absolute path"
+            fi
+          done
+          for value in "${safe[@]}"; do
+            run "$value" notes.md
+            if [ "$status" != 0 ] || ! grep -q 'parser="cmark ' out; then
+              cat out
+              fail "$variable=\"$value\": cmark wasn't loaded"
+            fi
+          done
+          run "${unsafe[0]}" notes.txt
+          if [ "$status" != 1 ] || ! grep -q missing-modal out; then
+            cat out
+            fail "$variable=\"${unsafe[0]}\": plain text wasn't checked as usual"
+          fi
+
       # Last, since it removes cmark from the runner. With only the runtime package, which has
       # just a versioned libcmark.so.*, the native binary still reads Markdown; with no cmark, it
       # says what to install, and plain text still works. It also shows what the binary does

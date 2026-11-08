@@ -12,7 +12,9 @@ release renames Unreleased to its version and date.
 - The `ears-check` command line as a native binary for Linux (x64 and Arm) and macOS (Arm). It
   reads Markdown through an installed cmark 0.30 or later, loaded when it runs (`brew install
   cmark`, or `apt install cmark` on Debian and Ubuntu); plain text and OpenSpec JSON need
-  nothing installed.
+  nothing installed. It never loads cmark from the current directory, even when
+  `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` has a relative entry; on macOS it then reads no
+  Markdown and says which entry to remove.
 - The classifier as the npm package `@tsnee/ears-checker`, with TypeScript declarations and a
   source map leading back to the Scala sources.
 - Release notes from this changelog, and a GitHub Release for each version with the jar, both

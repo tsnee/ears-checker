@@ -179,3 +179,18 @@
 - 2026-11-07: speed-up-node-markdown's CI run 42443487482 passed on 6d6c4cc, 1,696 job-seconds:
   check 470 s, check-jdk17 98 s; native builds linux-x64 341 s, linux-arm64 288 s, macos-arm64
   348 s; rechecks 59 s, 49 s, 43 s.
+- 2026-11-08: load-cmark-safely applied locally. Probes: on macOS, `DYLD_LIBRARY_PATH=.` made the
+  native binary run a library planted in the current directory, though it asked for an absolute
+  path (empty entries and an empty value are ignored); on Linux (Ubuntu 22.04 and 24.04 in colima,
+  run by the owner), the bare name followed empty and relative `LD_LIBRARY_PATH` entries, absolute
+  paths never did. The binary now skips the bare name on Linux and declines cmark on macOS for
+  such entries; CI plants a library to check. Every local check passed. Local coverage once read
+  ears.cli 100% from 12 statements: Mill's incremental compile of the instrumented module left
+  scoverage's statement list with only the recompiled file; after cleaning the instrumented
+  builds (statement/branch %): ears 95.91/92.04, ears.cli 97.27/100, ears.npm 100/100,
+  ears.linkCheck 97.28/100, ears.markdown 100/100, ears.releaseNotes 96.60/100.
+- 2026-11-08: load-cmark-safely's reviews: glibc also splits `LD_LIBRARY_PATH` at `;` (confirmed
+  by the owner's second colima probe: `/opt/lib;`, `/opt/lib;.`, `;/opt/lib`, and `;` loaded a
+  planted library by bare name), now handled on Linux; the CI step gains a preload control, a
+  check for versioned cmark files, a `readelf -d` check for RPATH/RUNPATH, and the semicolon
+  cases; the docs claim only that cmark is never loaded from the current directory.

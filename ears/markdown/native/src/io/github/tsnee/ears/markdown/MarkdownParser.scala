@@ -21,10 +21,10 @@ private final case class Cmark(
     free: CFuncPtr1[Ptr[Byte], Unit]
 )
 
-/** Finds and loads an installed cmark: lists the directories `CmarkLibrary` names, tries its
-  * candidates in order until one opens with every function and a supported release, and closes each
-  * one it can't use. Nothing is kept between calls; once a library is open, `dlopen` returns the
-  * same handle.
+/** Finds and loads an installed cmark: lists the directories `CmarkLibrary` names, tries the
+  * candidates it allows for the loader-path variable (`loadable`) in order until one opens with
+  * every function and a supported release, and closes each one it can't use. Nothing is kept
+  * between calls; once a library is open, `dlopen` returns the same handle.
   */
 private object CmarkLoader:
 
@@ -42,9 +42,10 @@ private object CmarkLoader:
         directory -> Option(File(directory).list()).map(_.toList.flatMap(Option(_))).getOrElse(Nil)
       )
     CmarkLibrary
-      .firstLoaded(CmarkLibrary.candidates(platform, listing), attempt)
-      .left
-      .map(CmarkLibrary.unavailable)
+      .loadable(platform, listing, loaderPath)
+      .flatMap(candidates =>
+        CmarkLibrary.firstLoaded(candidates, attempt).left.map(CmarkLibrary.unavailable)
+      )
 
   private def attempt(path: String): Either[CmarkAttempt, (Cmark, String)] =
     val handle = Zone(present(dlfcn.dlopen(toCString(path), dlfcn.RTLD_NOW)))
