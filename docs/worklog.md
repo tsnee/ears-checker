@@ -176,3 +176,6 @@
   `\\` in text as an escape; two conformance fixtures added. `time-cli` validates JSON output,
   dates runs locally, and marks dirty trees. One full `./mill __.test` run exited 1 with no failed
   test (its log was deleted unread); five later runs passed.
+- 2026-11-07: speed-up-node-markdown's CI run 42443487482 passed on 6d6c4cc, 1,696 job-seconds:
+  check 470 s, check-jdk17 98 s; native builds linux-x64 341 s, linux-arm64 288 s, macos-arm64
+  348 s; rechecks 59 s, 49 s, 43 s.

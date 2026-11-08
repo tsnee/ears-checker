@@ -25,7 +25,7 @@ All work is on branch `batch-release-0.2.0`, the fifth change in the "release 0.
 - [x] 4.2 Update CLAUDE.md (Node's parser, the facade notes, `scripts/time-cli`), CONTRIBUTING.md, the README if a claim changed, the conformance suite's and `HelpersSuite`'s comments, CHANGELOG (Changed), and take the item off the roadmap. Verify with `mq`
 - [x] 4.3 Run the full gate: `./mill __.checkFormat`, `./mill __.test`, every module's `validateCoverageMinimums`, and the five check scripts. Report coverage and add a dated line to `docs/worklog.md`
 - [x] 4.4 Run `/code-review` in a subagent on this change, and let the owner choose which findings to fix
-- [ ] 4.5 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes
+- [x] 4.5 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes
 
 ## Workflow follow-up
 

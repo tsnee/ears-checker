@@ -21,11 +21,11 @@ The CLI npm package SHALL provide one command, named `ears-check`.
 - **THEN** the usage text for `ears-check` is printed and the exit status is 0
 
 ### Requirement: Markdown parser dependency
-The CLI npm package SHALL depend on exactly the version of `mdast-util-from-markdown` that the Markdown conformance suite runs on Node.
+The CLI npm package SHALL depend on exactly the version of `commonmark` that the Markdown conformance suite runs on Node.
 
 #### Scenario: Dependency in the package metadata
-- **WHEN** a developer builds the CLI npm package while the conformance suite's lockfile pins `mdast-util-from-markdown` 2.1.0
-- **THEN** its `package.json` lists `mdast-util-from-markdown` at exactly `2.1.0` under `dependencies`, and nothing else
+- **WHEN** a developer builds the CLI npm package while the conformance suite's lockfile pins `commonmark` 0.31.2
+- **THEN** its `package.json` lists `commonmark` at exactly `0.31.2` under `dependencies`, and nothing else
 
 ### Requirement: CLI package version
 The CLI npm package SHALL carry the same version as the library npm package.
