@@ -86,8 +86,15 @@ These are for working on ears-checker, not part of any package.
 - `scripts/check-openspec` validates every OpenSpec file strictly and checks every requirement
   with this repository's own checker.
 - `scripts/time-cli` times the jar, the Node package, and the native binary on Markdown and plain
-  text made from this repository's specs, at several sizes, and prints a table; add a run to
-  [docs/performance.md](docs/performance.md) when a change could affect speed.
+  text made from this repository's specs, at several sizes, records each timing in
+  `docs/measurements/time-cli.jsonl`, and prints a table rendered from the records; add the run
+  to [docs/performance.md](docs/performance.md) when a change could affect speed.
+- `scripts/coverage-records`, after the tests, records each measured module's coverage from
+  scoverage's XML report in `docs/measurements/coverage.jsonl`.
+- `scripts/ci-run-record <run id>` records a finished GitHub Actions run's jobs and minutes in
+  `docs/measurements/ci-runs.jsonl`.
+- Measurements are kept as these JSON Lines records, with the `jq` query that reports each figure
+  beside them in `docs/measurements/`, so any figure can be regenerated.
 
 Before calling a change done, run `./mill __.checkFormat`, then `./mill clean __.scoverage`
 (measuring coverage from a clean slate, as CI does), `./mill -j 1 '__:ScalaNativeModule.compile'`,

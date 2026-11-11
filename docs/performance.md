@@ -5,6 +5,11 @@ repository's specs (Markdown: every `openspec/specs/*/spec.md` concatenated; pla
 requirements, one per line), repeated `xN` times. One run per cell, so small differences are
 noise. Each run says the commit, the machine, and the runtimes.
 
+Every table here is rendered from records in `docs/measurements/` by the query beside them (the
+prose around a table, such as the CI step timings below, is not): `time-cli.jsonl` and `time-cli.jq` for the `time-cli` runs (the
+three below, from before `time-cli` wrote records, were backfilled from these tables and render
+back identically), `native-compile-rounds.jsonl` and `.jq` for the compile rounds.
+
 ## Compiling Scala Native one at a time (compile-native-serially)
 
 Not a `scripts/time-cli` run: the cost of compiling the six Scala Native modules with `-j 1`.

@@ -298,3 +298,18 @@
   passed (45 job-minutes), covering both security fixes, the release-doc corrections, and the
   update-openspec archive; check and check-jdk17 installed the Node CLI's 5 pinned packages (npm
   11 and 10). Verify found escape-text-output and pin-npm-cli-check complete; both archived.
+- 2026-11-11: record-measurements (the owner's new rule on structured records): `docs/measurements/`
+  holds JSON Lines written by the tools, with a `jq` query beside each. `scripts/ci-run-record`
+  backfilled this branch's 24 runs (195 job records, 816 minutes; a rerun's untouched jobs are
+  "carried", found when attempt 2 of run 43031719238 summed to 51 minutes instead of 12).
+  `scripts/coverage-records` matched every module's consoleReport after a clean-slate run.
+  `time-cli` writes a record per cell and prints its table from them; its three earlier runs were
+  backfilled through mq and render back identically.
+  After the code review's eleven fixes (all approved): records are appended a whole attempt or
+  six modules at a time (time-cli appends each cell as measured), carried jobs are those that
+  started before their attempt (`run_started_at`; the same flags on all 195 earlier records),
+  coverage records the time the tests wrote their measurements rather than the report's, the
+  queries format numbers themselves and fail on an unknown run, relative `--records` paths stay
+  where they were given, and messages go to standard error. The coverage and time-cli records
+  marked eedddea-dirty measured the code committed with this change. The re-backfill picked up
+  run 43070108595 (c0460a4, 39 minutes): 25 runs, 855 minutes on this branch so far.

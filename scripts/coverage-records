@@ -1,0 +1,80 @@
+#!/usr/bin/env sh
+# Records the coverage of every measured module: one JSON line per module, with the date, the
+# commit when recording (marked -dirty when uncommitted), the module, when the tests measured it,
+# statement count, statements invoked, statement rate, and branch rate, read from scoverage's XML
+# report, appended to docs/measurements/coverage.jsonl. All six are written together or not at
+# all. Run it right after the tests, from a clean slate as CLAUDE.md says (`./mill clean
+# __.scoverage`, then `./mill __.test`): the report covers the last test run, and the commit is
+# the working tree's when recording. docs/measurements/coverage.jq reports from the records.
+# Needs jq and mikefarah's yq 4, which names XML attributes +@name (checked with v4.54.3).
+#
+# --records <file> appends to another file instead (a relative path is relative to where the
+# script is run).
+set -e
+
+usage() {
+  echo "Usage: coverage-records [--records <file>]" >&2
+  exit 2
+}
+fail() {
+  echo "coverage-records: $1" >&2
+  exit 1
+}
+records=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --records)
+      [ $# -ge 2 ] || usage
+      records=$2
+      shift 2
+      ;;
+    *) usage ;;
+  esac
+done
+case $records in
+  "" | /*) ;;
+  *) records=$(pwd)/$records ;;
+esac
+
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+[ -n "$records" ] || records=$(pwd)/docs/measurements/coverage.jsonl
+mkdir -p "$(dirname "$records")"
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+date=$(date +%Y-%m-%d)
+commit=$(git describe --always --dirty)
+# The measured modules, as in build.mill's Covered modules and CI's coverage steps.
+modules="ears ears.cli ears.npm ears.linkCheck ears.markdown ears.releaseNotes"
+for module in $modules; do
+  ./mill --ticker false "$module.scoverage.xmlReport" >/dev/null ||
+    fail "./mill $module.scoverage.xmlReport failed (Mill's output is above)"
+  report="out/$(printf '%s' "$module" | tr . /)/scoverage/xmlReport.dest/scoverage.xml"
+  [ -f "$report" ] || fail "no report at $report for $module"
+  # When the tests measured it: the newest measurement file the instrumented tests wrote (the
+  # report's own timestamp is only when it was generated).
+  data="$(dirname "$(dirname "$report")")/data.dest"
+  # ls -t for the newest: scoverage names these files with a UUID and a number, nothing odd.
+  # shellcheck disable=SC2012
+  newest=$(ls -t "$data"/scoverage.measurements.* 2>/dev/null | head -n 1)
+  [ -n "$newest" ] || fail "no measurements in $data for $module: run the tests first"
+  measured=$(date -u -r "$newest" +%Y-%m-%dT%H:%M:%SZ)
+  yq -p xml -o json '.scoverage' "$report" | jq -e -c --arg date "$date" \
+    --arg commit "$commit" --arg module "$module" --arg measured "$measured" '
+    if has("+@statement-count") | not then error("no +@statement-count attribute") else . end
+    | {
+      date: $date, commit: $commit, module: $module, measured: $measured,
+      statements: (."+@statement-count" | tonumber),
+      invoked: (."+@statements-invoked" | tonumber),
+      statement_rate: (."+@statement-rate" | tonumber),
+      branch_rate: (."+@branch-rate" | tonumber)
+    }' >>"$tmp/coverage.jsonl" || fail "couldn't read $report (jq's or yq's error is above)"
+done
+count=$(grep -c . "$tmp/coverage.jsonl" || true)
+expected=$(printf '%s' "$modules" | wc -w | tr -d ' ')
+[ "$count" = "$expected" ] || fail "$expected modules measured, but $count records were made"
+cat "$tmp/coverage.jsonl" >>"$records"
+echo "coverage-records: recorded $count modules at $commit in $records" >&2

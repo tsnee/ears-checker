@@ -1,0 +1,95 @@
+#!/usr/bin/env sh
+# Records a finished GitHub Actions run of this repository: one JSON line per job of each of the
+# run's attempts (a rerun is a later attempt), with the run, attempt, commit, branch, event,
+# workflow, job, conclusion, start, end, minutes (the job's wall-clock time rounded up to a whole
+# minute), and whether the job was carried over from an earlier attempt rather than run in this
+# one (it started before the attempt did), appended to docs/measurements/ci-runs.jsonl. An attempt
+# is written whole or not at all, and one already in the file isn't recorded again.
+# docs/measurements/ci-runs.jq reports from the records.
+# Needs gh (signed in) and jq.
+#
+# --records <file> appends to another file instead (a relative path is relative to where the
+# script is run).
+set -e
+
+usage() {
+  echo "Usage: ci-run-record [--records <file>] <run id>" >&2
+  exit 2
+}
+fail() {
+  echo "ci-run-record: $1" >&2
+  exit 1
+}
+records=
+run=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --records)
+      [ $# -ge 2 ] || usage
+      records=$2
+      shift 2
+      ;;
+    -*) usage ;;
+    *)
+      [ -z "$run" ] || usage
+      run=$1
+      shift
+      ;;
+  esac
+done
+case $run in '' | *[!0-9]*) usage ;; esac
+case $records in
+  "" | /*) ;;
+  *) records=$(pwd)/$records ;;
+esac
+
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+[ -n "$records" ] || records=$(pwd)/docs/measurements/ci-runs.jsonl
+mkdir -p "$(dirname "$records")"
+touch "$records"
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+command="gh run view $run --json attempt,status,headSha,headBranch,event,workflowName"
+summary=$($command) || fail "$command failed (gh's error is above)"
+status=$(printf '%s' "$summary" | jq -r .status)
+[ "$status" = completed ] || fail "run $run is $status, not finished; record it when it is"
+attempts=$(printf '%s' "$summary" | jq -r .attempt)
+
+attempt=1
+while [ "$attempt" -le "$attempts" ]; do
+  if ! known=$(jq -s --argjson run "$run" --argjson attempt "$attempt" \
+    'any(.run == $run and .attempt == $attempt)' "$records"); then
+    fail "$records isn't valid JSON Lines (jq's error is above)"
+  fi
+  if [ "$known" = true ]; then
+    echo "ci-run-record: run $run attempt $attempt is already recorded" >&2
+  else
+    command="gh api repos/{owner}/{repo}/actions/runs/$run/attempts/$attempt"
+    began=$($command --jq .run_started_at) || fail "$command failed (gh's error is above)"
+    command="gh run view $run --attempt $attempt --json jobs"
+    jobs=$($command) || fail "$command failed (gh's error is above)"
+    if ! printf '%s' "$jobs" | jq -c --argjson run "$run" --argjson attempt "$attempt" \
+      --argjson summary "$summary" --arg began "$began" '
+      .jobs[] | {
+        run: $run, attempt: $attempt, commit: $summary.headSha, branch: $summary.headBranch,
+        event: $summary.event, workflow: $summary.workflowName, job: .name,
+        conclusion: .conclusion, started: .startedAt, completed: .completedAt,
+        carried: (.startedAt < $began),
+        minutes: ([((.completedAt | fromdateiso8601) - (.startedAt | fromdateiso8601)) / 60
+                   | ceil, 0] | max)
+      }' >"$tmp/attempt.jsonl"; then
+      fail "couldn't make records of run $run attempt $attempt from: $jobs"
+    fi
+    expected=$(printf '%s' "$jobs" | jq '.jobs | length')
+    written=$(grep -c . "$tmp/attempt.jsonl" || true)
+    [ "$written" = "$expected" ] ||
+      fail "run $run attempt $attempt has $expected jobs, but $written records were made"
+    cat "$tmp/attempt.jsonl" >>"$records"
+    echo "ci-run-record: recorded run $run attempt $attempt, $written jobs, in $records" >&2
+  fi
+  attempt=$((attempt + 1))
+done

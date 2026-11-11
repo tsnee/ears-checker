@@ -278,7 +278,7 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
   `check-npm-cli`, `check-native-cli`, `check-coursier-app` (all three sourcing `cli-cases`),
   `check-scalajs-link`, and `time-cli`, which times the three builds on generated inputs for
   `docs/performance.md`; `check-npm-cli` and `time-cli` install the Node CLI through
-  `npm-cli-project`
+  `npm-cli-project`; `coverage-records` and `ci-run-record` record coverage and CI runs
 - `coursier/apps.json` — the Coursier channel users install `ears-check` from
 - `.github/` — the CI workflow and the native one it calls (`native.yml`), the release workflow,
   Dependabot's weekly updates to their action pins, and `tools/`, the lockfile CI installs its
@@ -288,6 +288,12 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
 - `CHANGELOG.md` — what changed in each release; `docs/release-files.md` — the files
   description every release's notes end with
 - `docs/performance.md` — every `scripts/time-cli` run, newest first, with its commit and machine
+- `docs/measurements/` — every measured run as JSON Lines, written by the tool that measured it,
+  with the `jq` query behind each reported figure beside it: `time-cli.jsonl` (timings, written
+  by `time-cli`), `coverage.jsonl` (`scripts/coverage-records`, run after a clean-slate gate),
+  `ci-runs.jsonl` (`scripts/ci-run-record <run id>`, run on each finished CI run; `ci-runs.jq`
+  gives its minutes), `native-compile-rounds.jsonl`. Figures reported in the work log or a reply
+  come from these queries, not from copied console output
 - `docs/json-output.md` — the reference for `--output json`; a change to the document updates it,
   and removing or renaming a field, changing its type or meaning, or adding a location type
   bumps the document's `version`

@@ -3,26 +3,32 @@
 # installed into an empty project, as a user gets it), and the native binary. The inputs are made
 # from this repository's specs: Markdown, every openspec/specs/*/spec.md concatenated, and plain
 # text, their requirements one per line, each repeated --copies times. Each run writes JSON
-# (--output json), which must be a valid document, so a crash is never timed as a run. Prints a
-# Markdown table with the date, commit (marked -dirty when uncommitted), machine, and runtimes, for
-# docs/performance.md. One wall-clock run per cell, so small differences are noise. A development tool, not part of any package.
+# (--output json), which must be a valid document, so a crash is never timed as a run. Each timed
+# cell is a JSON record (the run, date, commit marked -dirty when uncommitted, machine, runtimes,
+# build, input, size, and seconds), appended to docs/measurements/time-cli.jsonl; the Markdown
+# table it prints for docs/performance.md is rendered from those records by
+# docs/measurements/time-cli.jq. One wall-clock run per cell, so small differences are noise. A
+# development tool, not part of any package.
 # Needs java, node, npm, jq, git, openspec, and cmark (for the native binary's Markdown).
 #
 # --copies <n,n,...> (default 8,16,32,76) sets the input sizes; --builds <jvm,node,native>
-# (default all three) which builds to time.
+# (default all three) which builds to time; --records <file> appends the records to another file,
+# or to none when empty.
 set -e
 
 usage() {
-  echo "Usage: time-cli [--copies <n,n,...>] [--builds <jvm,node,native>]" >&2
+  echo "Usage: time-cli [--copies <n,n,...>] [--builds <jvm,node,native>] [--records <file>]" >&2
   exit 2
 }
 copies=8,16,32,76
 builds=jvm,node,native
+records=docs/measurements/time-cli.jsonl
 while [ $# -gt 0 ]; do
   [ $# -ge 2 ] || usage
   case $1 in
     --copies) copies=$2 ;;
     --builds) builds=$2 ;;
+    --records) records=$2 ;;
     *) usage ;;
   esac
   shift 2
@@ -32,6 +38,11 @@ for build in $(printf '%s' "$builds" | tr ',' ' '); do
   case $build in jvm | node | native) ;; *) usage ;; esac
 done
 wanted() { case ",$builds," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
+# A relative records path is relative to where the script is run.
+case $records in
+  "" | /*) ;;
+  *) records=$(pwd)/$records ;;
+esac
 
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
@@ -108,19 +119,13 @@ seconds() {
 }
 
 java_version=$(java -version 2>&1 | head -n 1)
-echo "$(date +%Y-%m-%d) at $(git describe --always --dirty), $(uname -sm), Node $(node --version),"
+run=$(date -u +%Y-%m-%dT%H:%M:%SZ) date=$(date +%Y-%m-%d) commit=$(git describe --always --dirty)
+machine=$(uname -sm) node_version=$(node --version)
+echo "$date at $commit, $machine, Node $node_version,"
 echo "$java_version; one run per cell, --output json, wall-clock seconds."
 echo
-header="| Input | Bytes |"
-rule="|---|---|"
-for build in jvm node native; do
-  if wanted "$build"; then
-    header="$header $build |"
-    rule="$rule---|"
-  fi
-done
-echo "$header"
-echo "$rule"
+: >"$tmp/records.jsonl"
+if [ -n "$records" ]; then mkdir -p "$(dirname "$records")"; fi
 for kind in md txt; do
   for n in $(printf '%s' "$copies" | tr ',' ' '); do
     input="$tmp/input-$n.$kind"
@@ -130,10 +135,27 @@ for kind in md txt; do
       cat "$tmp/unit.$kind" >>"$input"
       i=$((i + 1))
     done
-    row="| $kind x$n | $(wc -c <"$input" | tr -d ' ') |"
+    bytes=$(wc -c <"$input" | tr -d ' ')
     for build in jvm node native; do
-      if wanted "$build"; then row="$row $(seconds "$build" "$input") |"; fi
+      if wanted "$build"; then
+        took=$(seconds "$build" "$input")
+        jq -n -c --arg run "$run" --arg date "$date" --arg commit "$commit" \
+          --arg machine "$machine" --arg node "$node_version" --arg java "$java_version" \
+          --arg build "$build" --arg input "$kind" --argjson copies "$n" \
+          --argjson bytes "$bytes" --argjson seconds "$took" \
+          '{run: $run, date: $date, commit: $commit, machine: $machine, node: $node,
+            java: $java, output: "json", build: $build, input: $input, copies: $copies,
+            bytes: $bytes, seconds: $seconds}' >"$tmp/record.json"
+        # Kept as soon as it's measured, so a run that fails later loses nothing.
+        cat "$tmp/record.json" >>"$tmp/records.jsonl"
+        if [ -n "$records" ]; then cat "$tmp/record.json" >>"$records"; fi
+      fi
     done
-    echo "$row"
   done
 done
+
+# The table, from the run's records, so the two can't disagree.
+jq -s -r --arg run "$run" -f docs/measurements/time-cli.jq "$tmp/records.jsonl"
+if [ -n "$records" ]; then
+  echo "time-cli: $(grep -c . "$tmp/records.jsonl") records appended to $records" >&2
+fi
