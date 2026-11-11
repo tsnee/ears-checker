@@ -211,3 +211,16 @@
   gate, clean step included, passed: ears 684 statements, 95.91% / 92.04%; ears.cli 512, 97.27% /
   100%; ears.npm 56, 100% / 100%; ears.linkCheck 294, 97.28% / 100%; ears.markdown 558, 100% /
   100%; ears.releaseNotes 235, 96.60% / 100%; all five scripts passed.
+- 2026-11-08: compile-native-serially: CI run 42516759834 failed compiling
+  `ears.markdown.native.test` ("tail of empty list" in Scala Native 0.5.12's
+  `scalanative-prepareInterop-postinline`), traced to the plugin's unlocked global definitions
+  cache. Reproduced at f99ef39 on an Apple M4 Max with a warm Mill 1.3.1 daemon, each round
+  cleaning the six Scala Native compiles and compiling them (`__:ScalaNativeModule.compile`): in
+  parallel, 13 of 60 rounds failed (12 with "tail of empty list", 1 with "object CFuncPtr1 does
+  not have a member method fromScalaFunction", both in that phase); with `-j 1`, 0 of 60.
+  The documented gate, the one-at-a-time native compile included, passed: coverage unchanged
+  (ears 95.91% / 92.04%, ears.cli 97.27% / 100%, ears.npm 100% / 100%, ears.linkCheck 97.28% /
+  100%, ears.markdown 100% / 100%, ears.releaseNotes 96.60% / 100%), and all five scripts passed.
+- 2026-11-11: compile-native-serially: scala-native#4950 already reported the same crash (Scala
+  3.8, a maintainer suspecting the classpath); the owner commented there with the race, the
+  reproduction, and the fix instead of opening a new issue. The docs and the CI comment link it.

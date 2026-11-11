@@ -79,9 +79,17 @@ These are for working on ears-checker, not part of any package.
   text made from this repository's specs, at several sizes, and prints a table; add a run to
   [docs/performance.md](docs/performance.md) when a change could affect speed.
 
-Before calling a change done, run `./mill __.checkFormat`, then `./mill clean __.scoverage` and
-`./mill __.test` (measuring coverage from a clean slate, as CI does), every module's
-`validateCoverageMinimums`, and all five scripts.
+Before calling a change done, run `./mill __.checkFormat`, then `./mill clean __.scoverage`
+(measuring coverage from a clean slate, as CI does), `./mill -j 1 '__:ScalaNativeModule.compile'`,
+and `./mill __.test`, every module's `validateCoverageMinimums`, and all five scripts.
+
+The Scala Native modules compile one at a time because Scala Native 0.5.12's compiler plugin
+isn't safe to run twice at once in one JVM
+([scala-native#4950](https://github.com/scala-native/scala-native/issues/4950)). If
+`./mill __.compile` or `./mill __.test` fails with an exception in the plugin's
+`scalanative-prepareInterop-postinline` phase, such as "tail of empty list" or "object CFuncPtr1
+does not have a member method fromScalaFunction", that's the cause: run
+`./mill -j 1 '__:ScalaNativeModule.compile'`, then the command again.
 
 ## Continuous integration
 

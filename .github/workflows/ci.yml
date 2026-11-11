@@ -72,7 +72,14 @@ jobs:
         run: ./mill __.checkFormat
 
       - name: Compile
-        run: ./mill __.compile
+        run: ./mill '__:^ScalaNativeModule.compile'
+
+      # Scala Native 0.5.12's compiler plugin caches its definitions globally with no locking, so
+      # two native compiles in Mill's one JVM can corrupt each other's compiler state ("tail of
+      # empty list", run 42516759834). Compile them one at a time until a release fixes it:
+      # https://github.com/scala-native/scala-native/issues/4950
+      - name: Compile Scala Native, one module at a time
+        run: ./mill -j 1 '__:ScalaNativeModule.compile'
 
       - name: Test
         run: ./mill __.test

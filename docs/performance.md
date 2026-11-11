@@ -4,6 +4,22 @@ Runs of `scripts/time-cli`, newest first: `ears-check`'s wall-clock time on inpu
 repository's specs (Markdown: every `openspec/specs/*/spec.md` concatenated; plain text: their
 requirements, one per line), repeated `xN` times. One run per cell, so small differences are
 noise. Each run says the commit, the machine, and the runtimes.
+
+## Compiling Scala Native one at a time (compile-native-serially)
+
+Not a `scripts/time-cli` run: the cost of compiling the six Scala Native modules with `-j 1`.
+Each round ran `./mill clean '__:ScalaNativeModule.compile'`, then timed
+`./mill '__:ScalaNativeModule.compile'` (all six compiled), in whole wall-clock seconds, with a
+warm daemon. Rounds that failed (the plugin's race) are left out of the parallel figures.
+
+2026-11-08 at f99ef39, Apple M4 Max (16 cores, 64 GB), macOS 27.2, Mill 1.3.1, Scala 3.10.0,
+Scala Native 0.5.12.
+
+| Jobs | Rounds timed | Min | Median | Max | Mean |
+|---|---|---|---|---|---|
+| default (parallel) | 47 | 1 | 2 | 7 | 2.13 |
+| `-j 1` | 60 | 3 | 3 | 4 | 3.33 |
+
 ## After speed-up-node-markdown
 
 The classifier fix, and Node reading Markdown with commonmark.js, after the review's fixes. From

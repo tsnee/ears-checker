@@ -11,7 +11,8 @@ theme is done.
 ### Release 0.2.0 (branch `batch-release-0.2.0`, PR #17)
 
 Already in it: the CLI on Scala Native, release notes and GitHub Releases, the JSON output
-reference, the README for users, faster Markdown on Node, and loading cmark safely.
+reference, the README for users, faster Markdown on Node, and loading cmark safely. In progress:
+compiling the Scala Native modules one at a time (compile-native-serially).
 
 1. **The CLI as a Coursier app**: an app description, with a channel file in this repository,
    so `cs install` sets up `ears-check`.
@@ -48,6 +49,11 @@ reference, the README for users, faster Markdown on Node, and loading cmark safe
    dependency on the classifier, so it can be extracted whenever it's proved itself here.
 
 ## Later
+
+- **Compile Scala Native in parallel again.** CI, CLAUDE.md, and CONTRIBUTING.md compile the
+  Scala Native modules one at a time because Scala Native 0.5.12's compiler plugin caches its
+  definitions globally with no locking (scala-native#4950). Once a Scala Native release fixes
+  it, raise Scala Native and drop the extra step and the rule.
 
 - **Skip Markdown tables.** No parser here recognizes GitHub-style tables, so a table is read as
   one paragraph and a table with `shall` in it gives misleading findings (seen on the jar and the

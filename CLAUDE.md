@@ -27,6 +27,14 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
 
 - `./mill __.compile`, `./mill __.test` (JVM and Scala.js), `./mill ears.cli.test`
 - `./mill __.reformat` formats with scalafmt; `./mill __.checkFormat` checks it
+- Compile the Scala Native modules one at a time: `./mill -j 1 '__:ScalaNativeModule.compile'`.
+  Scala Native 0.5.12's compiler plugin caches its definitions globally with no locking, so two
+  native compiles in Mill's one JVM can corrupt each other's compiler state (scala-native#4950).
+  It shows as an exception in the plugin's `scalanative-prepareInterop-postinline` phase, such as
+  "tail of empty list" in `Types.findMember` or "object CFuncPtr1 does not have a member method
+  fromScalaFunction". A failure like that isn't the code: rerun that command. `__.test`,
+  `__.compile`, and Metals' compiles (`compile-full`) compile them in parallel when their
+  sources have changed
 - `./mill ears.cli.assembly` builds the runnable jar. Run it on any JDK from 17 with
   `java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow -jar <jar> …`:
   the flag silences JDK 23+'s `sun.misc.Unsafe` warnings, and older JDKs skip it
@@ -103,14 +111,16 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
   runner doesn't pass `forkEnv`. Metals can't run the library's suites either: they're shared
   with `ears.js.test`.
 
-Run `./mill __.checkFormat`, `./mill clean __.scoverage` then `./mill __.test`, every module's
+Run `./mill __.checkFormat`, `./mill clean __.scoverage`, `./mill -j 1
+'__:ScalaNativeModule.compile'`, then `./mill __.test`, every module's
 `validateCoverageMinimums`, `scripts/check-npm-package`, `scripts/check-npm-cli`, `scripts/check-native-cli`,
 `scripts/check-scalajs-link`, and `scripts/check-openspec` before calling any change done (as
 CONTRIBUTING.md says), and report the coverage.
 Warnings are errors.
 
 CI (`.github/workflows/ci.yml`) runs the same checks on every push to `main` and every pull
-request: `./mill __.checkFormat`, `./mill __.compile`, `./mill __.test`, the changelog's form
+request: `./mill __.checkFormat`, the compile (the Scala Native modules one at a time),
+`./mill __.test`, the changelog's form
 (`ears.releaseNotes.run check CHANGELOG.md`), `scripts/check-npm-package`,
 `scripts/check-npm-cli`, `scripts/check-scalajs-link`, the coverage minimums (with each module's
 percentages on the run's summary page), and `scripts/check-openspec`. A second job,
