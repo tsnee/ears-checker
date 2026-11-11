@@ -1,8 +1,6 @@
 # Tasks
 
-Each implementation task is test-first: write the zio-test cases named in the task (from the
-spec scenarios), see them fail, then write the code until they pass. "Verify" names the command
-that must succeed with no warnings.
+Each implementation task is test-first: write the zio-test cases named in the task (from the spec scenarios), see them fail, then write the code until they pass. "Verify" names the command that must succeed with no warnings.
 
 ## 1. Modules and dependencies
 

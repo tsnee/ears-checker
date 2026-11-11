@@ -1,7 +1,6 @@
 # Tasks
 
-All work is on branch `batch-release-0.2.0`, the seventh change in the "release 0.2.0" theme
-(draft PR #17). The owner pushes from their own shell; Claude reads runs with `gh`.
+All work is on branch `batch-release-0.2.0`, the seventh change in the "release 0.2.0" theme (draft PR #17). The owner pushes from their own shell; Claude reads runs with `gh`.
 
 ## 1. The clean step
 
@@ -15,5 +14,4 @@ All work is on branch `batch-release-0.2.0`, the seventh change in the "release 
 
 ## Workflow follow-up
 
-- After CI passes, archive the change on the same branch (syncing `test-coverage`) for the owner
-  to push.
+- After CI passes, archive the change on the same branch (syncing `test-coverage`) for the owner to push.

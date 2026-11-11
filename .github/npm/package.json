@@ -1,0 +1,8 @@
+{
+  "name": "ears-release-npm",
+  "private": true,
+  "description": "The npm the release workflow's npm job stages packages with, installed from this lockfile with npm ci --ignore-scripts; apart from .github/tools so it never replaces CI's npm; not published.",
+  "dependencies": {
+    "npm": "11.21.1"
+  }
+}

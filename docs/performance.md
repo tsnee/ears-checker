@@ -1,45 +1,30 @@
 # Performance
 
-Runs of `scripts/time-cli`, newest first: `ears-check`'s wall-clock time on inputs made from this
-repository's specs (Markdown: every `openspec/specs/*/spec.md` concatenated; plain text: their
-requirements, one per line), repeated `xN` times. One run per cell, so small differences are
-noise. Each run says the commit, the machine, and the runtimes.
+Runs of `scripts/time-cli`, newest first: `ears-check`'s wall-clock time on inputs made from this repository's specs (Markdown: every `openspec/specs/*/spec.md` concatenated; plain text: their requirements, one per line), repeated `xN` times. One run per cell, so small differences are noise. Each run says the commit, the machine, and the runtimes.
 
-Every table here is rendered from records in `docs/measurements/` by the query beside them (the
-prose around a table, such as the CI step timings below, is not): `time-cli.jsonl` and `time-cli.jq` for the `time-cli` runs (the
-three below, from before `time-cli` wrote records, were backfilled from these tables and render
-back identically), `native-compile-rounds.jsonl` and `.jq` for the compile rounds.
+Every table here is rendered from records in `docs/measurements/` by the query beside them (the prose around a table, such as the CI step timings below, is not): `time-cli.jsonl` and `time-cli.jq` for the `time-cli` runs (the three below, from before `time-cli` wrote records, were backfilled from these tables and render back identically), `native-compile-rounds.jsonl` and `.jq` for the compile rounds. Each table follows a `<!-- prettier-ignore -->` comment, so formatting the Markdown leaves it exactly as its query prints it.
 
 ## Compiling Scala Native one at a time (compile-native-serially)
 
-Not a `scripts/time-cli` run: the cost of compiling the six Scala Native modules with `-j 1`.
-Each round ran `./mill clean '__:ScalaNativeModule.compile'`, then timed
-`./mill '__:ScalaNativeModule.compile'` (all six compiled), in whole wall-clock seconds, with a
-warm daemon. Rounds that failed (the plugin's race) are left out of the parallel figures. Every
-round is a record in `docs/measurements/native-compile-rounds.jsonl` (its failure, if any, named
-from its log), and `docs/measurements/native-compile-rounds.jq` regenerates the table below
-from them.
+Not a `scripts/time-cli` run: the cost of compiling the six Scala Native modules with `-j 1`. Each round ran `./mill clean '__:ScalaNativeModule.compile'`, then timed `./mill '__:ScalaNativeModule.compile'` (all six compiled), in whole wall-clock seconds, with a warm daemon. Rounds that failed (the plugin's race) are left out of the parallel figures. Every round is a record in `docs/measurements/native-compile-rounds.jsonl` (its failure, if any, named from its log), and `docs/measurements/native-compile-rounds.jq` regenerates the table below from them.
 
-2026-11-08 at f99ef39, Apple M4 Max (16 cores, 64 GB), macOS 27.2, Mill 1.3.1, Scala 3.10.0,
-Scala Native 0.5.12.
+2026-11-08 at f99ef39, Apple M4 Max (16 cores, 64 GB), macOS 27.2, Mill 1.3.1, Scala 3.10.0, Scala Native 0.5.12.
 
+<!-- prettier-ignore -->
 | Jobs | Rounds timed | Min | Median | Max | Mean |
 |---|---|---|---|---|---|
 | default (parallel) | 47 | 1 | 2 | 7 | 2.13 |
 | `-j 1` | 60 | 3 | 3 | 4 | 3.33 |
 
-In CI (run 43010858605, 2026-11-11, at 8616a82, `ubuntu-latest`, a cold Mill daemon), the step
-"Compile Scala Native, one module at a time" took 28 s (11:20:29 to 11:20:57), after 57 s for the
-parallel compile of everything else.
+In CI (run 43010858605, 2026-11-11, at 8616a82, `ubuntu-latest`, a cold Mill daemon), the step "Compile Scala Native, one module at a time" took 28 s (11:20:29 to 11:20:57), after 57 s for the parallel compile of everything else.
 
 ## After speed-up-node-markdown
 
-The classifier fix, and Node reading Markdown with commonmark.js, after the review's fixes. From
-this run on, each cell writes JSON and must give a valid document.
+The classifier fix, and Node reading Markdown with commonmark.js, after the review's fixes. From this run on, each cell writes JSON and must give a valid document.
 
-2026-11-07 at 56113a5-dirty, Darwin arm64, Node v25.2.1,
-openjdk version "27.0.1.0.3" 2026-10-24; one run per cell, --output json, wall-clock seconds.
+2026-11-07 at 56113a5-dirty, Darwin arm64, Node v25.2.1, openjdk version "27.0.1.0.3" 2026-10-24; one run per cell, --output json, wall-clock seconds.
 
+<!-- prettier-ignore -->
 | Input | Bytes | jvm | node | native |
 |---|---|---|---|---|
 | md x8 | 734160 | 0.78 | 0.44 | 0.26 |
@@ -55,9 +40,9 @@ openjdk version "27.0.1.0.3" 2026-10-24; one run per cell, --output json, wall-c
 
 The code-span parser built once; Node still on mdast. Uncommitted, on top of the commit shown.
 
-2026-11-07 (local; printed as the UTC date, 2026-11-08) at 56113a5, Darwin arm64, Node v25.2.1,
-openjdk version "27.0.1.0.3" 2026-10-24; one run per cell, wall-clock seconds.
+2026-11-07 (local; printed as the UTC date, 2026-11-08) at 56113a5, Darwin arm64, Node v25.2.1, openjdk version "27.0.1.0.3" 2026-10-24; one run per cell, wall-clock seconds.
 
+<!-- prettier-ignore -->
 | Input | Bytes | jvm | node | native |
 |---|---|---|---|---|
 | md x8 | 734160 | 0.78 | 0.86 | 0.55 |
@@ -69,15 +54,13 @@ openjdk version "27.0.1.0.3" 2026-10-24; one run per cell, wall-clock seconds.
 | txt x32 | 811776 | 0.69 | 0.44 | 0.50 |
 | txt x76 | 1927968 | 0.89 | 0.76 | 1.12 |
 
-
 ## Before speed-up-node-markdown
 
-The classifier rebuilt a 65,536-character set for every inline code span, and Node read Markdown
-with mdast (micromark), whose time grows faster than the document.
+The classifier rebuilt a 65,536-character set for every inline code span, and Node read Markdown with mdast (micromark), whose time grows faster than the document.
 
-2026-11-07 (local; printed as the UTC date, 2026-11-08) at 56113a5, Darwin arm64, Node v25.2.1,
-openjdk version "27.0.1.0.3" 2026-10-24; one run per cell, wall-clock seconds.
+2026-11-07 (local; printed as the UTC date, 2026-11-08) at 56113a5, Darwin arm64, Node v25.2.1, openjdk version "27.0.1.0.3" 2026-10-24; one run per cell, wall-clock seconds.
 
+<!-- prettier-ignore -->
 | Input | Bytes | jvm | node | native |
 |---|---|---|---|---|
 | md x8 | 734160 | 1.09 | 2.78 | 9.39 |

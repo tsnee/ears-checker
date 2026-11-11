@@ -1,9 +1,6 @@
 # Tasks
 
-No change to the build, sources, or tests. JDK 17 is Temurin 17 from
-Coursier: `cs java-home --jvm temurin:17`, put first on the PATH for a
-run. Pushing, merging, and opening pull requests' branches happen in
-the user's shell; Claude opens pull requests and reads runs with `gh`.
+No change to the build, sources, or tests. JDK 17 is Temurin 17 from Coursier: `cs java-home --jvm temurin:17`, put first on the PATH for a run. Pushing, merging, and opening pull requests' branches happen in the user's shell; Claude opens pull requests and reads runs with `gh`.
 
 ## 1. Check script
 

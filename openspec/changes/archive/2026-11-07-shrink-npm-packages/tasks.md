@@ -1,9 +1,6 @@
 # Tasks
 
-All work is on branch `batch-node-cli`, the second change in its batch; draft pull request #16
-carries it, and its CI runs on every push. The owner pushes from their own shell; Claude reads
-runs with `gh`. npm commands take `--cache` under a temporary directory or a task's own
-directory, never `~/.npm`.
+All work is on branch `batch-node-cli`, the second change in its batch; draft pull request #16 carries it, and its CI runs on every push. The owner pushes from their own shell; Claude reads runs with `gh`. npm commands take `--cache` under a temporary directory or a task's own directory, never `~/.npm`.
 
 ## 1. esbuild, installed by the build
 
@@ -29,6 +26,4 @@ directory, never `~/.npm`.
 
 ## Workflow follow-up
 
-- After CI passes, archive the change on the same branch (syncing `npm-package` and
-  `cli-npm-package`) for the owner to push. The batch's pull request is merged at its ship
-  point, not after this change.
+- After CI passes, archive the change on the same branch (syncing `npm-package` and `cli-npm-package`) for the owner to push. The batch's pull request is merged at its ship point, not after this change.

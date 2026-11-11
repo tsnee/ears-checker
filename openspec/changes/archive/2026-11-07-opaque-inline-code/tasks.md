@@ -1,10 +1,6 @@
 # Tasks
 
-All work is on branch `batch-node-cli`, the third change in its batch; draft pull request #16
-carries it, and its CI runs on every push. The owner pushes from their own shell; Claude reads
-runs with `gh`. Compile, test, and format through Metals (BSP) where it can; the library's
-shared suites, Scala.js and Scala Native, the coverage check, and the final run go through
-`./mill`.
+All work is on branch `batch-node-cli`, the third change in its batch; draft pull request #16 carries it, and its CI runs on every push. The owner pushes from their own shell; Claude reads runs with `gh`. Compile, test, and format through Metals (BSP) where it can; the library's shared suites, Scala.js and Scala Native, the coverage check, and the final run go through `./mill`.
 
 ## 1. Inline code in the classifier (test-first)
 
@@ -31,8 +27,5 @@ shared suites, Scala.js and Scala Native, the coverage check, and the final run 
 
 ## Workflow follow-up
 
-- After CI passes, archive the change on the same branch (syncing `ears-classifier`,
-  `markdown-input`, and `ears-cli`) for the owner to push.
-- This makes three changes in the batch, its ship point: mark #16 ready and squash-merge it. A
-  release (0.2.0, for the classifier change) then needs `/security-review` on everything since
-  0.1.1 before the tag, per CLAUDE.md's Releasing steps.
+- After CI passes, archive the change on the same branch (syncing `ears-classifier`, `markdown-input`, and `ears-cli`) for the owner to push.
+- This makes three changes in the batch, its ship point: mark #16 ready and squash-merge it. A release (0.2.0, for the classifier change) then needs `/security-review` on everything since 0.1.1 before the tag, per CLAUDE.md's Releasing steps.

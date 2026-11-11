@@ -1,8 +1,6 @@
 # Tasks
 
-No change to the script's behavior, the hook, sources, or tests.
-Every scenario check runs in a scratch copy of the repository, never
-in `openspec/` itself.
+No change to the script's behavior, the hook, sources, or tests. Every scenario check runs in a scratch copy of the repository, never in `openspec/` itself.
 
 ## 1. Restore and confirm
 

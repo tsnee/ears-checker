@@ -1,9 +1,6 @@
 # Tasks
 
-All work is on branch `batch-release-0.2.0`, the first change in its batch; open a draft pull
-request with the batch's first push, so every later push runs CI. The owner pushes from their
-own shell; Claude opens the pull request and reads runs with `gh`. The roadmap's reorder
-(already on the branch, uncommitted) goes in this change's implementation commit.
+All work is on branch `batch-release-0.2.0`, the first change in its batch; open a draft pull request with the batch's first push, so every later push runs CI. The owner pushes from their own shell; Claude opens the pull request and reads runs with `gh`. The roadmap's reorder (already on the branch, uncommitted) goes in this change's implementation commit.
 
 ## 1. The classifier and the CLI on Scala Native
 
@@ -30,5 +27,4 @@ own shell; Claude opens the pull request and reads runs with `gh`. The roadmap's
 
 ## Workflow follow-up
 
-- After CI passes, archive the change on the same branch (creating `cli-native-binary`, syncing
-  `ears-cli`, `markdown-input`, and `continuous-integration`) for the owner to push.
+- After CI passes, archive the change on the same branch (creating `cli-native-binary`, syncing `ears-cli`, `markdown-input`, and `continuous-integration`) for the owner to push.

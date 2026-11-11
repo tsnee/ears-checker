@@ -1,12 +1,6 @@
 # Tasks
 
-Groups 1–4 happen on branch `publish-to-maven-central` before it
-merges; group 5 needs the release workflow on `main`, so it happens
-after the merge, and the archive goes in a small follow-up pull
-request. Pushing branches and tags happens in the owner's shell;
-Claude opens pull requests, reads runs with `gh`, and never handles
-the secrets. Nothing in groups 1–4 writes a non-SNAPSHOT version to
-`~/.ivy2/local`, which the downstream project reads.
+Groups 1–4 happen on branch `publish-to-maven-central` before it merges; group 5 needs the release workflow on `main`, so it happens after the merge, and the archive goes in a small follow-up pull request. Pushing branches and tags happens in the owner's shell; Claude opens pull requests, reads runs with `gh`, and never handles the secrets. Nothing in groups 1–4 writes a non-SNAPSHOT version to `~/.ivy2/local`, which the downstream project reads.
 
 ## 1. Version from the tag
 

@@ -1,8 +1,6 @@
 # Tasks
 
-All work is on branch `add-coverage-measurement`. The owner pushes it
-from their own shell; Claude opens the pull request and reads runs
-with `gh`.
+All work is on branch `add-coverage-measurement`. The owner pushes it from their own shell; Claude opens the pull request and reads runs with `gh`.
 
 ## 1. Coverage in the build
 

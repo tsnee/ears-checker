@@ -1,9 +1,6 @@
 # Tasks
 
-No change to the build, sources, tests, or `scripts/check-openspec`.
-If one seems needed for CI to pass, stop and ask first. Pushing,
-opening pull requests, and merging happen in the user's own shell;
-Claude reads results with `gh` (read-only) and never pushes.
+No change to the build, sources, tests, or `scripts/check-openspec`. If one seems needed for CI to pass, stop and ask first. Pushing, opening pull requests, and merging happen in the user's own shell; Claude reads results with `gh` (read-only) and never pushes.
 
 ## 1. Workflow files
 
