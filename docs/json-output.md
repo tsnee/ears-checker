@@ -45,7 +45,7 @@ When an order arrives the checkout service shall send a receipt.
 | Field | Type | What it is |
 | --- | --- | --- |
 | `version` | number | The format version: `1`. See [Stability](#stability). |
-| `checker` | string | The ears-checker release that wrote the document, such as `0.2.0`; a build between releases gives the next version as a snapshot, such as `0.2.0-SNAPSHOT`. Findings can differ between releases within a format version. |
+| `checker` | string | The ears-checker release that wrote the document, such as `0.2.0`; a build between releases gives the next version as a snapshot, such as `0.3.0-SNAPSHOT` after 0.2.0. Findings can differ between releases within a format version. |
 | `checked` | number | How many requirements were checked, in every input together. |
 | `findings` | array | One object per finding, in input order: the inputs in command-line order, and each input's requirements in the order they appear. A requirement with several problems has one finding for each, ordered by where their spans start. Empty when every requirement passes. |
 

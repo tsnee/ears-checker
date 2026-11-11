@@ -242,7 +242,7 @@ trait Published extends PublishModule {
     */
   def publishVersion = Task.Input {
     Task.env.get("EARS_RELEASE_VERSION").filter(_.nonEmpty) match {
-      case None => "0.2.0-SNAPSHOT"
+      case None => "0.3.0-SNAPSHOT"
       case Some(v) if v.matches("""\d+\.\d+\.\d+""") => v
       case Some(v) =>
         Task.fail(s"EARS_RELEASE_VERSION must be <major>.<minor>.<patch>, not '$v'")
@@ -499,7 +499,7 @@ object ears extends Base with Published with Covered {
     def branchCoverageMin = Some(95.0)
 
     /** `CheckerBuild.version`, the release this program is (`publishVersion`: `0.2.0`, or the next
-      * version as `0.2.0-SNAPSHOT`), which JSON output names. Not `BuildInfo`: zio-json has one, and
+      * version as `0.3.0-SNAPSHOT`), which JSON output names. Not `BuildInfo`: zio-json has one, and
       * a wildcard import of `zio.json.*` would take its place. Generated for every platform's build
       * of the program, so they all say the same.
       */

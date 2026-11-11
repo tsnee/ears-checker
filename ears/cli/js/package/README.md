@@ -2,7 +2,7 @@
 
 The `ears-check` command: checks requirements in plain text, Markdown, and OpenSpec JSON against the EARS templates (Easy Approach to Requirements Syntax), and says how to fix the ones that don't fit. It's the command line from [ears-checker](https://github.com/tsnee/ears-checker), compiled to JavaScript for Node 22 or newer. For the classifier as a library, use `@tsnee/ears-checker`.
 
-Install it from the tarball each [GitHub release](https://github.com/tsnee/ears-checker/releases) attaches (`npm install -g ./tsnee-ears-checker-cli-<version>.tgz`); it isn't on npm yet. Its options and output may change in any 0.x release.
+Run it with `npx @tsnee/ears-checker-cli <file>`, or install it as the `ears-check` command with `npm install -g @tsnee/ears-checker-cli`. Always use the scoped name: `npx ears-check` would fetch whatever unrelated package claims that name. Each [GitHub release](https://github.com/tsnee/ears-checker/releases) also attaches the same tarball, with a checksum and a build-provenance attestation. Its options and output may change in any 0.x release.
 
 ## Usage
 

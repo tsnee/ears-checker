@@ -2,7 +2,7 @@
 
 Checks requirement sentences against the EARS templates (Easy Approach to Requirements Syntax), and says how to fix the ones that don't fit. It's the classifier from [ears-checker](https://github.com/tsnee/ears-checker), compiled to JavaScript, with TypeScript declarations and no dependencies.
 
-Install it from the tarball each [GitHub release](https://github.com/tsnee/ears-checker/releases) attaches (`npm install ./tsnee-ears-checker-<version>.tgz`); it isn't on npm yet. The API may change in any 0.x release.
+Install it with `npm install @tsnee/ears-checker`. Each [GitHub release](https://github.com/tsnee/ears-checker/releases) also attaches the same tarball, with a checksum and a build-provenance attestation. The API may change in any 0.x release.
 
 ## Usage
 

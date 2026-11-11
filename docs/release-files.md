@@ -10,7 +10,7 @@
 | `ears-check-{version}-macos-arm64` | `ears-check` as a native binary for macOS on Apple silicon | macOS 15 or later |
 | `SHA256SUMS` | The SHA-256 of every other file |  |
 
-The library is on Maven Central as `io.github.tsnee:ears-checker_3:{version}` (and `ears-checker_sjs1_3` for Scala.js), and the command line as `io.github.tsnee:ears-checker-cli_3:{version}`.
+The library is on Maven Central as `io.github.tsnee:ears-checker_3:{version}` (and `ears-checker_sjs1_3` for Scala.js), and the command line as `io.github.tsnee:ears-checker-cli_3:{version}`. Once the owner has checked and approved them, both npm packages are on npm too, as `@tsnee/ears-checker@{version}` and `@tsnee/ears-checker-cli@{version}`, with the same tarballs as here: `npm view @tsnee/ears-checker-cli@{version} dist.shasum` gives the SHA-1 that `shasum tsnee-ears-checker-cli-{version}.tgz` does, and prints nothing until then.
 
 The jar here and the one on Maven Central are built from the same tagged commit, but in separate jobs, so they may not be identical byte for byte. The checksums and attestations below cover the files here.
 
@@ -32,7 +32,7 @@ gh attestation verify ears-check-{version}-linux-x64 --repo tsnee/ears-checker \
 
 ### Running the files
 
-Run the jar with `java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow -jar ears-check-{version}.jar`: the flag stops JDK 23 and later from warning about the Scala runtime's use of `sun.misc.Unsafe`, and older JDKs skip it. Install an npm tarball with `npm install ./tsnee-ears-checker-cli-{version}.tgz`.
+Run the jar with `java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow -jar ears-check-{version}.jar`: the flag stops JDK 23 and later from warning about the Scala runtime's use of `sun.misc.Unsafe`, and older JDKs skip it. Install an npm package from npm with `npm install @tsnee/ears-checker-cli@{version}`, or a tarball from here with `npm install ./tsnee-ears-checker-cli-{version}.tgz`.
 
 The native binaries read Markdown through cmark 0.30 or later, which they load when they run: `brew install cmark` on macOS, `apt install cmark` on Debian and Ubuntu. Plain text and OpenSpec JSON need nothing installed. Make a binary executable with `chmod +x` after downloading it.
 

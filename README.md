@@ -1,6 +1,6 @@
 # ears-checker
 
-[![CI](https://github.com/tsnee/ears-checker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tsnee/ears-checker/actions/workflows/ci.yml?query=branch%3Amain) [![Maven Central](https://img.shields.io/maven-central/v/io.github.tsnee/ears-checker_3)](https://central.sonatype.com/artifact/io.github.tsnee/ears-checker_3) [![License: CC0-1.0](https://img.shields.io/badge/license-CC0--1.0-blue)](LICENSE)
+[![CI](https://github.com/tsnee/ears-checker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tsnee/ears-checker/actions/workflows/ci.yml?query=branch%3Amain) [![Maven Central](https://img.shields.io/maven-central/v/io.github.tsnee/ears-checker_3)](https://central.sonatype.com/artifact/io.github.tsnee/ears-checker_3) [![npm](https://img.shields.io/npm/v/@tsnee/ears-checker-cli)](https://www.npmjs.com/package/@tsnee/ears-checker-cli) [![License: CC0-1.0](https://img.shields.io/badge/license-CC0--1.0-blue)](LICENSE)
 
 Checks that requirements follow EARS, the Easy Approach to Requirements Syntax, and suggests a fix when one doesn't. `ears-check` reads plain text, Markdown, and OpenSpec specs and changes (as `openspec show --json` prints them); the same checker is a Scala 3 library for the JVM and Scala.js, and an npm package.
 
@@ -49,13 +49,16 @@ ears-check reqs.txt
 
 `cs update ears-check` moves it to a newer release. The native binary needs cmark to read Markdown, as above. Coursier keeps it next to the `ears-check` it installs, as `.ears-check.aux` (by default in `~/.local/share/coursier/bin` on Linux and `~/Library/Application Support/Coursier/bin` on macOS); [docs/release-files.md](docs/release-files.md) shows how to check who built it.
 
-**Node** 22 or later, as the npm package `@tsnee/ears-checker-cli`. It isn't on npm yet; until it is, install the tarball from the release, which installs its one dependency too:
+**Node** 22 or later, as the npm package [`@tsnee/ears-checker-cli`](https://www.npmjs.com/package/@tsnee/ears-checker-cli):
 
 ```sh
-curl -fLO https://github.com/tsnee/ears-checker/releases/download/v0.2.0/tsnee-ears-checker-cli-0.2.0.tgz
-npm install -g ./tsnee-ears-checker-cli-0.2.0.tgz
+npx @tsnee/ears-checker-cli reqs.txt
+# or, to keep it as the ears-check command:
+npm install -g @tsnee/ears-checker-cli
 ears-check reqs.txt
 ```
+
+Always use the scoped name, `@tsnee/ears-checker-cli`: `npx ears-check` would fetch whatever unrelated package claims that name.
 
 ### The library
 
@@ -181,11 +184,10 @@ A `Requirement` is the syntax tree, with a source span on every part. A `Diagnos
 
 ## JavaScript and TypeScript
 
-The npm package `@tsnee/ears-checker` is the same classifier compiled to JavaScript, as an ES module with TypeScript declarations and no dependencies, for Node 22 or later and bundlers. It isn't on npm yet; until it is, install the tarball from the [latest release](https://github.com/tsnee/ears-checker/releases/latest):
+The npm package `@tsnee/ears-checker` is the same classifier compiled to JavaScript, as an ES module with TypeScript declarations and no dependencies, for Node 22 or later and bundlers:
 
 ```sh
-curl -fLO https://github.com/tsnee/ears-checker/releases/download/v0.2.0/tsnee-ears-checker-0.2.0.tgz
-npm install ./tsnee-ears-checker-0.2.0.tgz
+npm install @tsnee/ears-checker
 ```
 
 ```ts

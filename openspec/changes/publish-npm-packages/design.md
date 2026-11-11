@@ -14,6 +14,7 @@ Observations, 2026-11-11:
 - `npm stage publish ./<file>.tgz --dry-run` with npm 11.21.1 took a packed tarball as it is: the same shasum as the file, "staged with tag latest and default access".
 - `--access` defaults to public for a new package and leaves an existing one's alone; the hand publish of 0.2.0 still passes `--access public`, as `npm publish` of a new scoped package defaults to restricted.
 - Node 26.13.1 bundles npm 11.20.0; npm's latest is 12.2.2 and its latest 11.x is 11.21.2, both released 2026-11-04; 11.21.1 was released 2026-10-15.
+- After the owner published 0.2.0 by hand (2026-11-11), npm listed only a placeholder version, `0.0.0-stage`, for a few minutes while it processed each new package ("may take a few minutes to become available"); the placeholder stays in each package's version list. `npm stage list <package> --json` then printed `[]` for both: a JSON array, empty when nothing is staged. A staged entry's fields are still unseen.
 - The `release` environment allows only `v*` tags and requires the owner's review.
 
 ## Goals / Non-Goals
@@ -60,7 +61,7 @@ _Alternatives considered:_
 
 `scripts/approve-npm-release --version <version>` (Bash 3.2, `set -euo pipefail`):
 
-1. Refuses if the GitHub Release for `v<version>` is missing or still a draft (`gh release view --json isDraft`), so npm is always last.
+1. Refuses if the GitHub Release for `v<version>` is missing or still a draft (`gh release view --json isDraft`), or if the version isn't on Maven Central yet (its CLI POM on `repo1.maven.org`), so npm is always last, and a deployment dropped on the Central Portal never gets its npm packages approved. (Added after review: the first version checked only the GitHub Release.)
 2. Downloads `SHA256SUMS` from it.
 3. For each package: finds the staged version's stage id (`npm stage list <package> --json`), downloads its tarball (`npm stage download`), and checks its SHA-256 against `SHA256SUMS` and its attestation (`gh attestation verify` with the release workflow as signer and the tag as source ref). Then `npm stage approve <id>`, which asks for the second factor.
 4. Carries on past one package's failure, prints each package's status, and exits non-zero if any wasn't approved.
@@ -71,7 +72,7 @@ _Alternative considered:_ approving on npmjs.com. The page shows npm's own check
 
 ### 5. The owner's order, and a dropped deployment
 
-CLAUDE.md's Releasing steps become: publish the draft GitHub Release, then publish the Central Portal deployment, then run `scripts/approve-npm-release`. If the owner drops the deployment instead, they reject both staged versions (`npm stage reject`, with the second factor) and delete the draft, and the fix ships as a new patch version. One-time setup before the first staged release (0.3.0), in this order, within two days of tagging it: create the `npm` GitHub environment, then on each package `npm trust github <package> --file release.yml --repo tsnee/ears-checker --env npm --allow-stage-publish`, and set each package's publishing access to "Require two-factor authentication and disallow tokens".
+CLAUDE.md's Releasing steps become: publish the draft GitHub Release, then publish the Central Portal deployment, then run `scripts/approve-npm-release`. If the owner drops the deployment instead, they reject both staged versions (`npm stage reject`, with the second factor); the GitHub Release is already published by then, so the fix ships as a new patch version. The `npm` GitHub environment was created during apply (2026-11-11), before anything uses it, since GitHub would otherwise create it on the job's first run with no rule at all: its one deployment rule is the tag pattern `v*` (a tag rule; as a branch rule, a branch named `v…` could stage), and it has no reviewer. One-time setup before the first staged release (0.3.0), within two days of tagging it: on each package `npm trust github <package> --file release.yml --repo tsnee/ears-checker --env npm --allow-stage-publish`, and set each package's publishing access to "Require two-factor authentication and disallow tokens".
 
 ### 6. Fallback if a staged version has no provenance
 
@@ -94,8 +95,8 @@ The specs' other version numbers stay: each is a scenario's concrete example tie
 
 ## Risks / Trade-offs
 
-- **Partial staging.** If staging the library succeeds and the command line fails, a rerun of the `npm` job fails on the library (its version is taken). The owner then rejects the staged library and reruns the job, or stages the command line's release tarball by hand. Rerunning only this job never reruns `publish`.
+- **Partial staging.** The job tries both packages whatever became of the other, and fails naming those it didn't stage. A rerun stages whichever is missing; the one already staged fails again, harmlessly, since its version is taken. (Added after review: the first version stopped at the first failure, so a rerun never reached the command line. Whether rejecting a staged version frees its number is unknown, so nothing relies on it.) Rerunning only this job never reruns `publish`.
 - **A staged version may expire** before it's approved; the docs don't say when. The owner approves the same day; if it's gone, rerun the `npm` job.
 - **The trust expires if unused for two days**, and npm doesn't check it when it's saved: a typo shows only when the job fails. Set it up just before tagging 0.3.0 and expect to rerun the job after fixing it.
 - **The approval script's parsing is unverified** until 0.3.0 (Decision 7).
-- **Unverified assumptions:** that staging carries provenance (Decision 6); that a staged version lasts at least a day; that `npm stage list --json` gives the stage id with each version. Checked today: the npm versions, staging a tarball as it is (dry run), the trust and staging requirements, the `release` environment's rules, the packages' repository URL, and Node 26's bundled npm.
+- **Unverified assumptions:** that staging carries provenance (Decision 6); that a staged version lasts at least a day; that `npm stage list --json` gives the stage id with each version; that `npm stage list` and `npm stage download` never ask for a second factor (npm's table says only `approve` and `reject` do), since the script captures their output and npm prompts only on a terminal; and that rejecting a staged version doesn't free its number for a new staging. Checked today: the npm versions, staging a tarball as it is (dry run), the trust and staging requirements, the `release` environment's rules, the packages' repository URL, and Node 26's bundled npm.

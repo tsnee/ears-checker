@@ -4,6 +4,10 @@ Every release of ears-checker, newest first. Each change adds its lines under Un
 
 ## Unreleased
 
+### Added
+
+- Both npm packages are on npm, from 0.2.0: `npx @tsnee/ears-checker-cli` runs the command line, and `npm install @tsnee/ears-checker` installs the library. From this release on, the release workflow stages them on npm with trusted publishing, and they're published once the owner has checked that they're the GitHub Release's own tarballs.
+
 ## 0.2.0 - 2026-11-11
 
 ### Added

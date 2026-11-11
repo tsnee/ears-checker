@@ -1,10 +1,12 @@
-# Releases a version to Maven Central when the owner pushes a tag v<major>.<minor>.<patch>.
+# Releases a version to Maven Central, GitHub Releases, and npm when the owner pushes a tag
+# v<major>.<minor>.<patch>.
 # tag (which also writes the release notes from CHANGELOG.md) and checks (the whole CI workflow)
 # run with no secrets; publish then waits for the owner's approval (the release environment) and
 # uploads to the Central Portal for review; draft-release then creates a draft GitHub Release with
-# the notes and the files the checks passed on. Nothing is published until the owner clicks
-# Publish on the Central Portal and publishes the draft. See openspec/specs/release-publishing
-# and openspec/specs/github-release.
+# the notes and the files the checks passed on; npm then stages the two npm tarballs on npm.
+# Nothing is published until the owner publishes the draft, clicks Publish on the Central Portal,
+# and approves the staged npm versions, in that order. See openspec/specs/release-publishing,
+# openspec/specs/github-release, and openspec/specs/npm-publishing.
 name: Release
 
 on:
@@ -106,10 +108,11 @@ jobs:
 
   # A draft GitHub Release for the tag, once the upload succeeded: the notes, the files the checks
   # passed on (release-* artifacts from checks), SHA256SUMS, and a build-provenance attestation
-  # for each. The only job with a write token, so it checks out nothing and runs no code from the
-  # repository or its dependencies: it downloads this run's files and calls GitHub, with gh
-  # (GitHub's own, on the runner) rather than a third-party action. A release already made for the
-  # tag fails it untouched; to redo a draft, the owner deletes it and reruns this job.
+  # for each. The only job whose token can write to the repository, so it checks out nothing and
+  # runs no code from the repository or its dependencies: it downloads this run's files and calls
+  # GitHub, with gh (GitHub's own, on the runner) rather than a third-party action. A release
+  # already made for the tag fails it untouched; to redo a draft, the owner deletes it and reruns
+  # this job.
   draft-release:
     needs: [tag, publish]
     runs-on: ubuntu-latest
@@ -176,3 +179,84 @@ jobs:
             --title "${TAG#v}" --notes-file notes/notes.md files/*
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,isDraft,assets \
             --jq '{url, isDraft, assets: [.assets[] | {name, size}]}'
+
+  # Stages the two npm tarballs the checks passed on (the ones the draft release attaches) on npm,
+  # once the draft exists. Staged versions aren't public: the owner approves them on npm, with a
+  # second factor, after publishing the GitHub Release and the Central Portal deployment
+  # (scripts/approve-npm-release). npm's trusted publishing authenticates it: the npm environment
+  # (v* tags only, no reviewer) is named in each package's trusted publisher, which may only stage,
+  # so no npm token is stored anywhere. It runs only the pinned npm from .github/npm, on this run's
+  # files. See openspec/specs/npm-publishing.
+  npm:
+    needs: [tag, draft-release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      # Only the lockfile of the pinned npm.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/npm
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+
+      # npm 11.15.0 or later has npm stage; the lockfile pins the version and its integrity.
+      - name: Install the pinned npm
+        run: |
+          npm ci --prefix .github/npm --ignore-scripts --no-audit --no-fund
+          echo "npm $(.github/npm/node_modules/.bin/npm --version)"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-jvm
+          path: files
+
+      # Each tarball must name its package at the tag's version, before either is staged.
+      # (draft-release has already checked that the artifacts hold exactly the release's files.)
+      - name: Check the npm tarballs
+        working-directory: files
+        run: |
+          version=${TAG#v}
+          for pair in "tsnee-ears-checker-$version.tgz @tsnee/ears-checker" \
+                      "tsnee-ears-checker-cli-$version.tgz @tsnee/ears-checker-cli"; do
+            file=${pair% *}
+            name=${pair#* }
+            declared=$(tar -xOzf "$file" package/package.json | jq -r '.name + "@" + .version')
+            if [ "$declared" != "$name@$version" ]; then
+              echo "::error::$file declares $declared, not $name@$version"
+              exit 1
+            fi
+            echo "$file is $declared, SHA-256 $(sha256sum "$file" | cut -d ' ' -f 1)"
+          done
+
+      # npm exchanges the job's OIDC token for a short-lived one through the trusted publisher, and
+      # adds provenance. The library first, then the command line; each is tried whatever became of
+      # the other, so a rerun stages whichever isn't staged yet (one staged by an earlier attempt
+      # fails again, since its version is taken, and the step names it).
+      - name: Stage the npm packages
+        working-directory: files
+        run: |
+          version=${TAG#v}
+          failed=''
+          for file in "tsnee-ears-checker-$version.tgz" "tsnee-ears-checker-cli-$version.tgz"; do
+            if ../.github/npm/node_modules/.bin/npm stage publish "./$file" --provenance \
+                --access public --ignore-scripts; then
+              echo "Staged $file"
+            else
+              echo "::error::Staging $file failed"
+              failed="$failed $file"
+            fi
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::Not staged by this attempt:$failed"
+            exit 1
+          fi

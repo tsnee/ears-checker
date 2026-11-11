@@ -50,6 +50,7 @@ These are for working on ears-checker, not part of any package.
 - `scripts/time-cli` times the jar, the Node package, and the native binary on Markdown and plain text made from this repository's specs, at several sizes, records each timing in `docs/measurements/time-cli.jsonl`, and prints a table rendered from the records; add the run to [docs/performance.md](docs/performance.md) when a change could affect speed.
 - `scripts/coverage-records`, after the tests, records each measured module's coverage from scoverage's XML report in `docs/measurements/coverage.jsonl`.
 - `scripts/ci-run-record <run id>` records a finished GitHub Actions run's jobs and minutes in `docs/measurements/ci-runs.jsonl`.
+- `scripts/approve-npm-release --version <version>` is the owner's last release step, not a check: it approves the npm packages the release workflow staged, after checking each against the GitHub Release's `SHA256SUMS` and attestation, once the release is published and on Maven Central.
 - Measurements are kept as these JSON Lines records, with the `jq` query that reports each figure beside them in `docs/measurements/`, so any figure can be regenerated.
 
 Before calling a change done, run `./mill __.checkFormat`, then `./mill clean __.scoverage` (measuring coverage from a clean slate, as CI does), `./mill -j 1 '__:ScalaNativeModule.compile'`, and `./mill __.test`, every module's `validateCoverageMinimums`, and all six check scripts (`scripts/check-coursier-app` both without options and with `--binary`).

@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+# Approves a release's staged npm packages, @tsnee/ears-checker and @tsnee/ears-checker-cli, after
+# checking that each staged tarball is the one the release attests. Run by the owner, in their own
+# terminal and logged in to npm, after publishing the GitHub Release and the Central Portal
+# deployment (CLAUDE.md's Releasing steps); npm asks for the second factor at each approval.
+# Needs curl, gh, npm 11.15.0 or later, jq, shasum, and tar on the PATH.
+#
+#   scripts/approve-npm-release --version <major>.<minor>.<patch>
+#
+# It refuses, before touching npm, unless the GitHub Release for v<version> exists and is
+# published and the version is on Maven Central. Then, for each package: the staged version's stage id from `npm stage list --json`,
+# its tarball from `npm stage download`, that tarball's SHA-256 against the release's SHA256SUMS
+# and its build-provenance attestation (the release workflow, at the tag), and only then
+# `npm stage approve`. One package's failure doesn't stop the other; each one's outcome is printed
+# at the end, and the exit status is non-zero unless both were approved.
+#
+# `npm stage list --json` gives a JSON array, empty when nothing is staged (seen 2026-11-11); the
+# fields of a staged entry weren't documented or seen when this was written. An entry counts as
+# the version's when its `version` field is the version, and its stage id is its `id` or
+# `stageId` field. Anything else, or more than one such entry, approves nothing and prints npm's
+# JSON, so the owner can check and approve by hand (`npm stage download`, `shasum -a 256`,
+# `gh attestation verify`, `npm stage approve`).
+set -euo pipefail
+
+repo=tsnee/ears-checker
+version=
+
+usage() {
+  echo "Usage: approve-npm-release --version <major>.<minor>.<patch>" >&2
+  exit 2
+}
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --version)
+      [ $# -ge 2 ] || usage
+      version="$2"
+      shift 2
+      ;;
+    *) usage ;;
+  esac
+done
+printf '%s\n' "$version" | grep -E -x -q '[0-9]+\.[0-9]+\.[0-9]+' || usage
+tag="v$version"
+
+log() { echo "approve-npm-release: $*" >&2; }
+
+for tool in curl gh npm jq shasum tar; do
+  command -v "$tool" >/dev/null || { log "missing: $tool"; exit 1; }
+done
+
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+trap 'exit 130' INT TERM
+
+# The GitHub Release first, so npm is always the last thing published.
+if ! draft="$(gh release view "$tag" --repo "$repo" --json isDraft --jq .isDraft 2>"$work/gh.err")"; then
+  log "no GitHub Release for $tag in $repo; approving nothing. gh said:"
+  cat "$work/gh.err" >&2
+  exit 1
+fi
+if [ "$draft" != false ]; then
+  log "the GitHub Release for $tag is still a draft; publish it, then the Central Portal deployment, then run this again. Approving nothing."
+  exit 1
+fi
+log "the GitHub Release for $tag is published"
+
+# Then Maven Central: a deployment dropped on the Central Portal never gets there, and its npm
+# packages are rejected instead. Maven Central can take a while after Publish.
+pom="https://repo1.maven.org/maven2/io/github/tsnee/ears-checker-cli_3/$version/ears-checker-cli_3-$version.pom"
+if ! curl -fsSI "$pom" >/dev/null 2>"$work/curl.err"; then
+  log "$version isn't on Maven Central ($pom); approving nothing. Publish the Central Portal deployment and wait for it to appear, then run this again; if it was dropped, reject the staged npm versions instead. curl said:"
+  cat "$work/curl.err" >&2
+  exit 1
+fi
+log "$version is on Maven Central"
+
+gh release download "$tag" --repo "$repo" --pattern SHA256SUMS --dir "$work"
+log "downloaded $tag's SHA256SUMS"
+
+# Checks and approves one package; prints its outcome on standard output.
+approve() {
+  local name="$1" file="$2" dir="$work/${2%.tgz}" listed ids count id downloaded expected actual
+  mkdir -p "$dir"
+  if ! listed="$(npm stage list "$name" --json 2>"$dir/npm.err")"; then
+    log "$name: npm stage list failed:"
+    cat "$dir/npm.err" >&2
+    echo "npm stage list failed"
+    return
+  fi
+  log "$name: npm stage list --json gave: $listed"
+  if ! ids="$(jq -r --arg v "$version" \
+      'if type == "array" then [.[] | select(type == "object" and .version == $v) | (.id // .stageId)] else error("not an array") end
+       | map(select(type == "string" or type == "number")) | .[] | tostring' <<<"$listed" 2>"$dir/jq.err")"; then
+    log "$name: npm's stage list isn't the array this script expects:"
+    cat "$dir/jq.err" >&2
+    echo "unrecognized stage list (check and approve by hand)"
+    return
+  fi
+  count="$(printf '%s' "$ids" | grep -c . || true)"
+  if [ "$count" = 0 ]; then
+    if [ "$listed" = "[]" ]; then
+      echo "nothing staged"
+    else
+      echo "no staged $version with an id this script recognizes (check and approve by hand)"
+    fi
+    return
+  fi
+  if [ "$count" != 1 ]; then
+    echo "$count staged entries for $version (check and approve by hand)"
+    return
+  fi
+  id="$ids"
+  log "$name@$version: stage id $id"
+
+  if ! (cd "$dir" && npm stage download "$id" >"$dir/download.out" 2>"$dir/download.err"); then
+    log "$name: npm stage download $id failed:"
+    cat "$dir/download.out" "$dir/download.err" >&2
+    echo "npm stage download failed"
+    return
+  fi
+  downloaded="$(find "$dir" -maxdepth 1 -type f -name '*.tgz' -print)"
+  if [ -z "$downloaded" ] || [ "$(printf '%s\n' "$downloaded" | wc -l | tr -d ' ')" != 1 ]; then
+    log "$name: expected one tarball from npm stage download, found: ${downloaded:-none}"
+    cat "$dir/download.out" >&2
+    echo "no single downloaded tarball"
+    return
+  fi
+  expected="$(awk -v f="$file" '$2 == f { print $1 }' "$work/SHA256SUMS")"
+  actual="$(shasum -a 256 "$downloaded" | cut -d ' ' -f 1)"
+  if [ -z "$expected" ]; then
+    echo "$file isn't in SHA256SUMS"
+    return
+  fi
+  if [ "$actual" != "$expected" ]; then
+    log "$name: staged tarball's SHA-256 $actual, SHA256SUMS gives $expected for $file"
+    echo "SHA-256 mismatch: staged $actual, release $expected"
+    return
+  fi
+  log "$name: SHA-256 $actual matches SHA256SUMS"
+  if ! gh attestation verify "$downloaded" --repo "$repo" \
+      --signer-workflow "$repo/.github/workflows/release.yml" \
+      --source-ref "refs/tags/$tag" >"$dir/attest.out" 2>&1; then
+    log "$name: attestation check failed:"
+    cat "$dir/attest.out" >&2
+    echo "attestation failed"
+    return
+  fi
+  log "$name: attestation verified (release.yml at $tag)"
+
+  # Interactive: npm asks for the second factor (standard input is still the terminal; only
+  # standard output is captured, so npm's goes to standard error).
+  if ! npm stage approve "$id" >&2; then
+    echo "npm stage approve failed"
+    return
+  fi
+  echo "approved"
+}
+
+statuses=()
+failed=0
+for pair in "@tsnee/ears-checker tsnee-ears-checker-$version.tgz" \
+            "@tsnee/ears-checker-cli tsnee-ears-checker-cli-$version.tgz"; do
+  name="${pair% *}"
+  status="$(approve "$name" "${pair#* }")"
+  log "$name@$version: $status"
+  statuses+=("$name@$version: $status")
+  [ "$status" = approved ] || failed=1
+done
+
+echo >&2
+printf '%s\n' "${statuses[@]}" >&2
+exit "$failed"

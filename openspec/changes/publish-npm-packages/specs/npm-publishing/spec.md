@@ -93,3 +93,12 @@ If the GitHub Release for the version is still a draft, then the approval script
 
 - **WHEN** the owner runs `scripts/approve-npm-release --version 0.3.0` before publishing the draft GitHub Release for `v0.3.0`
 - **THEN** the script says the release is still a draft, approves nothing, and exits with a non-zero status
+
+### Requirement: Approval only once on Maven Central
+
+If the version isn't on Maven Central, then the approval script SHALL approve nothing.
+
+#### Scenario: Deployment not yet published
+
+- **WHEN** the owner runs `scripts/approve-npm-release --version 0.3.0` after publishing the GitHub Release for `v0.3.0` but before 0.3.0 reaches Maven Central
+- **THEN** the script says 0.3.0 isn't on Maven Central, approves nothing, and exits with a non-zero status
