@@ -8,7 +8,8 @@ release renames Unreleased to its version and date.
 ### Added
 
 - The `ears-check` command line on Node, as the npm package `@tsnee/ears-checker-cli`, with the
-  same output and exit statuses as the jar.
+  same output and exit statuses as the jar. It's attached to the GitHub Release as a tarball; it
+  isn't on npm yet.
 - The `ears-check` command line as a native binary for Linux (x64 and Arm) and macOS (Arm). It
   reads Markdown through an installed cmark 0.30 or later, loaded when it runs (`brew install
   cmark`, or `apt install cmark` on Debian and Ubuntu); plain text and OpenSpec JSON need
@@ -16,7 +17,8 @@ release renames Unreleased to its version and date.
   `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` has a relative entry; on macOS it then reads no
   Markdown and says which entry to remove.
 - The classifier as the npm package `@tsnee/ears-checker`, with TypeScript declarations and a
-  source map leading back to the Scala sources.
+  source map leading back to the Scala sources, likewise attached to the release as a tarball and
+  not on npm yet.
 - `ears-check` as a Coursier app, from this repository's channel (see the README): `cs install`
   gives the native binary on Linux and macOS (Apple silicon) and the JVM launcher elsewhere, and
   `cs update ears-check` moves it to the next release.

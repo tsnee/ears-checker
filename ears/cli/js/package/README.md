@@ -6,9 +6,9 @@ don't fit. It's the command line from
 [ears-checker](https://github.com/tsnee/ears-checker), compiled to JavaScript for Node 22 or
 newer. For the classifier as a library, use `@tsnee/ears-checker`.
 
-Install it with `npm install -g @tsnee/ears-checker-cli`, or from the tarball each
-[GitHub release](https://github.com/tsnee/ears-checker/releases) attaches. Its options and
-output may change in any 0.x release.
+Install it from the tarball each [GitHub release](https://github.com/tsnee/ears-checker/releases)
+attaches (`npm install -g ./tsnee-ears-checker-cli-<version>.tgz`); it isn't on npm yet. Its
+options and output may change in any 0.x release.
 
 ## Usage
 

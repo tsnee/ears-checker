@@ -24,10 +24,12 @@ it rather than waiting for a fix to an older version.
   that reaches the terminal shows control characters and Unicode's line and paragraph
   separators as `\uXXXX`: in a fix or a file or requirement name, a run of spaces, tabs, and line
   breaks becomes one space instead; in a message, line feeds are escaped too. Log lines escape
-  them as well (writing line feeds and carriage returns as `\n` and `\r`), and JSON output
-  escapes them. Escaping problems (a log line or output that another tool could misread),
-  or anything that makes it read or write a file it wasn't given, are in scope. It reads each
-  input whole, so a very large input uses a lot of memory; that's known (a size limit is on the
+  them as well (writing line feeds and carriage returns as `\n` and `\r`). JSON output escapes
+  the C0 control characters, ESC among them, but writes C1 controls, DEL, and the separators as
+  they are, for the tools that read it (escaping them too is on the [roadmap](docs/roadmap.md)).
+  Escaping problems (a log line or output that another tool could misread), or anything that
+  makes it read or write a file it wasn't given, are in scope. It reads each input whole, so a
+  very large input uses a lot of memory; that's known (a size limit is on the
   [roadmap](docs/roadmap.md)) and not a vulnerability by itself.
 - **The native binary loading cmark.** For Markdown, the native binary loads an installed cmark
   0.30 or later when it runs, by absolute path from the absolute entries of

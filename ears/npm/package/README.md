@@ -5,9 +5,9 @@ and says how to fix the ones that don't fit. It's the classifier from
 [ears-checker](https://github.com/tsnee/ears-checker), compiled to JavaScript, with TypeScript
 declarations and no dependencies.
 
-Install it with `npm install @tsnee/ears-checker`, or from the tarball each
-[GitHub release](https://github.com/tsnee/ears-checker/releases) attaches. The API may change
-in any 0.x release.
+Install it from the tarball each [GitHub release](https://github.com/tsnee/ears-checker/releases)
+attaches (`npm install ./tsnee-ears-checker-<version>.tgz`); it isn't on npm yet. The API may
+change in any 0.x release.
 
 ## Usage
 
