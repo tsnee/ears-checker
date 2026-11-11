@@ -1,0 +1,338 @@
+# The native CLI on each platform it's released for, called by ci.yml (and so by release.yml's
+# checks). build links the binary on the platform's oldest runner and checks it there against the
+# JVM jar; recheck runs the same binary and jar on the newest runner, so a binary that needs a newer
+# system fails here. On a release tag the binary that passed both is kept for the release as
+# release-native-<platform>; any other run keeps nothing.
+name: Native CLI
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-22.04
+          - platform: linux-arm64
+            runner: ubuntu-22.04-arm
+          - platform: macos-arm64
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # On a release tag, the binary and jar are built at the tag's version.
+      - name: Set the release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "EARS_RELEASE_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
+      # The java the check starts the jar with; Mill fetches its own JDK for the build.
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "27"
+
+      # The OpenSpec CLI, which writes the check's OpenSpec JSON inputs.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+
+      - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
+
+      # cmark, which the binary loads when it reads Markdown.
+      - name: Install cmark and the OpenSpec CLI
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            brew install cmark
+          else
+            sudo apt-get update -q
+            sudo apt-get install -y -q --no-install-recommends libcmark-dev
+          fi
+          # The OpenSpec CLI, from .github/tools/package-lock.json, with no install scripts.
+          npm ci --prefix .github/tools --ignore-scripts --no-audit --no-fund
+          echo "$PWD/.github/tools/node_modules/.bin" >> "$GITHUB_PATH"
+
+      # The binary, against the JVM jar; both are kept in kept/ for recheck.
+      - name: Check the native CLI
+        run: scripts/check-native-cli --out kept
+
+      # The Markdown conformance suite through this runner's cmark: on Ubuntu 22.04 that's 0.30,
+      # the oldest the binaries support (Ubuntu 26.04 has the same release; Homebrew has 0.31).
+      - name: Run the Markdown conformance suite natively
+        if: runner.os == 'Linux'
+        run: ./mill ears.markdown.native.test
+
+      # The oldest glibc the binary runs on is the newest GLIBC_ symbol version it needs, which
+      # must be 2.35 at most, as the release notes say.
+      - name: Check the glibc the binary needs
+        if: runner.os == 'Linux'
+        run: |
+          newest=$(objdump -T kept/ears-check | grep -o 'GLIBC_[0-9.]*' | sed 's/^GLIBC_//' |
+            sort -u -V | tail -n 1)
+          echo "The binary needs glibc $newest"
+          if [ "$(printf '%s\n' "$newest" 2.35 | sort -V | tail -n 1)" != 2.35 ]; then
+            echo "::error::The binary needs glibc $newest, newer than 2.35"
+            exit 1
+          fi
+
+      - name: Check the macOS release the binary needs
+        if: runner.os == 'macOS'
+        run: |
+          minos=$(otool -l kept/ears-check | awk '/LC_BUILD_VERSION/ { found = 1 }
+            found && $1 == "minos" { print $2; exit }')
+          echo "The binary needs macOS $minos"
+          if [ "$minos" != 15.0 ]; then
+            echo "::error::The binary declares macOS $minos as its minimum, not 15.0"
+            exit 1
+          fi
+
+      # Kept for a week, so a failed recheck can be rerun later without rebuilding.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-${{ matrix.platform }}
+          path: kept/
+          if-no-files-found: error
+          retention-days: 7
+
+  recheck:
+    name: Recheck (${{ matrix.platform }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-26.04
+          - platform: linux-arm64
+            runner: ubuntu-26.04-arm
+          - platform: macos-arm64
+            runner: macos-26
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      # The check's inputs: this repository's Markdown and specs.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # On a release tag, the Coursier app check publishes the CLI at the tag's version.
+      - name: Set the release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "EARS_RELEASE_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "27"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+
+      - name: Install cmark and the OpenSpec CLI
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            brew install cmark
+          else
+            sudo apt-get update -q
+            sudo apt-get install -y -q --no-install-recommends libcmark-dev
+          fi
+          # The OpenSpec CLI, from .github/tools/package-lock.json, with no install scripts.
+          npm ci --prefix .github/tools --ignore-scripts --no-audit --no-fund
+          echo "$PWD/.github/tools/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: native-${{ matrix.platform }}
+          path: kept/
+
+      # Artifacts don't keep file modes.
+      - name: Check the native CLI
+        run: |
+          chmod +x kept/ears-check
+          scripts/check-native-cli --binary kept/ears-check --jar kept/ears-check.jar
+
+      # A cmark planted in the current directory must never run, whatever the library path
+      # variable holds. On Linux the binary skips the bare name libcmark.so while LD_LIBRARY_PATH
+      # has a relative or empty entry, and loads cmark by absolute path; on macOS it loads no cmark
+      # while DYLD_LIBRARY_PATH has a relative entry (dyld would look there first even for an
+      # absolute path). The planted library only prints PLANTED when it loads.
+      - name: Check a library planted in the current directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail() { echo "$1" >&2; exit 1; }
+          binary=$PWD/kept/ears-check
+          dir=$(mktemp -d)
+          cd "$dir"
+          printf '%s\n' '#include <unistd.h>' \
+            '__attribute__((constructor)) static void planted(void) { write(2, "PLANTED\n", 8); }' \
+            >planted.c
+          printf '%s\n' '- The scheduler shall list events.' >notes.md
+          printf '%s\n' 'The scheduler lists events.' >notes.txt
+          # The planted library under every name the binary would look up, and a control that it does
+          # run when the loader is told to load it, so a case that prints nothing proves something.
+          if [ "$RUNNER_OS" = macOS ]; then
+            cc -dynamiclib -o libcmark.dylib planted.c
+            versioned=()
+            while IFS= read -r found; do versioned+=("$found"); done \
+              < <(find /opt/homebrew/lib -maxdepth 1 -name 'libcmark.*.dylib')
+            [ "${#versioned[@]}" -gt 0 ] || fail "no versioned libcmark.*.dylib in /opt/homebrew/lib"
+            for installed in "${versioned[@]}"; do
+              cp libcmark.dylib "$(basename "$installed")"
+            done
+            control=(env "DYLD_INSERT_LIBRARIES=$PWD/libcmark.dylib")
+            variable=DYLD_LIBRARY_PATH
+            unsafe=(. lib /opt/homebrew/lib:.)
+            safe=("" ":" ":/opt/homebrew/lib" "/opt/homebrew/lib;.")
+          else
+            cc -shared -fPIC -o libcmark.so planted.c
+            control=(env "LD_PRELOAD=$PWD/libcmark.so")
+            variable=LD_LIBRARY_PATH
+            unsafe=(":" "." ":/opt/lib" "/opt/lib:" "/opt/lib::/srv/lib" "lib" "/opt/lib;" "/opt/lib;.")
+            safe=("")
+            # The binary must carry no search path of its own, which the bare name would follow too.
+            if readelf -d "$binary" | grep -E '\((RPATH|RUNPATH)\)'; then
+              fail "the binary has an RPATH or RUNPATH"
+            fi
+          fi
+          "${control[@]}" "$binary" notes.txt >out 2>&1 || true
+          grep -q PLANTED out || { cat out; fail "the planted library doesn't run even when preloaded"; }
+          mkdir lib
+          cp libcmark.* lib/
+          ls -l . lib
+          run() {
+            status=0
+            env "$variable=$1" "$binary" --verbose "$2" >out 2>&1 || status=$?
+            parser=$(grep -oE 'parser="[^"]*"|parser=none' out | head -n 1 || true)
+            echo "$variable=\"$1\" on $2: status $status, ${parser:-no parser logged}"
+            if grep -q PLANTED out; then
+              cat out
+              fail "$variable=\"$1\": the library planted in the current directory ran"
+            fi
+          }
+          for value in "${unsafe[@]}"; do
+            run "$value" notes.md
+            if [ "$RUNNER_OS" = macOS ]; then
+              if [ "$status" != 2 ] || ! grep -q 'DYLD_LIBRARY_PATH has the entr' out; then
+                cat out
+                fail "$variable=\"$value\": Markdown wasn't declined with the message"
+              fi
+            elif [ "$status" != 0 ] || ! grep -qE 'parser="cmark [0-9.]+ at /' out; then
+              cat out
+              fail "$variable=\"$value\": cmark wasn't loaded by absolute path"
+            fi
+          done
+          for value in "${safe[@]}"; do
+            run "$value" notes.md
+            if [ "$status" != 0 ] || ! grep -q 'parser="cmark ' out; then
+              cat out
+              fail "$variable=\"$value\": cmark wasn't loaded"
+            fi
+          done
+          run "${unsafe[0]}" notes.txt
+          if [ "$status" != 1 ] || ! grep -q missing-modal out; then
+            cat out
+            fail "$variable=\"${unsafe[0]}\": plain text wasn't checked as usual"
+          fi
+
+      # On a release tag, the binary that passed on both runners, named for the release.
+      - name: Name the binary for the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          mkdir release
+          cp kept/ears-check "release/ears-check-${TAG#v}-$PLATFORM"
+          ls -l release
+
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-native-${{ matrix.platform }}
+          path: release/
+          if-no-files-found: error
+
+      # The Coursier app check publishes the CLI to ~/.ivy2/local with Mill, which this job
+      # otherwise doesn't run; the cache keeps Mill's downloads. Coursier's CLI keeps the
+      # runner's JVM and installs no apps. After the release file is uploaded, since they
+      # download tools, and before cmark is removed below, since the cases read Markdown.
+      - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
+
+      - uses: coursier/setup-action@648df969f41ef15fda2baba8b37f9fa3d16390a3 # v3.0.4
+        with:
+          apps: ""
+
+      # The app installed from coursier/apps.json with this binary at this platform's address:
+      # the installed command must be exactly this binary, and match the jar on the same inputs.
+      - name: Check the Coursier app
+        run: scripts/check-coursier-app --binary kept/ears-check --jar kept/ears-check.jar
+
+      # Last, since it removes cmark from the runner. With only the runtime package, which has
+      # just a versioned libcmark.so.*, the native binary still reads Markdown; with no cmark, it
+      # says what to install, and plain text still works. It also shows what the binary does
+      # with a non-ASCII file name under the C locale (printed, not checked).
+      - name: Check the native binary with less cmark
+        if: matrix.platform == 'linux-x64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail() { echo "$1" >&2; exit 1; }
+          # Every directory CmarkLibrary searches on Linux.
+          searched=(/usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu /usr/lib64 /usr/lib
+            /usr/local/lib)
+          libraries() { find "${searched[@]}" -maxdepth 1 -name 'libcmark.so*' 2>/dev/null || true; }
+          binary=$PWD/kept/ears-check
+          dir=$(mktemp -d)
+          printf '%s\n' '- When an order arrives the scheduler shall list events.' >"$dir/notes.md"
+          printf '%s\n' 'The scheduler lists events.' >"$dir/notes.txt"
+          run() {
+            status=0
+            "$binary" "$@" >"$dir/out" 2>&1 || status=$?
+            cat "$dir/out"
+          }
+          # Installed packages only: dpkg also knows packages that were never installed.
+          runtime=$(dpkg-query -W -f '${db:Status-Abbrev}${Package}\n' 'libcmark0*' |
+            sed -n 's/^ii *//p')
+          [ -n "$runtime" ] || fail "no cmark runtime package is installed"
+          sudo apt-get remove -y -q libcmark-dev
+          if libraries | grep -q -E '/libcmark\.so$'; then
+            fail "an unversioned libcmark.so is still installed: $(libraries)"
+          fi
+          run --verbose "$dir/notes.md"
+          if [ "$status" != 1 ] || ! grep -q missing-comma "$dir/out" ||
+            ! grep -q 'parser="cmark 0\.' "$dir/out"; then
+            fail "with only $runtime, Markdown wasn't read through it (status $status)"
+          fi
+          sudo apt-get remove -y -q "$runtime"
+          if [ -n "$(libraries)" ] || ldconfig -p | grep -q libcmark; then
+            fail "a cmark library is still installed: $(libraries)"
+          fi
+          run "$dir/notes.md"
+          if [ "$status" != 2 ] || ! grep -q "brew install cmark" "$dir/out" ||
+            ! grep -q "apt install cmark" "$dir/out" ||
+            ! grep -q "attempts=" "$dir/out"; then
+            fail "without cmark, Markdown didn't fail with the message (status $status)"
+          fi
+          run "$dir/notes.txt"
+          if [ "$status" != 1 ] || ! grep -q missing-modal "$dir/out"; then
+            fail "without cmark, plain text wasn't checked as usual (status $status)"
+          fi
+          name=$(printf 'r\303\251sum\303\251.txt')
+          cp "$dir/notes.txt" "$dir/$name"
+          (cd "$dir" && LC_ALL=C LANG=C "$binary" "$name") || true

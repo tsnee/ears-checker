@@ -3,6 +3,7 @@ package io.github.tsnee.ears.cli
 import java.time.Instant
 
 import io.github.tsnee.ears.Profile
+import io.github.tsnee.ears.markdown.MarkdownUnavailable
 import zio.LogLevel
 import zio.json.*
 
@@ -36,6 +37,15 @@ private[cli] object Logging:
       "format" -> formatName(settings.inputFormat),
       "profile" -> profileName(settings.profile),
       "output" -> outputName(settings.output)
+    )
+
+  /** For a Markdown input, the parser that reads it, or, without one, every library tried. */
+  def parserDetails(parser: Option[Either[MarkdownUnavailable, String]]): Map[String, String] =
+    parser.fold(Map.empty)(
+      _.fold(
+        unavailable => Map("parser" -> "none", "attempts" -> unavailable.attempts.mkString("; ")),
+        name => Map("parser" -> name)
+      )
     )
 
   /** The command line exactly, as a JSON array, so arguments with spaces keep their boundaries. */

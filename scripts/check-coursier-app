@@ -1,0 +1,286 @@
+#!/usr/bin/env sh
+# The Coursier app's check: install `ears-check` from this repository's channel file
+# (coursier/apps.json) with Coursier's CLI, pointed at this build, then run it and the JVM jar on
+# the cases in scripts/cli-cases and require the same standard output, the same messages on
+# standard error (log lines aside), and the same exit status. A development check, run by
+# contributors and CI.
+# Needs cs, java, jq, and git on the PATH; openspec too unless --cases smoke, and cmark for
+# --binary (to read Markdown).
+#
+# First it checks the descriptor's download addresses: each platform's must name that platform's
+# native binary in the GitHub Release of the version installed. Then it installs a copy of the
+# descriptor whose only changes are where things come from: the CLI from this build (published to
+# ~/.ivy2/local, which goes in front of the descriptor's own repositories, at this build's version
+# in place of latest.release, which it must ask for), and the native binaries from local files.
+# Its repositories, launcher type, main class, and JVM options are the descriptor's own, so a
+# broken field fails the check.
+#
+# Without --binary, every native address names a file that doesn't exist, so Coursier installs
+# the JVM launcher. The cases run it, like the jar, on the java on the PATH and without
+# JAVA_OPTS: the launcher would otherwise prefer $JAVA_HOME's java. With --binary <file>, this
+# platform's address names that file, and the installed command must run exactly it.
+# --jar <file> compares with a jar built elsewhere instead of building one; --channel <file>
+# checks another channel file. --repo <dir> installs from an Ivy repository that already holds
+# this build's ears and ears.cli (one version), such as another job's ~/.ivy2/local, so Mill
+# doesn't run (it needs --jar). --cases smoke runs four cases (help, a passing file, a failing
+# file, JSON output) instead of scripts/cli-cases, whose cases need a Unix system.
+#
+# On Windows it runs under Git Bash: Coursier writes ears-check.bat there, and `cs` and the
+# file: addresses get Windows paths. Windows has no native binary, so --binary is refused.
+set -e
+
+usage() {
+  echo "Usage: check-coursier-app [--binary <file>] [--jar <file>] [--channel <file>]" \
+    "[--repo <dir>] [--cases full|smoke]" >&2
+  exit 2
+}
+binary='' jar='' channel=coursier/apps.json repo='' cases=full
+while [ $# -gt 0 ]; do
+  [ $# -ge 2 ] || usage
+  case $1 in
+    --binary) binary=$2 ;;
+    --jar) jar=$2 ;;
+    --channel) channel=$2 ;;
+    --repo) repo=$2 ;;
+    --cases) cases=$2 ;;
+    *) usage ;;
+  esac
+  shift 2
+done
+case $cases in full | smoke) ;; *) usage ;; esac
+# Absolute, since the check runs from the repository's root.
+absolute() {
+  case $1 in
+    "" | /*) printf '%s' "$1" ;;
+    *) printf '%s/%s' "$(pwd)" "$1" ;;
+  esac
+}
+binary=$(absolute "$binary") jar=$(absolute "$jar") channel=$(absolute "$channel")
+repo=$(absolute "$repo")
+
+case $(uname -s) in
+  MINGW* | MSYS* | CYGWIN*) windows=yes ;;
+  *) windows=no ;;
+esac
+# Windows' jq is a native build, which writes CRLF line endings unless given -b.
+if [ "$windows" = yes ]; then
+  jq() { command jq -b "$@"; }
+fi
+# A path as `cs` and Java take it, and as a file: URL.
+native_path() {
+  if [ "$windows" = yes ]; then cygpath -m "$1"; else printf '%s' "$1"; fi
+}
+file_url() {
+  p=$(native_path "$1")
+  case $p in
+    /*) printf 'file://%s' "$p" ;;
+    *) printf 'file:///%s' "$p" ;;
+  esac
+}
+
+fail() {
+  echo "check-coursier-app: $1" >&2
+  exit 1
+}
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi |
+    cut -d ' ' -f 1
+}
+
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+root=$(pwd)
+
+[ -f "$channel" ] || fail "no channel file at $channel"
+jq -e 'type == "object" and keys == ["ears-check"]' "$channel" >/dev/null ||
+  fail "$channel must describe exactly one app, ears-check"
+cli=io.github.tsnee:ears-checker-cli_3
+jq -e --arg d "$cli:latest.release" '."ears-check".dependencies == [$d]' "$channel" >/dev/null ||
+  fail "the app must depend on exactly $cli:latest.release, so it installs each new release"
+
+# Mill runs on its own (not in a pipeline) so a failed build stops the script with Mill's errors.
+shown() {
+  if ! shown=$(./mill --ticker false show "$1"); then
+    fail "building $1 failed (see the Mill output above)"
+  fi
+  printf '%s' "$shown" | jq -r 'if type == "object" then .path else . end |
+    sub("^ref:v[0-9]+:[0-9a-f]+:"; "")'
+}
+if [ -n "$repo" ]; then
+  [ -n "$jar" ] || fail "--repo needs --jar, since Mill doesn't run"
+  versions=$(ls "$repo/io.github.tsnee/ears-checker-cli_3" 2>/dev/null || true)
+  [ -n "$versions" ] && [ "$(printf '%s\n' "$versions" | wc -l)" -eq 1 ] ||
+    fail "$repo must hold exactly one version of ears-checker-cli_3, not [$versions]"
+  version=$versions
+else
+  version=$(shown ears.cli.publishVersion)
+fi
+
+# The download addresses, with the version filled in, against the release's file names
+# (docs/release-files.md). The platforms are Coursier's names, then this project's.
+release="https://github.com/tsnee/ears-checker/releases/download/v$version"
+platforms="x86_64-pc-linux:linux-x64 aarch64-pc-linux:linux-arm64 aarch64-apple-darwin:macos-arm64"
+listed=$(jq -r '."ears-check".prebuiltBinaries // {} | keys | sort | join(" ")' "$channel")
+expected=$(for p in $platforms; do echo "${p%%:*}"; done | LC_ALL=C sort | xargs)
+[ "$listed" = "$expected" ] ||
+  fail "the app's native addresses are for [$listed], not [$expected]"
+for p in $platforms; do
+  coursier=${p%%:*} ours=${p#*:}
+  address=$(jq -r --arg p "$coursier" --arg v "$version" \
+    '."ears-check".prebuiltBinaries[$p] | gsub("\\$\\{version\\}"; $v)' "$channel")
+  want="$release/ears-check-$version-$ours"
+  if [ "$address" != "$want" ]; then
+    fail "the $ours address names ${address##*/}, not ears-check-$version-$ours ($address)"
+  fi
+done
+echo "check-coursier-app: every native address names its platform's release file"
+
+if [ -n "$binary" ]; then
+  [ -f "$binary" ] && [ -x "$binary" ] || fail "no executable binary at $binary"
+  [ "$windows" = no ] || fail "no native binary is released for Windows"
+  case "$(uname -s) $(uname -m)" in
+    "Linux x86_64") here=x86_64-pc-linux ours=linux-x64 ;;
+    "Linux aarch64" | "Linux arm64") here=aarch64-pc-linux ours=linux-arm64 ;;
+    "Darwin arm64") here=aarch64-apple-darwin ours=macos-arm64 ;;
+    *) fail "no native binary is released for $(uname -s) $(uname -m)" ;;
+  esac
+fi
+if [ -z "$jar" ]; then
+  jar=$(shown ears.cli.assembly)
+fi
+[ -n "$jar" ] && [ -f "$jar" ] || fail "no jar at $jar"
+
+# The CLI's jar and its library's, where the descriptor's copy resolves them.
+if [ -n "$repo" ]; then
+  local_repo="ivy:$(file_url "$repo")/[defaultPattern]"
+else
+  if ! ./mill --ticker false ears.publishLocal + ears.cli.publishLocal; then
+    fail "publishing ears and ears.cli to ~/.ivy2/local failed (see the Mill output above)"
+  fi
+  local_repo=ivy2Local
+fi
+
+tmp=$(mktemp -d)
+# sh runs the EXIT trap on exit, but not when interrupted; the INT and TERM traps exit, which
+# runs it.
+trap 'rm -rf "$tmp"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# The copy: this build's version, from its local repository ahead of the descriptor's
+# repositories, and every native address a local file: missing, except this platform's with
+# --binary.
+mkdir -p "$tmp/channel" "$tmp/release" "$tmp/bin"
+if [ -n "$binary" ]; then
+  cp "$binary" "$tmp/release/ears-check-$version-$ours"
+fi
+# MSYS2_ARG_CONV_EXCL keeps Git Bash from rewriting the arguments that hold URLs (it rewrites
+# whatever looks like a Unix path for native programs), so the file is passed in Windows form.
+MSYS2_ARG_CONV_EXCL='*' jq --arg v "$version" --arg dir "$(file_url "$tmp/release")" \
+  --arg here "${here:-}" --arg repo "$local_repo" '
+  ."ears-check" |= (
+    .repositories = [$repo] + (.repositories // [])
+    | .dependencies |= map(sub(":latest\\.release$"; ":" + $v))
+    | .prebuiltBinaries |= with_entries(
+        .value = (if .key == $here then $dir + "/" + (.value | split("/") | last)
+                  else $dir + "/missing/" + (.value | split("/") | last) end)))
+' "$(native_path "$channel")" >"$tmp/channel/ears-check.json.all"
+jq '."ears-check"' "$tmp/channel/ears-check.json.all" >"$tmp/channel/ears-check.json"
+rm "$tmp/channel/ears-check.json.all"
+
+echo "check-coursier-app: installing ears-check $version from $channel, as:"
+cat "$tmp/channel/ears-check.json"
+if ! cs install -q --default-channels=false --channel "$(native_path "$tmp/channel")" \
+  --install-dir "$(native_path "$tmp/bin")" ears-check; then
+  fail "cs install failed (see its output above)"
+fi
+installed="$tmp/bin/ears-check"
+[ "$windows" = no ] || installed="$installed.bat"
+wrote=$(ls -A "$tmp/bin")
+if [ "$windows" = yes ]; then
+  [ -f "$installed" ] || fail "cs install wrote no ears-check.bat (it wrote: $wrote)"
+else
+  [ -x "$installed" ] || fail "cs install wrote no executable ears-check (it wrote: $wrote)"
+fi
+
+# Coursier installs a native binary as .ears-check.aux, behind a small script.
+if [ -n "$binary" ]; then
+  if [ ! -f "$tmp/bin/.ears-check.aux" ] || ! cmp -s "$tmp/bin/.ears-check.aux" "$binary"; then
+    what="a JVM launcher, or another file"
+    fail "the installed command isn't the native binary $binary (Coursier installed $what)"
+  fi
+  echo "check-coursier-app: installed the native binary, sha256 $(sha256 "$binary")"
+elif [ "$windows" = yes ]; then
+  # Coursier's JVM launcher on Windows: a batch file that runs java with the descriptor's options.
+  # The batch file has the launcher jar appended; the message shows its text, without NULs.
+  if ! grep -q -F -e '-XX:+IgnoreUnrecognizedVMOptions' "$installed"; then
+    text=$(head -c 2000 "$installed" | tr -d '\000')
+    fail "the installed ears-check.bat isn't Coursier's JVM launcher: $text"
+  fi
+  # Coursier names a native binary's file .<name>.aux.exe on Windows.
+  [ ! -e "$tmp/bin/.ears-check.aux.exe" ] ||
+    fail "Coursier installed a native binary, though none was available"
+  echo "check-coursier-app: installed the JVM launcher (ears-check.bat)"
+else
+  # Coursier's JVM launcher: a sh preamble that runs java with the descriptor's options on the
+  # jar appended to it.
+  preamble=$(LC_ALL=C head -c 4096 "$installed" | LC_ALL=C tr -d '\000')
+  # The patterns are the launcher's own text, not this script's variables.
+  # shellcheck disable=SC2016
+  case $preamble in
+    '#!/usr/bin/env sh'*'-jar "$0"'*'exec "$JAVA_CMD"'*) ;;
+    *) fail "the installed command isn't Coursier's JVM launcher" ;;
+  esac
+  [ ! -e "$tmp/bin/.ears-check.aux" ] ||
+    fail "Coursier installed a native binary, though none was available"
+  echo "check-coursier-app: installed the JVM launcher"
+fi
+echo "check-coursier-app: against $jar, sha256 $(sha256 "$jar")"
+
+# In a subshell, so the variables stay set for the jar.
+coursier_cli() { (unset JAVA_HOME JAVA_OPTS && "$installed" "$@"); }
+
+check=check-coursier-app subject=coursier label="the Coursier app"
+if [ "$cases" = full ]; then
+  . "$root/scripts/cli-cases"
+  echo "check-coursier-app: the Coursier app matches the JVM CLI on every case"
+  exit 0
+fi
+
+# The smoke cases: like scripts/cli-cases' compare, on inputs any system can make.
+jvm_cli() {
+  java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow -jar "$jar" "$@"
+}
+smoke() {
+  name=$1 expected=$2
+  shift 2
+  for build in coursier jvm; do
+    mkdir -p "$tmp/$build"
+    status=0
+    "${build}_cli" "$@" </dev/null >"$tmp/$build/$name.out" 2>"$tmp/$build/$name.log" || status=$?
+    echo "$status" >"$tmp/$build/$name.status"
+    grep -v -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z (TRACE|DEBUG|INFO|WARN|ERROR|FATAL) ' \
+      "$tmp/$build/$name.log" >"$tmp/$build/$name.err" || true
+  done
+  for part in status out err; do
+    if ! cmp -s "$tmp/coursier/$name.$part" "$tmp/jvm/$name.$part"; then
+      echo "check-coursier-app: case $name: $label's $part differs from the JVM CLI's" >&2
+      echo "(< coursier, > JVM)" >&2
+      diff "$tmp/coursier/$name.$part" "$tmp/jvm/$name.$part" | head -40 >&2 || true
+      exit 1
+    fi
+  done
+  status=$(cat "$tmp/coursier/$name.status")
+  [ "$status" = "$expected" ] ||
+    fail "case $name: both builds exited with $status, not $expected: $(cat "$tmp/jvm/$name.err")"
+  echo "check-coursier-app: $name: the same (exit status $status)"
+}
+inputs="$tmp/inputs"
+mkdir -p "$inputs"
+printf '%s\n' 'The scheduler shall list upcoming events.' >"$inputs/passing.txt"
+printf '%s\n' 'The scheduler shall list upcoming events.' 'The scheduler lists events.' \
+  >"$inputs/plain.txt"
+smoke help 0 --help
+smoke passing 0 "$inputs/passing.txt"
+smoke plain-text 1 "$inputs/plain.txt"
+smoke plain-json 1 --output json "$inputs/plain.txt"
+echo "check-coursier-app: the Coursier app matches the JVM CLI on the smoke cases"

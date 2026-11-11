@@ -3,13 +3,13 @@ package io.github.tsnee.ears.markdown
 import zio.test.*
 
 /** The same fixtures, with the same expected sentences and lines, on every platform: the JVM
-  * (commonmark-java), Node (mdast), and Scala Native (cmark). The expected results are what the
-  * CLI's Markdown reader gave before the facade, checked against CommonMark.
+  * (commonmark-java), Node (commonmark.js), and Scala Native (cmark). The expected results are what
+  * the CLI's Markdown reader gave before the facade, checked against CommonMark.
   */
 object MarkdownConformanceSuite extends ZIOSpecDefault:
 
   private def fixture(name: String, content: String, expected: Sentence*) =
-    test(name)(assertTrue(Markdown.sentences(content) == expected.toList))
+    test(name)(assertTrue(Markdown.sentences(content) == Right(expected.toList)))
 
   def spec = suite("Markdown conformance")(
     suite("what's read")(
@@ -166,6 +166,28 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
         Sentence(3, "The calendar shall sync.")
       ),
       fixture(
+        "escapes on every line of a paragraph keep each sentence on its line",
+        "Intro.\n\nThe \\<system\\> shall \\<a\\>.\nThe \\<system\\> shall \\<b\\>.\n" +
+          "The \\<system\\> shall \\<c\\>.\n",
+        Sentence(3, "The <system> shall <a>."),
+        Sentence(4, "The <system> shall <b>."),
+        Sentence(5, "The <system> shall <c>.")
+      ),
+      fixture(
+        "inline HTML across lines keeps the text on each side apart",
+        "The <span\nclass=x> a SHALL b. The c SHALL d.\nThe e SHALL f.\n",
+        Sentence(1, "The  a SHALL b."),
+        Sentence(2, "The c SHALL d."),
+        Sentence(3, "The e SHALL f.")
+      ),
+      fixture(
+        "text decoded from an entity, then the same text written plainly, later",
+        "Tom &amp; Jerry SHALL run.\nThe x SHALL y.\nTom & Jerry SHALL run.\n",
+        Sentence(1, "Tom & Jerry SHALL run."),
+        Sentence(2, "The x SHALL y."),
+        Sentence(3, "Tom & Jerry SHALL run.")
+      ),
+      fixture(
         "a reference definition, then a code span across lines",
         "[r]: /u\nIntro `a\nb` c.\nThe scheduler shall list.\n",
         Sentence(4, "The scheduler shall list.")
@@ -250,10 +272,14 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
     suite("deep nesting")(
       test("5,000 levels of emphasis: the sentence is still read"):
         val content = "*a " * 5000 + "The scheduler shall list." + " a*" * 5000 + "\n"
-        assertTrue(Markdown.sentences(content).exists(_.text.contains("The scheduler shall list.")))
+        assertTrue(
+          Markdown.sentences(content).exists(_.exists(_.text.contains("The scheduler shall list.")))
+        )
       ,
       test("10,000 nested block quotes: no crash"):
         val content = "> " * 10000 + "The scheduler shall list.\n"
-        assertTrue(Markdown.sentences(content).size <= 1)
-    )
+        assertTrue(Markdown.sentences(content).exists(_.size <= 1))
+    ),
+    test("the platform's parser is found and named"):
+      assertTrue(Markdown.parser().exists(_.nonEmpty))
   )

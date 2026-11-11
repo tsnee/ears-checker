@@ -5,6 +5,7 @@ import cats.data.Validated
 import cats.data.ValidatedNel
 import cats.syntax.all.*
 import com.monovore.decline.Command
+import com.monovore.decline.Help
 import com.monovore.decline.Opts
 import io.github.tsnee.ears.Profile
 
@@ -45,7 +46,15 @@ object Settings:
     command
       .parse(arguments, Map.empty)
       .left
-      .map(help => Usage(help.toString, help.errors.isEmpty, help.errors))
+      // The errors quote the arguments, which can come from file names a glob found: each is
+      // shown with its control characters as \uXXXX (Visible), while the usage keeps its lines.
+      .map(help =>
+        Usage(
+          Help.fromCommand(command).withErrors(help.errors.map(Visible.escape)).toString,
+          help.errors.isEmpty,
+          help.errors
+        )
+      )
 
   given CanEqual[NonEmptyList[Settings], NonEmptyList[Settings]] = CanEqual.derived
 

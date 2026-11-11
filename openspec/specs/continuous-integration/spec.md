@@ -79,12 +79,12 @@ When every check passes, the CI workflow SHALL report the run as successful.
 - **WHEN** a pushed commit compiles, passes every test, is formatted, and passes the OpenSpec check
 - **THEN** the run succeeds and the commit shows a passing check on GitHub
 
-### Requirement: Linux runners
-The CI workflow SHALL run on GitHub-hosted Linux runners.
+### Requirement: GitHub-hosted runners
+The CI workflow SHALL run on GitHub-hosted Linux and macOS runners.
 
 #### Scenario: Runner for a run
 - **WHEN** a CI run starts
-- **THEN** its job runs on a GitHub-hosted Ubuntu runner and on no macOS or Windows runner
+- **THEN** its jobs run on GitHub-hosted Ubuntu and macOS runners, and none runs on a Windows or self-hosted runner
 
 ### Requirement: Published actions
 The CI workflow SHALL take every setup and caching step from a published GitHub Action.
@@ -216,3 +216,120 @@ The CI workflow SHALL run the Node CLI check on the oldest Node version the CLI 
 #### Scenario: Node 22
 - **WHEN** a CI run checks a pull request
 - **THEN** the Node CLI check runs once on Node 22 and once on Node 26
+
+### Requirement: Native CLI differences
+If the native binary writes different standard output or messages than the JVM CLI's jar on the same arguments and input, or exits with a different status, then the CI workflow SHALL fail the run.
+
+#### Scenario: A changed exit status on one platform
+- **WHEN** a pushed commit makes only the native binary exit with a different status for a failing file
+- **THEN** the run fails at the native CLI check, naming the input whose statuses differ
+
+### Requirement: Native CLI differences on every platform
+If the native binary for linux-x64, linux-arm64, or macos-arm64 writes different standard output or messages than the JVM CLI's jar on the same arguments and input, or exits with a different status, on its platform's oldest or newest runner, then the CI workflow SHALL fail the run.
+
+#### Scenario: A change that breaks only macOS
+- **WHEN** a pushed commit makes only the macos-arm64 binary exit with a different status for a failing file
+- **THEN** the run fails at that platform's native CLI check, naming the input whose statuses differ
+
+#### Scenario: A binary that needs a newer system
+- **WHEN** the linux-x64 binary built on the oldest runner passes there but doesn't start on the newest
+- **THEN** the run fails at the check on the newest runner
+
+### Requirement: Changelog failures
+If `CHANGELOG.md` doesn't have the changelog's form, then the CI workflow SHALL fail the run.
+
+#### Scenario: A misnamed heading
+- **WHEN** a pushed commit changes `## Unreleased` to `## Next`
+- **THEN** the run fails with the release-notes tool's message naming `Next`
+
+### Requirement: Release version on release tags
+When the CI workflow runs for a release tag, the CI workflow SHALL build every file it checks at the tag's version.
+
+#### Scenario: Checks for v0.2.0
+- **WHEN** the release run for tag `v0.2.0` runs the CI workflow
+- **THEN** the npm tarballs it checks have version `0.2.0` and the jar and native binaries it checks are named for `0.2.0`
+
+#### Scenario: A pull request
+- **WHEN** the CI workflow runs for a pull request
+- **THEN** it builds the snapshot version, as before
+
+### Requirement: A library planted in the current directory
+If the native binary, run on Linux or macOS with its library path variable naming the current directory, runs code from a cmark library planted in the current directory, then the CI workflow SHALL fail the run.
+
+#### Scenario: A change that loads cmark by bare name again
+- **WHEN** a pushed commit makes the Linux binary try `libcmark.so` by bare name whatever `LD_LIBRARY_PATH` holds
+- **THEN** the run fails at the planted-library check on Linux, saying the planted library ran
+
+### Requirement: Scala Native modules compiled one at a time
+The CI workflow SHALL compile the Scala Native modules one at a time, each after the previous one's compile has finished.
+
+#### Scenario: Compile step's log
+- **WHEN** a CI run compiles from a fresh checkout
+- **THEN** its log shows no two of `ears.native`, `ears.native.test`, `ears.markdown.native`, `ears.markdown.native.test`, `ears.cli.native`, and `ears.cli.native.test` compiling at the same time
+
+### Requirement: Coursier app differences
+If the command installed from the Coursier channel file, as the JVM launcher or as a native binary, writes different standard output or messages than the JVM CLI's jar on the same arguments and input, or exits with a different status, then the CI workflow SHALL fail the run.
+
+#### Scenario: A dropped JVM option
+- **WHEN** a pushed commit removes `--sun-misc-unsafe-memory-access=allow` from the app's JVM options
+- **THEN** the run fails at the Coursier app check on JDK 27, naming the input whose messages differ
+
+### Requirement: Coursier app on the oldest JDK
+The CI workflow SHALL run the Coursier app check for the JVM launcher on JDK 17, as well as on JDK 27.
+
+#### Scenario: JDK 17
+- **WHEN** a CI run checks a pull request
+- **THEN** the Coursier app check runs the JVM launcher once on JDK 17 and once on JDK 27
+
+### Requirement: Coursier native install
+If installing the Coursier app on linux-x64, linux-arm64, or macos-arm64, with that platform's native binary available at the app's download address, gives a command that doesn't run that exact binary, then the CI workflow SHALL fail the run.
+
+#### Scenario: A JVM launcher instead of the binary
+- **WHEN** a pushed commit changes the app's launcher type so that Coursier never uses a native binary
+- **THEN** the run fails at the Coursier app check of each native recheck job, saying the installed command isn't the native binary
+
+### Requirement: Coursier download addresses
+If the Coursier app's download address for linux-x64, linux-arm64, or macos-arm64 doesn't name that platform's native binary in the GitHub Release of the version installed, then the CI workflow SHALL fail the run.
+
+#### Scenario: Swapped platforms
+- **WHEN** a pushed commit gives the app's linux-arm64 address the linux-x64 file name
+- **THEN** the run fails at the Coursier app check, naming linux-arm64 and both file names
+
+### Requirement: Coursier app without a native binary
+The CI workflow SHALL check the Coursier app's JVM launcher on Intel macOS and on Windows on x64, which have no native binary in the release.
+
+#### Scenario: Intel macOS and Windows
+- **WHEN** a CI run checks a commit
+- **THEN** the Coursier app check installs the JVM launcher on `macos-15-intel` and on `windows-latest` and compares it with the jar
+
+### Requirement: Pinned Node CLI install
+When the Node CLI check installs the packed CLI package, the check SHALL install each of its dependencies at the version and checksum the Markdown facade's lockfile records.
+
+#### Scenario: A newer dependency on npm
+- **WHEN** a newer `entities` 3.0.x is published to npm and the Node CLI check runs
+- **THEN** it installs `entities` 3.0.1, the version the lockfile records
+
+#### Scenario: A checksum that doesn't match
+- **WHEN** a package the check installs doesn't match the checksum its lockfile records
+- **THEN** the check fails before running the Node CLI, reporting the integrity error
+
+### Requirement: No install scripts in the Node CLI install
+When the Node CLI check installs the packed CLI package, the check SHALL install it with npm's install scripts disabled.
+
+#### Scenario: A package with a postinstall script
+- **WHEN** a package the check installs declares a `postinstall` script
+- **THEN** the install finishes without running that script
+
+### Requirement: Release files kept before dependencies run
+When the Node CLI check keeps the tarball and jar for a release, the check SHALL copy them to its output directory before any code from the CLI's dependencies runs.
+
+#### Scenario: Kept before the install
+- **WHEN** the Node CLI check runs with an output directory
+- **THEN** its log lists the kept tarball and jar, with their checksums, before the install
+
+### Requirement: Kept files unchanged
+If a file in the Node CLI check's output directory changes between the check keeping its files and the check ending, then the check SHALL fail.
+
+#### Scenario: A kept file that changes
+- **WHEN** the library tarball another check kept in the same output directory changes while the Node CLI check runs its cases
+- **THEN** the check fails, naming the file and both checksums

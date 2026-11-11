@@ -1,5 +1,7 @@
 # Format, compile, test, and the OpenSpec check, on every push to main and every pull request,
-# and on a release tag when release.yml calls it before publishing. Publishes nothing itself.
+# and on a release tag when release.yml calls it before publishing. Publishes nothing itself. On a
+# release tag every job builds at the tag's version, and the files the checks passed on are kept
+# as artifacts named release-* for release.yml to attach; any other run keeps none.
 name: CI
 
 on:
@@ -26,6 +28,13 @@ jobs:
         with:
           persist-credentials: false
 
+      # On a release tag, everything is built at the tag's version.
+      - name: Set the release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "EARS_RELEASE_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
       # The java that scripts/check-openspec starts the CLI jar with: the newest JDK here, the
       # oldest supported one in check-jdk17. Mill fetches its own JDK 27 for the build.
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
@@ -42,35 +51,96 @@ jobs:
       # Dependencies, Mill's JDK, and the Mill launcher.
       - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
 
-      # cmark, which ears.markdown.native's tests link against (Scala Native's clang is on the
-      # runner already).
+      # cmark, which the native Markdown reader loads when it runs, in the native tests (Scala
+      # Native's clang is on the runner already; nothing links cmark). The native CLI's checks are
+      # in native.yml.
       - name: Install cmark
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends libcmark-dev
-          pkg-config --modversion libcmark
+          dpkg-query -W 'libcmark*'
 
-      # The OpenSpec CLI, and the TypeScript compiler and linters the npm package check uses.
+      # The OpenSpec CLI, and the TypeScript compiler and linters the npm package check uses,
+      # with their whole dependency tree pinned by .github/tools/package-lock.json and no install
+      # scripts run: these jobs build files a release attaches.
       - name: Install the npm tools
-        run: >-
-          npm install -g @fission-ai/openspec@1.16.0 typescript@7.0.2 publint@0.3.25
-          @arethetypeswrong/cli@0.18.5
+        run: |
+          npm ci --prefix .github/tools --ignore-scripts --no-audit --no-fund
+          echo "$PWD/.github/tools/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Check formatting
         run: ./mill __.checkFormat
 
       - name: Compile
-        run: ./mill __.compile
+        run: ./mill '__:^ScalaNativeModule.compile'
+
+      # Scala Native 0.5.12's compiler plugin caches its definitions globally with no locking, so
+      # two native compiles in Mill's one JVM can corrupt each other's compiler state ("tail of
+      # empty list", run 42516759834). Compile them one at a time until a release fixes it:
+      # https://github.com/scala-native/scala-native/issues/4950
+      - name: Compile Scala Native, one module at a time
+        run: ./mill -j 1 '__:ScalaNativeModule.compile'
 
       - name: Test
         run: ./mill __.test
 
+      # The changelog's form: Unreleased, then each release, newest first.
+      - name: Check the changelog
+        run: ./mill ears.releaseNotes.run check CHANGELOG.md
+
+      # Each check keeps the files it passed on in kept/, logging their SHA-256.
       - name: Check the npm package
-        run: scripts/check-npm-package
+        run: scripts/check-npm-package --out kept
 
       # The Node CLI, installed from its packed package, against the JVM jar on the same inputs.
       - name: Check the Node CLI
-        run: scripts/check-npm-cli
+        run: scripts/check-npm-cli --out kept
+
+      # On a release tag, the jar and both tarballs, as checked, for the release.
+      - name: Name the jar for the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          mv kept/ears-check.jar "kept/ears-check-$EARS_RELEASE_VERSION.jar"
+          ls -l kept
+
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-jvm
+          path: kept/
+          if-no-files-found: error
+
+      # Coursier's CLI, for the app check; it keeps the runner's JVM and installs no apps. After
+      # the release files are uploaded, since it and the check's Mill run download tools.
+      - uses: coursier/setup-action@648df969f41ef15fda2baba8b37f9fa3d16390a3 # v3.0.4
+        with:
+          apps: ""
+
+      # The app installed from coursier/apps.json with no native binary to download: the JVM
+      # launcher, on this job's JDK, against the jar kept above (renamed on a release tag).
+      - name: Check the Coursier app
+        run: |
+          jar=kept/ears-check.jar
+          [ -f "$jar" ] || jar="kept/ears-check-$EARS_RELEASE_VERSION.jar"
+          scripts/check-coursier-app --jar "$jar"
+
+      # The ears and ears.cli that check published to ~/.ivy2/local, and the jar it compared with,
+      # for the Coursier app jobs on platforms with no native binary.
+      - name: Collect the Coursier app's inputs
+        run: |
+          jar=kept/ears-check.jar
+          [ -f "$jar" ] || jar="kept/ears-check-$EARS_RELEASE_VERSION.jar"
+          mkdir -p coursier-inputs/repo
+          cp -R ~/.ivy2/local/io.github.tsnee coursier-inputs/repo/
+          cp "$jar" coursier-inputs/ears-check.jar
+          find coursier-inputs -maxdepth 4
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coursier-inputs
+          path: coursier-inputs/
+          if-no-files-found: error
+          retention-days: 7
 
       # scala-cli links the Scala.js library's link-check program against the published artifact;
       # it uses the runner's Java from setup-java.
@@ -88,7 +158,7 @@ jobs:
         run: |
           failed=0
           fence="\`\`\`"
-          for module in ears ears.cli ears.npm ears.linkCheck ears.markdown; do
+          for module in ears ears.cli ears.npm ears.linkCheck ears.markdown ears.releaseNotes; do
             if report="$(./mill --ticker false "$module.scoverage.consoleReport" 2>&1)"; then
               lines="$(printf '%s\n' "$report" | grep -E '^(Statement|Branch) coverage' || true)"
             else
@@ -112,9 +182,81 @@ jobs:
           + ears.npm.scoverage.validateCoverageMinimums
           + ears.linkCheck.scoverage.validateCoverageMinimums
           + ears.markdown.scoverage.validateCoverageMinimums
+          + ears.releaseNotes.scoverage.validateCoverageMinimums
 
       - name: Check OpenSpec
         run: scripts/check-openspec
+
+  # The native binary for each released platform, built and checked on its oldest runner and
+  # checked again on its newest.
+  native:
+    uses: ./.github/workflows/native.yml
+
+  # The Coursier app where the release has no native binary, so it installs the JVM launcher:
+  # Intel macOS with every case, and Windows with the smoke cases (the others need a Unix
+  # system). Both install this build from check's artifact, so Mill doesn't run here.
+  coursier-jvm:
+    name: Coursier app (${{ matrix.platform }})
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Temurin has no JDK 27 for Intel macOS, so 25, the newest it has there (an LTS).
+          - platform: macos-x64
+            runner: macos-15-intel
+            cases: full
+            java: "25"
+          - platform: windows-x64
+            runner: windows-latest
+            cases: smoke
+            java: "27"
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Windows checks files out with CRLF line endings by default, which sh scripts can't run.
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      # Every case reads this repository's specs as OpenSpec JSON, with the OpenSpec CLI.
+      - if: matrix.cases == 'full'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+
+      - if: matrix.cases == 'full'
+        name: Install the npm tools
+        run: |
+          npm ci --prefix .github/tools --ignore-scripts --no-audit --no-fund
+          echo "$PWD/.github/tools/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - uses: coursier/setup-action@648df969f41ef15fda2baba8b37f9fa3d16390a3 # v3.0.4
+        with:
+          apps: ""
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: coursier-inputs
+          path: coursier-inputs/
+
+      - name: Check the Coursier app
+        env:
+          CASES: ${{ matrix.cases }}
+        run: >-
+          scripts/check-coursier-app --repo coursier-inputs/repo
+          --jar coursier-inputs/ears-check.jar --cases "$CASES"
 
   # The oldest supported runtimes: the OpenSpec check again with JDK 17, the oldest JDK the jar
   # supports, starting it; and the npm package and Node CLI checks on Node 22, the oldest Node the
@@ -129,6 +271,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set the release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "EARS_RELEASE_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
@@ -142,9 +290,9 @@ jobs:
       - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
 
       - name: Install the npm tools
-        run: >-
-          npm install -g @fission-ai/openspec@1.16.0 typescript@7.0.2 publint@0.3.25
-          @arethetypeswrong/cli@0.18.5
+        run: |
+          npm ci --prefix .github/tools --ignore-scripts --no-audit --no-fund
+          echo "$PWD/.github/tools/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Check OpenSpec
         run: scripts/check-openspec
@@ -154,3 +302,11 @@ jobs:
 
       - name: Check the Node CLI
         run: scripts/check-npm-cli
+
+      - uses: coursier/setup-action@648df969f41ef15fda2baba8b37f9fa3d16390a3 # v3.0.4
+        with:
+          apps: ""
+
+      # The Coursier app's JVM launcher on JDK 17, whose JVM must skip the newer flag.
+      - name: Check the Coursier app
+        run: scripts/check-coursier-app

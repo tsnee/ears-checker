@@ -10,6 +10,7 @@ import mill.scalajslib.*
 import mill.scalajslib.api.ESModuleImportMapping
 import mill.scalajslib.api.ModuleKind
 import mill.scalanativelib.*
+import mill.scalanativelib.api.ReleaseMode
 import mill.scalalib.*
 import mill.scalalib.publish.*
 import mill.scalalib.scalafmt.ScalafmtModule
@@ -41,6 +42,9 @@ val pureWarts = zioSafeWarts :+ "Any"
 val zioVersion = "2.1.27"
 val declineVersion = "2.6.2"
 val zioJsonVersion = "1.1.1"
+
+/** commonmark-java, for the Markdown facade on the JVM and the release-notes tool. */
+val commonmarkVersion = "0.31.0"
 
 def wartOptions(warts: Seq[String]): Seq[String] =
   warts.map(w => s"-P:wartremover:traverser:org.wartremover.warts.$w")
@@ -294,6 +298,20 @@ object ears extends Base with Published with Covered {
     }
   }
 
+  /** The same sources and tests on Scala Native, for the native CLI. `ears/src-jvm` serves it
+    * too: Scala Native's `java.util.Locale` gives `LetterCase` the JVM's results. Not published.
+    */
+  object native extends Base with ScalaNativeModule {
+    def scalaNativeVersion = markdown.native.scalaNativeVersion()
+    override def warts = pureWarts
+    def sources = Task(ears.sharedSources() ++ ears.jvmSources())
+    def mvnDeps = ears.mvnDeps
+
+    object test extends ScalaNativeTests with ZioSpecs {
+      def sources = ears.test.sources
+    }
+  }
+
   /** The npm package `@tsnee/ears-checker`. This module is its pure core, every decision behind
     * `classify`, compiled and measured on the JVM; `js` adds the Scala.js export. Neither is
     * published to Maven Central: top-level exports in a Scala.js library would be exported from
@@ -395,15 +413,15 @@ object ears extends Base with Published with Covered {
   }
 
   /** Requirement sentences from Markdown: shared extraction over a small parser facade, with one
-    * parser per platform (commonmark-java here; mdast on Node in `js`; cmark in `native`). Not
-    * published: `cli` compiles the shared and JVM sources into itself.
+    * parser per platform (commonmark-java here; commonmark.js on Node in `js`; cmark in
+    * `native`). Not published: `cli` compiles the shared and JVM sources into itself.
     */
   object markdown extends Base with Covered {
     override def warts = pureWarts
     def sharedSources = Task.Sources("src")
     def jvmSources = Task.Sources("src-jvm")
     def sources = Task(sharedSources() ++ jvmSources())
-    def mvnDeps = Seq(mvn"org.commonmark:commonmark:0.31.0")
+    def mvnDeps = Seq(mvn"org.commonmark:commonmark:$commonmarkVersion")
 
     def statementCoverageMin = Some(100.0)
     def branchCoverageMin = Some(100.0)
@@ -411,7 +429,9 @@ object ears extends Base with Published with Covered {
     /** The conformance suite, which every platform's test module compiles. */
     object test extends CoveredTests with ZioSpecs
 
-    /** The shared sources and the mdast parser, for Node. Its tests run the conformance suite. */
+    /** The shared sources and the commonmark.js parser, for Node. Its tests run the conformance
+      * suite.
+      */
     object js extends Base with ScalaJSModule with NpmInstalled {
       def scalaJSVersion = ears.js.scalaJSVersion()
       override def warts = pureWarts
@@ -424,42 +444,23 @@ object ears extends Base with Published with Covered {
         // Node resolves a bare import only from `node_modules` above the importing file, and the
         // tests are linked under `out/`: the map points the import at the installed package.
         def scalaJSImportMap = Task {
-          val entry = npmDependencies().path / "mdast-util-from-markdown" / "index.js"
-          Seq(ESModuleImportMapping.Prefix("mdast-util-from-markdown", entry.toNIO.toUri.toString))
+          val entry = npmDependencies().path / "commonmark" / "lib" / "index.js"
+          Seq(ESModuleImportMapping.Prefix("commonmark", entry.toNIO.toUri.toString))
         }
       }
     }
 
-    /** The shared sources and the cmark parser, for Scala Native. Its tests run the conformance
-      * suite natively, linked with the system's cmark.
+    /** The shared sources and the cmark parser, for Scala Native. Nothing links cmark: the parser
+      * finds an installed cmark when it runs (`CmarkLibrary`), so the build needs none, and the
+      * tests, which run the conformance suite natively, need one installed.
       */
     object native extends Base with ScalaNativeModule {
       def scalaNativeVersion = "0.5.12"
       override def warts = pureWarts
       def sources = Task(markdown.sharedSources() ++ super.sources())
 
-      /** cmark's linker flags, from `pkg-config`: read on every run (an input), so a change of
-        * the system library is noticed.
-        */
-      def cmarkLinking = Task.Input {
-        val missing = "cmark isn't installed, or pkg-config can't find it: install them " +
-          "(`brew install cmark pkg-config`, or `apt-get install libcmark-dev pkg-config`) " +
-          "to link ears.markdown.native"
-        // os-lib throws when the program itself isn't there.
-        scala.util.Try(os.proc("pkg-config", "--libs", "libcmark").call(check = false)).toOption
-          .filter(_.exitCode == 0) match {
-          case Some(found) => found.out.trim().split("\\s+").toSeq.filter(_.nonEmpty)
-          case None => Task.fail(missing)
-        }
-      }
-
-      // cmark's flags first, so its -L comes before Mill's defaults (such as Homebrew's lib
-      // directory) and the library pkg-config names is the one linked.
-      def nativeLinkingOptions = Task(cmarkLinking() ++ super.nativeLinkingOptions())
-
       object test extends ScalaNativeTests with ZioSpecs {
         def sources = markdown.test.sources
-        def nativeLinkingOptions = Task(cmarkLinking() ++ super.nativeLinkingOptions())
       }
     }
   }
@@ -491,11 +492,31 @@ object ears extends Base with Published with Covered {
       mvn"dev.zio::zio:$zioVersion",
       mvn"com.monovore::decline:$declineVersion",
       mvn"dev.zio::zio-json:$zioJsonVersion",
-      mvn"org.commonmark:commonmark:0.31.0"
+      mvn"org.commonmark:commonmark:$commonmarkVersion"
     )
 
     def statementCoverageMin = Some(96.0)
     def branchCoverageMin = Some(95.0)
+
+    /** `CheckerBuild.version`, the release this program is (`publishVersion`: `0.2.0`, or the next
+      * version as `0.2.0-SNAPSHOT`), which JSON output names. Not `BuildInfo`: zio-json has one, and
+      * a wildcard import of `zio.json.*` would take its place. Generated for every platform's build
+      * of the program, so they all say the same.
+      */
+    def checkerBuild = Task {
+      os.write(
+        Task.dest / "io" / "github" / "tsnee" / "ears" / "cli" / "CheckerBuild.scala",
+        s"""package io.github.tsnee.ears.cli
+           |
+           |/** Generated by build.mill (`cli.checkerBuild`). */
+           |private[cli] object CheckerBuild:
+           |  val version: String = "${publishVersion()}"
+           |""".stripMargin,
+        createFolders = true
+      )
+      PathRef(Task.dest)
+    }
+    def generatedSources = Task(super.generatedSources() :+ checkerBuild())
 
     object test extends CoveredTests with ZioSpecs {
 
@@ -511,6 +532,39 @@ object ears extends Base with Published with Covered {
       }
     }
 
+    /** The same program as a native binary: the shared sources, the JVM's entry point and
+      * reading (`src-jvm`: every Java API it uses works on Scala Native), and the Markdown
+      * facade's cmark parser. Linked with Scala Native's full release optimizations; its tests,
+      * which only need to run, in debug mode, which links much faster.
+      */
+    object native extends Base with ScalaNativeModule {
+      def scalaNativeVersion = markdown.native.scalaNativeVersion()
+      def moduleDeps = Seq(ears.native)
+      // markdown.native's sources include the facade's shared ones.
+      def sources = Task(cli.sharedSources() ++ cli.jvmSources() ++ markdown.native.sources())
+      def generatedSources = Task(super.generatedSources() :+ cli.checkerBuild())
+      def mainClass = Some("io.github.tsnee.ears.cli.Main")
+      def releaseMode = Task(ReleaseMode.ReleaseFull)
+
+      // On macOS, the oldest release the binary runs on, the oldest GitHub's runners have;
+      // otherwise clang declares the build machine's own release.
+      private def macosMinimum =
+        if (scala.util.Properties.isMac) Seq("-mmacosx-version-min=15.0") else Nil
+      def nativeCompileOptions = Task(super.nativeCompileOptions() ++ macosMinimum)
+      def nativeLinkingOptions = Task(super.nativeLinkingOptions() ++ macosMinimum)
+
+      def mvnDeps = Seq(
+        mvn"dev.zio::zio::$zioVersion",
+        mvn"com.monovore::decline::$declineVersion",
+        mvn"dev.zio::zio-json::$zioJsonVersion"
+      )
+
+      object test extends ScalaNativeTests with ZioSpecs {
+        def sources = cli.test.sharedSources
+        def releaseMode = Task(ReleaseMode.Debug)
+      }
+    }
+
     /** The same program on Node: the shared sources, Node's entry point and reading (`js/src`),
       * and the Markdown facade's Node parser. Not published to Maven; it becomes the npm package
       * `@tsnee/ears-checker-cli`.
@@ -519,6 +573,7 @@ object ears extends Base with Published with Covered {
       def scalaJSVersion = ears.js.scalaJSVersion()
       def moduleDeps = Seq(ears.js)
       def sources = Task(cli.sharedSources() ++ super.sources() ++ markdown.js.sources())
+      def generatedSources = Task(super.generatedSources() :+ cli.checkerBuild())
       def mainClass = Some("io.github.tsnee.ears.cli.NodeMain")
       def moduleKind = Task(ModuleKind.ESModule)
 
@@ -565,7 +620,7 @@ object ears extends Base with Published with Covered {
         )
         os.copy(packageFiles().path / "README.md", out / "README.md")
         os.copy(npm.license().path, out / "LICENSE")
-        val parser = "mdast-util-from-markdown"
+        val parser = "commonmark"
         val lockfile = markdown.js.npmManifest().map(_.path).filter(_.last == "package-lock.json")
         val pinned = lockfile.headOption
           .flatMap(file => ujson.read(os.read(file))("packages").obj.get(s"node_modules/$parser"))
@@ -624,5 +679,21 @@ object ears extends Base with Published with Covered {
       * program generated from it. Not published.
       */
     object fixture extends Base
+  }
+
+  /** Checks `CHANGELOG.md`'s form and writes a version's release notes from its section. Reads
+    * Markdown with commonmark-java directly: it needs headings and source text, which the
+    * checker's facade doesn't give. Not published.
+    */
+  object releaseNotes extends Base with Covered {
+    def mvnDeps = Seq(
+      mvn"dev.zio::zio:$zioVersion",
+      mvn"org.commonmark:commonmark:$commonmarkVersion"
+    )
+
+    def statementCoverageMin = Some(96.0)
+    def branchCoverageMin = Some(100.0)
+
+    object test extends CoveredTests with ZioSpecs
   }
 }

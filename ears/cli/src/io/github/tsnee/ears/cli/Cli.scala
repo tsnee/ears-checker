@@ -3,6 +3,7 @@ package io.github.tsnee.ears.cli
 import java.time.Instant
 
 import cats.data.NonEmptyList
+import io.github.tsnee.ears.markdown.Markdown
 import zio.*
 
 /** `ears-check [--format text|markdown|openspec] [--profile classic|openspec] [--output text|json]
@@ -119,27 +120,36 @@ object Cli:
           )
         annotated(details)(ZIO.logDebug("Arguments")) *> loaded.either.map(Checker.outcome)
 
-  /** One input read and split into requirements, with its details on every entry it logs. */
+  /** One input read and split into requirements, with its details on every entry it logs: for
+    * Markdown, those include the parser, or every library tried when there's none.
+    */
   private def load(
       settings: Settings,
       reading: Reading
   ): IO[String, (Settings, List[Candidate])] =
-    annotated(Logging.inputDetails(settings)) {
-      for
-        _ <- ZIO.logDebug("Reading input")
-        content <- read(settings, reading)
-        candidates <- ZIO
-          .fromEither(Checker.candidates(settings, content))
-          .tapError(reason =>
-            annotated(Map("error" -> "parse", "reason" -> reason, "exit" -> "2"))(
-              ZIO.logError("Cannot parse input")
-            )
-          )
-        _ <- annotated(
-          Map("characters" -> content.length.toString, "requirements" -> candidates.size.toString)
-        )(ZIO.logInfo("Read input"))
-      yield settings -> candidates
-    }
+    ZIO
+      .when(settings.inputFormat == InputFormat.Markdown)(ZIO.succeed(Markdown.parser()))
+      .flatMap(parser =>
+        annotated(Logging.inputDetails(settings) ++ Logging.parserDetails(parser)) {
+          for
+            _ <- ZIO.logDebug("Reading input")
+            content <- read(settings, reading)
+            candidates <- ZIO
+              .fromEither(Checker.candidates(settings, content))
+              .tapError(reason =>
+                annotated(Map("error" -> "parse", "reason" -> reason, "exit" -> "2"))(
+                  ZIO.logError("Cannot parse input")
+                )
+              )
+            _ <- annotated(
+              Map(
+                "characters" -> content.length.toString,
+                "requirements" -> candidates.size.toString
+              )
+            )(ZIO.logInfo("Read input"))
+          yield settings -> candidates
+        }
+      )
 
   /** The input's text, or the message for standard error; the error itself is logged first. */
   private def read(settings: Settings, reading: Reading): IO[String, String] =

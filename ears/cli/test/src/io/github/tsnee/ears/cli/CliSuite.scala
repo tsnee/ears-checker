@@ -71,6 +71,46 @@ object CliSuite extends ZIOSpecDefault:
           )
         )
       ,
+      test("a file name with an escape sequence shows it as \\u001b"):
+        run(Map.empty, "mis\u001b[1Asing.txt").map(outcome =>
+          assertTrue(outcome.stderr == "Cannot read mis\\u001b[1Asing.txt\n")
+        )
+      ,
+      test("a file name with line feeds stays one line, showing \\u000a"):
+        run(Map.empty, "x\nforged.md:1: missing-comma\ny.md").map(outcome =>
+          assertTrue(
+            outcome.stderr == "Cannot read x\\u000aforged.md:1: missing-comma\\u000ay.md\n"
+          )
+        )
+      ,
+      test("a bad argument with a line feed can't add a line of its own"):
+        Cli
+          .program(
+            List("--format", "y\nforged"),
+            Reading(_ => unreadable("ENOENT"), unreadable(""))
+          )
+          .map(outcome =>
+            assertTrue(
+              outcome.exitCode == 2,
+              outcome.stderr.contains("y\\u000aforged"),
+              !outcome.stderr.linesIterator.exists(_.startsWith("forged"))
+            )
+          )
+      ,
+      test("a bad argument with an escape sequence shows it as \\u001b"):
+        Cli
+          .program(
+            List("--format", "y\u001b[2Kaml"),
+            Reading(_ => unreadable("ENOENT"), unreadable(""))
+          )
+          .map(outcome =>
+            assertTrue(
+              outcome.exitCode == 2,
+              outcome.stderr.contains("y\\u001b[2Kaml"),
+              !outcome.stderr.exists(c => Character.isISOControl(c) && c != '\n')
+            )
+          )
+      ,
       test("a file that isn't UTF-8: status 2, its name, and where"):
         run(Map("notes.txt" -> ZIO.fail(ReadFailure.NotUtf8(3, 1) -> "invalid UTF-8")), "notes.txt")
           .map(outcome =>

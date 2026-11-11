@@ -1,0 +1,161 @@
+#!/usr/bin/env sh
+# Times ears-check on growing inputs, on each build: the JVM jar, the Node package (packed and
+# installed into an empty project, as a user gets it), and the native binary. The inputs are made
+# from this repository's specs: Markdown, every openspec/specs/*/spec.md concatenated, and plain
+# text, their requirements one per line, each repeated --copies times. Each run writes JSON
+# (--output json), which must be a valid document, so a crash is never timed as a run. Each timed
+# cell is a JSON record (the run, date, commit marked -dirty when uncommitted, machine, runtimes,
+# build, input, size, and seconds), appended to docs/measurements/time-cli.jsonl; the Markdown
+# table it prints for docs/performance.md is rendered from those records by
+# docs/measurements/time-cli.jq. One wall-clock run per cell, so small differences are noise. A
+# development tool, not part of any package.
+# Needs java, node, npm, jq, git, openspec, and cmark (for the native binary's Markdown).
+#
+# --copies <n,n,...> (default 8,16,32,76) sets the input sizes; --builds <jvm,node,native>
+# (default all three) which builds to time; --records <file> appends the records to another file,
+# or to none when empty.
+set -e
+
+usage() {
+  echo "Usage: time-cli [--copies <n,n,...>] [--builds <jvm,node,native>] [--records <file>]" >&2
+  exit 2
+}
+copies=8,16,32,76
+builds=jvm,node,native
+records=docs/measurements/time-cli.jsonl
+while [ $# -gt 0 ]; do
+  [ $# -ge 2 ] || usage
+  case $1 in
+    --copies) copies=$2 ;;
+    --builds) builds=$2 ;;
+    --records) records=$2 ;;
+    *) usage ;;
+  esac
+  shift 2
+done
+case $copies in *[!0-9,]* | "" | ,* | *, | *,,*) usage ;; esac
+for build in $(printf '%s' "$builds" | tr ',' ' '); do
+  case $build in jvm | node | native) ;; *) usage ;; esac
+done
+wanted() { case ",$builds," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
+# A relative records path is relative to where the script is run.
+case $records in
+  "" | /*) ;;
+  *) records=$(pwd)/$records ;;
+esac
+
+cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+
+# Mill runs on its own (not in a pipeline) so a failed build stops the script with Mill's errors.
+built() {
+  if ! shown=$(./mill --ticker false show "$1"); then
+    echo "time-cli: building $1 failed (see the Mill output above)" >&2
+    exit 1
+  fi
+  printf '%s' "$shown" | jq -r 'if type == "object" then .path else . end |
+    sub("^ref:v[0-9]+:[0-9a-f]+:"; "")'
+}
+
+tmp=$(mktemp -d)
+# sh runs the EXIT trap on exit, but not when interrupted; the INT and TERM traps exit, which
+# runs it.
+trap 'rm -rf "$tmp"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+if wanted jvm; then jar=$(built ears.cli.assembly); fi
+if wanted native; then binary=$(built ears.cli.native.nativeLink); fi
+if wanted node; then
+  package=$(built ears.cli.js.npmPackage)
+  npm pack "$package" --pack-destination "$tmp" --cache "$tmp/cache" --silent >/dev/null
+  set -- "$tmp"/tsnee-ears-checker-cli-*.tgz
+  # From a pinned lockfile and with no install scripts, as check-npm-cli installs it.
+  check='time-cli' root=$(pwd)
+  . "$root/scripts/npm-cli-project"
+  install_cli_project "$tmp/project" "$1" "$tmp/cache"
+fi
+
+# The units: the specs as Markdown, and their requirements as plain text.
+cat openspec/specs/*/spec.md >"$tmp/unit.md"
+for spec in $(openspec list --specs --json | jq -r '.specs[].id'); do
+  openspec show "$spec" --type spec --json | jq -r '.requirements[].text | gsub("\n"; " ")'
+done >"$tmp/unit.txt"
+# Both units must have content: a failed openspec or jq above leaves the plain text empty.
+if [ ! -s "$tmp/unit.md" ] || [ ! -s "$tmp/unit.txt" ]; then
+  echo "time-cli: no specs to time (is openspec installed?)" >&2
+  exit 1
+fi
+
+# Seconds of wall-clock time for one build on one input, writing JSON; the run must exit 0 or 1
+# (findings) and write a valid document, or the script fails. /usr/bin/time runs a program, so each
+# build is spelled out.
+seconds() {
+  status=0
+  case $1 in
+    jvm)
+      /usr/bin/time -p java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow \
+        -jar "$jar" --output json "$2" >"$tmp/out" 2>"$tmp/time" || status=$?
+      ;;
+    node)
+      /usr/bin/time -p "$tmp/project/node_modules/.bin/ears-check" --output json "$2" >"$tmp/out" \
+        2>"$tmp/time" ||
+        status=$?
+      ;;
+    native)
+      /usr/bin/time -p "$binary" --output json "$2" >"$tmp/out" 2>"$tmp/time" || status=$?
+      ;;
+  esac
+  if [ "$status" -gt 1 ]; then
+    echo "time-cli: $1 on $2 exited $status:" >&2
+    cat "$tmp/time" >&2
+    exit 1
+  fi
+  if ! jq -e '.version == 1 and (.findings | type == "array")' "$tmp/out" >/dev/null 2>&1; then
+    echo "time-cli: $1 on $2 wrote no valid JSON document:" >&2
+    head -c 2000 "$tmp/out" "$tmp/time" >&2
+    exit 1
+  fi
+  awk '$1 == "real" { print $2 }' "$tmp/time"
+}
+
+java_version=$(java -version 2>&1 | head -n 1)
+run=$(date -u +%Y-%m-%dT%H:%M:%SZ) date=$(date +%Y-%m-%d) commit=$(git describe --always --dirty)
+machine=$(uname -sm) node_version=$(node --version)
+echo "$date at $commit, $machine, Node $node_version,"
+echo "$java_version; one run per cell, --output json, wall-clock seconds."
+echo
+: >"$tmp/records.jsonl"
+if [ -n "$records" ]; then mkdir -p "$(dirname "$records")"; fi
+for kind in md txt; do
+  for n in $(printf '%s' "$copies" | tr ',' ' '); do
+    input="$tmp/input-$n.$kind"
+    : >"$input"
+    i=0
+    while [ "$i" -lt "$n" ]; do
+      cat "$tmp/unit.$kind" >>"$input"
+      i=$((i + 1))
+    done
+    bytes=$(wc -c <"$input" | tr -d ' ')
+    for build in jvm node native; do
+      if wanted "$build"; then
+        took=$(seconds "$build" "$input")
+        jq -n -c --arg run "$run" --arg date "$date" --arg commit "$commit" \
+          --arg machine "$machine" --arg node "$node_version" --arg java "$java_version" \
+          --arg build "$build" --arg input "$kind" --argjson copies "$n" \
+          --argjson bytes "$bytes" --argjson seconds "$took" \
+          '{run: $run, date: $date, commit: $commit, machine: $machine, node: $node,
+            java: $java, output: "json", build: $build, input: $input, copies: $copies,
+            bytes: $bytes, seconds: $seconds}' >"$tmp/record.json"
+        # Kept as soon as it's measured, so a run that fails later loses nothing.
+        cat "$tmp/record.json" >>"$tmp/records.jsonl"
+        if [ -n "$records" ]; then cat "$tmp/record.json" >>"$records"; fi
+      fi
+    done
+  done
+done
+
+# The table, from the run's records, so the two can't disagree.
+jq -s -r --arg run "$run" -f docs/measurements/time-cli.jq "$tmp/records.jsonl"
+if [ -n "$records" ]; then
+  echo "time-cli: $(grep -c . "$tmp/records.jsonl") records appended to $records" >&2
+fi
