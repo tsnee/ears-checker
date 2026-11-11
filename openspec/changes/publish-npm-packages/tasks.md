@@ -20,7 +20,7 @@ All work is on branch `batch-npm`. The owner pushes from their own shell, and do
 
 ## 4. Approval
 
-- [ ] 4.1 `scripts/approve-npm-release` (decision 4); `bash -n` and `shellcheck` pass. Against 0.2.0's published release it downloads `SHA256SUMS` and reports nothing staged for either package, approving nothing and exiting non-zero; against a draft release (or a missing tag, `v9.9.9`) it refuses before touching npm
+- [x] 4.1 `scripts/approve-npm-release` (decision 4); `bash -n` and `shellcheck` pass. Against 0.2.0's published release it downloads `SHA256SUMS` and reports nothing staged for either package, approving nothing and exiting non-zero; against a draft release (or a missing tag, `v9.9.9`) it refuses before touching npm
 - [x] 4.2 CLAUDE.md's Releasing section (decision 5: the owner's order, the dropped-deployment case, the one-time setup before 0.3.0 and the two-day limit), its Layout (the script and `.github/npm`), and CONTRIBUTING.md if it lists scripts; verify with `mq`
 
 ## 5. Documents for users
