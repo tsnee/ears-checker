@@ -21,7 +21,7 @@ All work is on branch `batch-release-0.2.0`, in the "release 0.2.0" theme (draft
 
 - [x] 4.1 Run the full gate as documented, the new native compile step included. Report coverage, and add a dated line to `docs/worklog.md`
 - [x] 4.2 Run `/code-review` in a subagent on this change, and let the owner choose which findings to fix
-- [ ] 4.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes, and check from its log that the native compiles didn't overlap
+- [x] 4.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes, and check from its log that the native compiles didn't overlap
 
 ## Workflow follow-up
 

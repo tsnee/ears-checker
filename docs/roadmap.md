@@ -11,8 +11,8 @@ theme is done.
 ### Release 0.2.0 (branch `batch-release-0.2.0`, PR #17)
 
 Already in it: the CLI on Scala Native, release notes and GitHub Releases, the JSON output
-reference, the README for users, faster Markdown on Node, and loading cmark safely. In progress:
-compiling the Scala Native modules one at a time (compile-native-serially).
+reference, the README for users, faster Markdown on Node, loading cmark safely, measuring coverage
+from a clean slate, and compiling the Scala Native modules one at a time.
 
 1. **The CLI as a Coursier app**: an app description, with a channel file in this repository,
    so `cs install` sets up `ears-check`.

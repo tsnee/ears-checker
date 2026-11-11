@@ -20,6 +20,10 @@ Scala Native 0.5.12.
 | default (parallel) | 47 | 1 | 2 | 7 | 2.13 |
 | `-j 1` | 60 | 3 | 3 | 4 | 3.33 |
 
+In CI (run 43010858605, 2026-11-11, at 8616a82, `ubuntu-latest`, a cold Mill daemon), the step
+"Compile Scala Native, one module at a time" took 28 s (11:20:29 to 11:20:57), after 57 s for the
+parallel compile of everything else.
+
 ## After speed-up-node-markdown
 
 The classifier fix, and Node reading Markdown with commonmark.js, after the review's fixes. From
