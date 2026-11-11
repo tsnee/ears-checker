@@ -253,3 +253,8 @@
   launcher (ears-check.bat) but its standard error had four JDK 27 warnings about Coursier's
   launcher calling System.load. The descriptor now also passes --enable-native-access=ALL-UNNAMED
   (Temurin 17.0.21 and JDK 27 both start with it); Windows' next run is the test.
+- 2026-11-11: update-openspec: OpenSpec 1.17.0 everywhere. The owner removed nvm's 1.16.0 (so
+  `openspec` is Homebrew's 1.17.0) and set `delivery: skills`; `openspec update` refreshed the 11
+  skills and removed `.claude/commands/opsx/`, as the scratch probe predicted. CI's tools pin
+  1.17.0 (only its lockfile entry changed); `scripts/check-openspec` passed on 1.17.0 (24 of 24)
+  and `npm ci --ignore-scripts` of `.github/tools` installed 1.17.0.

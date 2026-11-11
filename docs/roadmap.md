@@ -15,11 +15,9 @@ reference, the README for users, faster Markdown on Node, loading cmark safely, 
 from a clean slate, compiling the Scala Native modules one at a time, and the CLI as a Coursier
 app (checked in CI on Linux, Apple silicon and Intel macOS, and Windows).
 
-1. **OpenSpec 1.17.0** (released 2026-11-09; the owner's machine has it, CI pins 1.16.0 in
-   `.github/tools/package-lock.json`): bump the lockfile, run `openspec update` to refresh the
-   generated skills and `/opsx:*` commands, and decide whether to switch to skills only
-   (`openspec config set delivery skills`) before OpenSpec 2.0 drops command files. The owner
-   chose to do it next rather than wait for the release to age (2026-11-11).
+1. **OpenSpec 1.17.0** (update-openspec, in progress): CI's tools pinned at 1.17.0, the skills
+   refreshed, and skills only, ahead of OpenSpec 2.0 dropping command files (the owner's choices,
+   2026-11-11).
 2. **Release 0.2.0**, after a security review of the whole repository (CLAUDE.md's Releasing
    steps). It's a minor release: inline code changes some of the classifier's verdicts. The
    pull request merges just before the tag, since a release is tagged on `main`. Once it's

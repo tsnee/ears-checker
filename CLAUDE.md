@@ -9,9 +9,14 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
 
 ## Workflow
 
-- Develop through OpenSpec: propose a change (`/opsx:propose` or `/opsx:new`), implement it
-  with `/opsx:apply`, check it with `/opsx:verify`, and archive it with `/opsx:archive`.
-  Don't start feature code without a change.
+- Develop through OpenSpec's skills: propose a change (`/openspec-propose` or
+  `/openspec-new-change`), implement it with `/openspec-apply-change`, check it with
+  `/openspec-verify-change`, and archive it with `/openspec-archive-change`. Don't start feature
+  code without a change. CI's OpenSpec version is pinned in `.github/tools/package-lock.json`;
+  the local `openspec` should match it. The repository keeps skills only, no command files:
+  `openspec update` reproduces that only when OpenSpec's user config (`openspec config list`)
+  has `delivery: skills` and all 11 workflows; otherwise it adds `.claude/commands/opsx/` or
+  changes the skill set, and that part of its output is discarded.
 - Every requirement is strict EARS, with `SHALL` in uppercase because OpenSpec's validator
   requires it. The templates and wording rules are in `openspec/config.yaml` under
   `rules.specs`, which OpenSpec feeds into every spec it writes.

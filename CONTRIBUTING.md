@@ -116,7 +116,9 @@ Coursier app (on Linux x64, also with less cmark installed).
 - **Through OpenSpec.** Each change is planned in `openspec/changes/<name>/` (a proposal, a
   design, tasks, and the specs it adds or changes), implemented, and archived, which merges its
   specs into `openspec/specs/`. A change usually has three commits: the plan, the
-  implementation, and the archive.
+  implementation, and the archive. The repository keeps OpenSpec's Claude Code skills
+  (`.claude/skills/`) and no command files; if `openspec update` adds `.claude/commands/opsx/`
+  (your OpenSpec config has `delivery: both`), discard that part.
 - **Requirements are strict EARS**, with `SHALL` in uppercase as OpenSpec's validator requires;
   `openspec/config.yaml` lists the templates and wording rules. ears-checker checks its own
   specs, so `scripts/check-openspec` fails on a requirement that doesn't fit.
