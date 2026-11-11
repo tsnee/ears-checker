@@ -1,10 +1,6 @@
 # Tasks
 
-All work is on branch `add-markdown-facade`, in one pull request that also carries the archive.
-The owner pushes from their own shell; Claude opens the pull request and reads runs with `gh`.
-Compile, test, and format through Metals (BSP) where it can; shared test sources, `forkEnv`,
-the npm and native toolchains, `show`, the coverage check, and the final CI-equivalent run go
-through `./mill`. cmark is installed locally (0.31.2, Homebrew).
+All work is on branch `add-markdown-facade`, in one pull request that also carries the archive. The owner pushes from their own shell; Claude opens the pull request and reads runs with `gh`. Compile, test, and format through Metals (BSP) where it can; shared test sources, `forkEnv`, the npm and native toolchains, `show`, the coverage check, and the final CI-equivalent run go through `./mill`. cmark is installed locally (0.31.2, Homebrew).
 
 ## 1. The facade on the JVM (test-first)
 

@@ -1,7 +1,6 @@
 # Tasks
 
-No spec, source file, or test changes in this change. If one seems
-needed for the build to pass, stop and ask first.
+No spec, source file, or test changes in this change. If one seems needed for the build to pass, stop and ask first.
 
 ## 1. Build
 

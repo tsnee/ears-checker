@@ -1,10 +1,6 @@
 # Tasks
 
-All work is on branch `add-cli-logging`, in one pull request that also
-carries the archive. The owner pushes from their own shell; Claude
-opens the pull request and reads runs with `gh`. Compile, test, and
-format through Metals (BSP); use `./mill` only for the coverage check,
-`assembly`, and the final CI-equivalent run.
+All work is on branch `add-cli-logging`, in one pull request that also carries the archive. The owner pushes from their own shell; Claude opens the pull request and reads runs with `gh`. Compile, test, and format through Metals (BSP); use `./mill` only for the coverage check, `assembly`, and the final CI-equivalent run.
 
 ## 1. Run-wide options (test-first)
 

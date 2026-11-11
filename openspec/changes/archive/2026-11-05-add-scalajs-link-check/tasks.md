@@ -1,9 +1,6 @@
 # Tasks
 
-All work is on branch `add-scalajs-link-check`, in one pull request that also carries the
-archive. The owner pushes from their own shell; Claude opens the pull request and reads runs
-with `gh`. Compile, test, and format through Metals (BSP) where it can; `publishLocal`, `show`,
-`run`, the coverage check, and the final CI-equivalent run go through `./mill`.
+All work is on branch `add-scalajs-link-check`, in one pull request that also carries the archive. The owner pushes from their own shell; Claude opens the pull request and reads runs with `gh`. Compile, test, and format through Metals (BSP) where it can; `publishLocal`, `show`, `run`, the coverage check, and the final CI-equivalent run go through `./mill`.
 
 ## 1. The generator (test-first)
 

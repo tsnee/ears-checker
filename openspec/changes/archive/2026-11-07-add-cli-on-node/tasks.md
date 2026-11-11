@@ -1,10 +1,6 @@
 # Tasks
 
-All work is on branch `add-cli-on-node`, in one pull request that also carries the archive. The
-owner pushes from their own shell; Claude opens the pull request and reads runs with `gh`.
-Compile, test, and format through Metals (BSP) where it can; shared test sources, `forkEnv`,
-Scala.js and npm, `show`, the coverage check, and the final CI-equivalent run go through
-`./mill`. npm commands take `--cache` under a temporary directory.
+All work is on branch `add-cli-on-node`, in one pull request that also carries the archive. The owner pushes from their own shell; Claude opens the pull request and reads runs with `gh`. Compile, test, and format through Metals (BSP) where it can; shared test sources, `forkEnv`, Scala.js and npm, `show`, the coverage check, and the final CI-equivalent run go through `./mill`. npm commands take `--cache` under a temporary directory.
 
 ## 1. One program, on the JVM (test-first)
 

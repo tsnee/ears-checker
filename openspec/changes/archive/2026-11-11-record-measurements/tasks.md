@@ -1,7 +1,6 @@
 # Tasks
 
-All work is on branch `batch-release-0.2.0`. The owner pushes from their own shell; Claude reads
-runs with `gh`.
+All work is on branch `batch-release-0.2.0`. The owner pushes from their own shell; Claude reads runs with `gh`.
 
 ## 1. CI run records
 

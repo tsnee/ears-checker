@@ -1,7 +1,6 @@
 # Tasks
 
-All work is on branch `batch-release-0.2.0`, the third change in its batch (draft PR #17). The
-owner pushes from their own shell; Claude reads runs with `gh`.
+All work is on branch `batch-release-0.2.0`, the third change in its batch (draft PR #17). The owner pushes from their own shell; Claude reads runs with `gh`.
 
 ## 1. The version and the tests (test-first)
 
@@ -23,5 +22,4 @@ owner pushes from their own shell; Claude reads runs with `gh`.
 
 ## Workflow follow-up
 
-- After CI passes, archive the change on the same branch (syncing `ears-cli`) for the owner to
-  push.
+- After CI passes, archive the change on the same branch (syncing `ears-cli`) for the owner to push.

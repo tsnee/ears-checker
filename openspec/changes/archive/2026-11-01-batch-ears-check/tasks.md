@@ -1,8 +1,6 @@
 # Tasks
 
-Existing tests stay unchanged except the expected values of the three
-`SettingsSuite` parsing tests, which become `NonEmptyList.one(...)`
-(task 1.2). Any other edit to an existing test: stop and ask first.
+Existing tests stay unchanged except the expected values of the three `SettingsSuite` parsing tests, which become `NonEmptyList.one(...)` (task 1.2). Any other edit to an existing test: stop and ask first.
 
 ## 1. Settings: one per file (test-first)
 

@@ -1,7 +1,6 @@
 # Tasks
 
-All work is on branch `batch-release-0.2.0`, the sixth change in the "release 0.2.0" theme (draft
-PR #17). The owner pushes from their own shell; Claude reads runs with `gh`.
+All work is on branch `batch-release-0.2.0`, the sixth change in the "release 0.2.0" theme (draft PR #17). The owner pushes from their own shell; Claude reads runs with `gh`.
 
 ## 1. The decisions, test-first
 
@@ -26,5 +25,4 @@ PR #17). The owner pushes from their own shell; Claude reads runs with `gh`.
 
 ## Workflow follow-up
 
-- After CI passes (including task 3.1's step on every platform), archive the change on the same
-  branch (syncing `markdown-input` and `continuous-integration`) for the owner to push.
+- After CI passes (including task 3.1's step on every platform), archive the change on the same branch (syncing `markdown-input` and `continuous-integration`) for the owner to push.

@@ -1,8 +1,6 @@
 # Tasks
 
-All work is on branch `batch-release-0.2.0`, in the "release 0.2.0" theme (draft PR #17), the
-first of the security review's two fixes. The owner pushes from their own shell; Claude reads
-runs with `gh`.
+All work is on branch `batch-release-0.2.0`, in the "release 0.2.0" theme (draft PR #17), the first of the security review's two fixes. The owner pushes from their own shell; Claude reads runs with `gh`.
 
 ## 1. Tests first
 
@@ -26,5 +24,4 @@ runs with `gh`.
 
 ## Workflow follow-up
 
-- After CI passes, archive the change on the same branch (syncing `ears-cli`) for the owner to
-  push.
+- After CI passes, archive the change on the same branch (syncing `ears-cli`) for the owner to push.

@@ -1,7 +1,6 @@
 # Tasks
 
-All work is on branch `batch-release-0.2.0`, in the "release 0.2.0" theme (draft PR #17), before
-`add-coursier-app`. The owner pushes from their own shell; Claude reads runs with `gh`.
+All work is on branch `batch-release-0.2.0`, in the "release 0.2.0" theme (draft PR #17), before `add-coursier-app`. The owner pushes from their own shell; Claude reads runs with `gh`.
 
 ## 1. Evidence
 
@@ -25,5 +24,4 @@ All work is on branch `batch-release-0.2.0`, in the "release 0.2.0" theme (draft
 
 ## Workflow follow-up
 
-- After CI passes, archive the change on the same branch (syncing `continuous-integration`) for
-  the owner to push.
+- After CI passes, archive the change on the same branch (syncing `continuous-integration`) for the owner to push.

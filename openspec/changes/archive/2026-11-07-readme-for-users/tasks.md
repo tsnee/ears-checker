@@ -1,7 +1,6 @@
 # Tasks
 
-All work is on branch `batch-release-0.2.0`, the fourth change in the "release 0.2.0" theme
-(draft PR #17). The owner pushes from their own shell; Claude reads runs with `gh`.
+All work is on branch `batch-release-0.2.0`, the fourth change in the "release 0.2.0" theme (draft PR #17). The owner pushes from their own shell; Claude reads runs with `gh`.
 
 ## 1. Contributing and security
 
