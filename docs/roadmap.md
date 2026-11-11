@@ -12,13 +12,11 @@ theme is done.
 
 Already in it: the CLI on Scala Native, release notes and GitHub Releases, the JSON output
 reference, the README for users, faster Markdown on Node, loading cmark safely, measuring coverage
-from a clean slate, compiling the Scala Native modules one at a time, and the CLI as a Coursier
-app (checked in CI on Linux, Apple silicon and Intel macOS, and Windows).
+from a clean slate, compiling the Scala Native modules one at a time, the CLI as a Coursier app
+(checked in CI on Linux, Apple silicon and Intel macOS, and Windows), and OpenSpec 1.17.0 with
+skills only.
 
-1. **OpenSpec 1.17.0** (update-openspec, in progress): CI's tools pinned at 1.17.0, the skills
-   refreshed, and skills only, ahead of OpenSpec 2.0 dropping command files (the owner's choices,
-   2026-11-11).
-2. **Release 0.2.0**, after a security review of the whole repository (CLAUDE.md's Releasing
+1. **Release 0.2.0**, after a security review of the whole repository (CLAUDE.md's Releasing
    steps). It's a minor release: inline code changes some of the classifier's verdicts. The
    pull request merges just before the tag, since a release is tagged on `main`. Once it's
    published, install the Coursier app from `main` on a Mac and check that it runs the release's
@@ -26,7 +24,7 @@ app (checked in CI on Linux, Apple silicon and Intel macOS, and Windows).
 
 ### npm
 
-3. **Publish the npm packages**: the library `@tsnee/ears-checker` and the command line
+2. **Publish the npm packages**: the library `@tsnee/ears-checker` and the command line
    `@tsnee/ears-checker-cli`. The owner (npm account `tsnee`, created 2026-11-07) publishes
    0.2.0 by hand, since npm wants a package to exist before a trusted publisher can be set up.
    Later versions are published from the release workflow with npm's trusted publishing, in
@@ -39,7 +37,7 @@ app (checked in CI on Linux, Apple silicon and Intel macOS, and Windows).
 
 ### A general Scala.js link checker
 
-4. **A general Scala.js link checker**, extracted from `ears.linkCheck`. It writes a program
+3. **A general Scala.js link checker**, extracted from `ears.linkCheck`. It writes a program
    that references every public operation of a Scala.js library from its SemanticDB, and
    `scripts/check-scalajs-link` links it against only the published artifact; it caught
    0.1.0's `java.util.Locale` bug, which the tests hid (zio-test brings in scala-java-locales).

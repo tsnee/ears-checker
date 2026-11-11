@@ -17,7 +17,7 @@ owner pushes from their own shell; Claude reads runs with `gh`.
 
 - [x] 3.1 Run `scripts/check-openspec` (which uses the local 1.17.0) and the CI tools install (`npm ci --ignore-scripts` with a temporary cache into a scratch copy of `.github/tools`); add a dated line to `docs/worklog.md`. No Scala changes, so the rest of the gate isn't needed
 - [x] 3.2 Run `/code-review` in a subagent on this change, and let the owner choose which findings to fix
-- [ ] 3.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes, and that its jobs installed OpenSpec 1.17.0
+- [x] 3.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes, and that its jobs installed OpenSpec 1.17.0
 
 ## Workflow follow-up
 
