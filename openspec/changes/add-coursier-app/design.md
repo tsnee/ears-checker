@@ -87,7 +87,14 @@ Observations (2026-11-08, Coursier 2.1.26 from Homebrew, macOS 27.2 on Apple sil
   on Windows.
 - `prebuiltBinaries`, not `prebuilt`, because this project's file names say `linux-x64` where
   Coursier's platform says `x86_64-pc-linux`.
-- `javaOptions` carries the two flags for the JVM launcher. The native binary takes none.
+- `javaOptions` carries the jar's two flags for the JVM launcher, and
+  `--enable-native-access=ALL-UNNAMED`: on Windows, Coursier's launcher calls `System.load`
+  (`coursier.bootstrap.launcher`), and JDK 24 and later warn about that restricted call on every
+  run unless native access is enabled (CI run 43019564325, 2026-11-11, `windows-latest`, JDK
+  27: four `WARNING:` lines, which the smoke cases caught). The flag only silences that warning,
+  since the JVM allows the call anyway; it changes nothing on Linux and macOS, whose launcher
+  makes no such call. Temurin 17.0.21 and JDK 27 both start with all three flags (2026-11-11,
+  this Mac). The native binary takes none.
 - Timing: Maven Central and the GitHub Release are published by hand, one after the other (CLAUDE.md
   Releasing step 6). Installed between the two, the app falls back to the JVM, silently; it
   works, and `cs update` after the next release picks up a binary. The release steps say to

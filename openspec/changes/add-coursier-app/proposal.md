@@ -13,7 +13,7 @@ choosing a file. The owner chose to keep it in 0.2.0 (2026-11-08).
 ## What Changes
 
 - A channel file in this repository, `coursier/apps.json`, describes the app `ears-check`: the
-  CLI from Maven Central at its latest release, its main class, the two JVM options, and the
+  CLI from Maven Central at its latest release, its main class, its JVM options, and the
   release's native binary for each of the three platforms. Users install it with
   `cs install --channel https://raw.githubusercontent.com/tsnee/ears-checker/main/coursier/apps.json ears-check`.
 - Where the platform has no native binary, or the release's binary can't be downloaded, Coursier

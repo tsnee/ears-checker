@@ -21,11 +21,15 @@ The `ears-check` app SHALL install the latest release of `io.github.tsnee:ears-c
 - **THEN** `ears-check --output json` reports `"checker":"0.2.1"`
 
 ### Requirement: JVM options
-When the `ears-check` app's JVM launcher starts the JVM, the launcher SHALL pass `-XX:+IgnoreUnrecognizedVMOptions` and `--sun-misc-unsafe-memory-access=allow` to it.
+When the `ears-check` app's JVM launcher starts the JVM, the launcher SHALL pass `-XX:+IgnoreUnrecognizedVMOptions`, `--sun-misc-unsafe-memory-access=allow`, and `--enable-native-access=ALL-UNNAMED` to it.
 
 #### Scenario: No warning on a new JDK
 - **WHEN** a user runs the installed JVM launcher on JDK 27
 - **THEN** standard error has no warning about `sun.misc.Unsafe`
+
+#### Scenario: No warning from the launcher on Windows
+- **WHEN** a user on Windows runs the installed JVM launcher on JDK 27
+- **THEN** standard error has no warning about a restricted method
 
 #### Scenario: Starting on JDK 17
 - **WHEN** a user runs the installed JVM launcher on JDK 17
