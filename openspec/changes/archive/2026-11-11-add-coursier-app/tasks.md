@@ -25,13 +25,13 @@ All work is on branch `batch-release-0.2.0`, the eighth change in the "release 0
 
 - [x] 5.1 Run the full gate as documented: `./mill __.checkFormat`, `./mill clean __.scoverage`, `./mill -j 1 '__:ScalaNativeModule.compile'`, `./mill __.test`, every module's `validateCoverageMinimums`, and the six check scripts. Report coverage, and add a dated line to `docs/worklog.md`
 - [x] 5.2 Run `/code-review` in a subagent on this change, and let the owner choose which findings to fix
-- [ ] 5.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes, and that each new step ran
+- [x] 5.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes, and that each new step ran
 
 ## 6. Intel macOS and Windows (added 2026-11-11, decision 5)
 
 - [x] 6.1 Give `scripts/check-coursier-app` `--repo <dir>` (install from an Ivy repository already holding this build, without Mill) and `--cases smoke` (help, a passing file, a failing file, and JSON output), and make it work under Git Bash on Windows (the `.bat` launcher, Windows paths in `file://` addresses). Test `--repo` and `--cases smoke` here, with a scratch repository; say that the Windows branch is first tested in CI
 - [x] 6.2 In `ci.yml`, upload the published CLI and the jar from `check` as an artifact, and add jobs on `macos-15-intel` (all cases) and `windows-latest` (smoke cases) that install the JVM launcher from it and compare it with the jar; update the docs and the design's risks
-- [ ] 6.3 Run the gate's affected checks, run `/code-review` on the additions and let the owner choose fixes, commit, and report the CI run: both new jobs ran, and on each the app installed the JVM launcher
+- [x] 6.3 Run the gate's affected checks, run `/code-review` on the additions and let the owner choose fixes, commit, and report the CI run: both new jobs ran, and on each the app installed the JVM launcher
 
 ## Workflow follow-up
 

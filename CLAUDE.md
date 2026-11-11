@@ -260,7 +260,8 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
     version's notes; `Main` is `check` and `notes`. Not published
 - `openspec/` — specs `ears-classifier`, `ears-cli`, `markdown-input` (the Markdown facade, the
   same on every platform), `npm-package`, `cli-npm-package` (the CLI's npm package),
-  `cli-native-binary` (the native binary), `openspec-check` (the OpenSpec gate:
+  `cli-native-binary` (the native binary), `coursier-app` (the Coursier app and its channel
+  file), `openspec-check` (the OpenSpec gate:
   `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub
   Actions workflow), `release-publishing` (the Maven Central release workflow), `github-release`
   (the changelog and the draft GitHub Release), `test-coverage` (the coverage minimums), and the

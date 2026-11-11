@@ -12,24 +12,23 @@ theme is done.
 
 Already in it: the CLI on Scala Native, release notes and GitHub Releases, the JSON output
 reference, the README for users, faster Markdown on Node, loading cmark safely, measuring coverage
-from a clean slate, and compiling the Scala Native modules one at a time.
+from a clean slate, compiling the Scala Native modules one at a time, and the CLI as a Coursier
+app (checked in CI on Linux, Apple silicon and Intel macOS, and Windows).
 
-1. **The CLI as a Coursier app** (add-coursier-app, in progress): an app description, with a
-   channel file in this repository, so `cs install` sets up `ears-check`, natively where a
-   release has a binary. After 0.2.0 is published, install it from `main` on a Mac and check it
-   runs the release's macos-arm64 binary.
-2. **OpenSpec 1.17.0** (released 2026-11-09; the owner's machine has it, CI pins 1.16.0 in
+1. **OpenSpec 1.17.0** (released 2026-11-09; the owner's machine has it, CI pins 1.16.0 in
    `.github/tools/package-lock.json`): bump the lockfile, run `openspec update` to refresh the
    generated skills and `/opsx:*` commands, and decide whether to switch to skills only
    (`openspec config set delivery skills`) before OpenSpec 2.0 drops command files. The owner
    chose to do it next rather than wait for the release to age (2026-11-11).
-3. **Release 0.2.0**, after a security review of the whole repository (CLAUDE.md's Releasing
+2. **Release 0.2.0**, after a security review of the whole repository (CLAUDE.md's Releasing
    steps). It's a minor release: inline code changes some of the classifier's verdicts. The
-   pull request merges just before the tag, since a release is tagged on `main`.
+   pull request merges just before the tag, since a release is tagged on `main`. Once it's
+   published, install the Coursier app from `main` on a Mac and check that it runs the release's
+   macos-arm64 binary (add-coursier-app's follow-up).
 
 ### npm
 
-4. **Publish the npm packages**: the library `@tsnee/ears-checker` and the command line
+3. **Publish the npm packages**: the library `@tsnee/ears-checker` and the command line
    `@tsnee/ears-checker-cli`. The owner (npm account `tsnee`, created 2026-11-07) publishes
    0.2.0 by hand, since npm wants a package to exist before a trusted publisher can be set up.
    Later versions are published from the release workflow with npm's trusted publishing, in
@@ -42,7 +41,7 @@ from a clean slate, and compiling the Scala Native modules one at a time.
 
 ### A general Scala.js link checker
 
-5. **A general Scala.js link checker**, extracted from `ears.linkCheck`. It writes a program
+4. **A general Scala.js link checker**, extracted from `ears.linkCheck`. It writes a program
    that references every public operation of a Scala.js library from its SemanticDB, and
    `scripts/check-scalajs-link` links it against only the published artifact; it caught
    0.1.0's `java.util.Locale` bug, which the tests hid (zio-test brings in scala-java-locales).
