@@ -1,0 +1,62 @@
+# shellcheck shell=sh
+# The sourcing script sets the variables below, so shellcheck can't see them assigned here.
+# shellcheck disable=SC2154
+# Installs the packed CLI package into an empty project the way CI may: `npm ci --ignore-scripts`
+# from a lockfile built here, so no dependency is resolved fresh and none runs an install script.
+# The lockfile is the tarball's own entry (its checksum computed from the file, its other fields
+# from its package.json) plus every package in ears/markdown/js/package-lock.json, the lockfile the
+# Markdown conformance suite installs commonmark from. Sourced by check-npm-cli and time-cli,
+# which set:
+#   check       its own name, for messages;
+#   root        the repository's root.
+# The function's own variables start with ncp_, since sh has no local ones. npm's output goes to
+# standard error, so a caller's standard output stays its own (time-cli prints a table there).
+# Needs npm, jq, tar, openssl, and base64.
+
+# install_cli_project <project directory> <tarball> <npm cache>
+install_cli_project() {
+  ncp_project=$1 ncp_tarball=$2 ncp_cache=$3
+  ncp_pins="$root/ears/markdown/js/package-lock.json"
+  ncp_manifest=$(tar -xOzf "$ncp_tarball" package/package.json)
+
+  # The package must depend on exactly what the lockfile pins, or the install below couldn't
+  # use it.
+  ncp_wanted=$(printf '%s' "$ncp_manifest" | jq -S -c '.dependencies // {}')
+  ncp_pinned=$(jq -S -c '.packages[""].dependencies // {}' "$ncp_pins")
+  if [ "$ncp_wanted" != "$ncp_pinned" ]; then
+    echo "$check: the CLI package depends on $ncp_wanted, but $ncp_pins pins $ncp_pinned" >&2
+    exit 1
+  fi
+
+  # The tarball's sha512, as npm writes it: a step of its own, so a failure is reported here
+  # rather than as npm's integrity error.
+  mkdir -p "$ncp_project"
+  if ! openssl dgst -sha512 -binary "$ncp_tarball" >"$ncp_project/.digest"; then
+    echo "$check: openssl couldn't compute the sha512 of $ncp_tarball" >&2
+    exit 1
+  fi
+  ncp_integrity="sha512-$(base64 <"$ncp_project/.digest" | tr -d '\n')"
+  rm "$ncp_project/.digest"
+  # "sha512-" and the 88 characters of a 64-byte digest in base64.
+  if [ "${#ncp_integrity}" -ne 95 ]; then
+    echo "$check: $ncp_integrity isn't a sha512 integrity value" >&2
+    exit 1
+  fi
+
+  jq -n --arg tarball "file:$ncp_tarball" \
+    '{name: "user", private: true, dependencies: {"@tsnee/ears-checker-cli": $tarball}}' \
+    >"$ncp_project/package.json"
+  printf '%s' "$ncp_manifest" | jq --arg tarball "file:$ncp_tarball" \
+    --arg integrity "$ncp_integrity" --slurpfile pins "$ncp_pins" '
+    {name: "user", lockfileVersion: 3, requires: true,
+     packages: ({"": {name: "user", dependencies: {"@tsnee/ears-checker-cli": $tarball}},
+                 "node_modules/@tsnee/ears-checker-cli": ({version, resolved: $tarball,
+                   integrity: $integrity} + {dependencies, bin, engines})}
+                + ($pins[0].packages | del(.[""])))}' >"$ncp_project/package-lock.json"
+
+  if ! (cd "$ncp_project" &&
+    npm ci --ignore-scripts --cache "$ncp_cache" --no-audit --no-fund --loglevel error >&2); then
+    echo "$check: npm ci failed installing the CLI package from its pinned lockfile" >&2
+    exit 1
+  fi
+}

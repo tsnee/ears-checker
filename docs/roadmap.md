@@ -18,12 +18,13 @@ skills only.
 
 1. **Release 0.2.0**, after a security review of the whole repository (CLAUDE.md's Releasing
    steps). The review (2026-11-11) found two medium findings, each fixed by its own change first:
-   escape-text-output (in progress: control characters from the input reach the terminal), then
-   pin-npm-cli-check (the Node CLI check installs unpinned npm packages with install scripts in a
-   job that builds release files). It's a minor release: inline code changes some of the
-   classifier's verdicts. The pull request merges just before the tag, since a release is tagged
-   on `main`. Once it's published, install the Coursier app from `main` on a Mac and check that
-   it runs the release's macos-arm64 binary (add-coursier-app's follow-up).
+   escape-text-output (implemented, waiting on CI: control characters from the input reach the
+   terminal), then pin-npm-cli-check (in progress: the Node CLI check installs unpinned npm
+   packages with install scripts in a job that builds release files). It's a minor release:
+   inline code changes some of the classifier's verdicts. The pull request merges just before the
+   tag, since a release is tagged on `main`. Once it's published, install the Coursier app from
+   `main` on a Mac and check that it runs the release's macos-arm64 binary (add-coursier-app's
+   follow-up).
 
 ### npm
 
@@ -78,10 +79,22 @@ skills only.
   2026-11-07, `ears-check --output json --help` printed "Unexpected option: --help" and exited 2,
   where other programs accept it anywhere (the README documents it as the first argument). A
   fix in option parsing, with a test per position.
-- **Lone surrogates in JSON output.** An OpenSpec requirement with an escaped lone surrogate
+- **Control characters and lone surrogates in JSON output.** zio-json escapes only the C0
+  control characters: C1 controls (such as the 8-bit CSI, U+009B), DEL, and U+2028/U+2029 from
+  the input reach `--output json` raw (security review, confirmed with the jar, 2026-11-11). Few
+  terminals act on a UTF-8 C1 control and JSON output is for tools, but escaping them costs a
+  parser nothing (a `\u` escape and the raw character are the same JSON string) and doesn't
+  change the document's version. And an OpenSpec requirement with an escaped lone surrogate
   (`"\ud83d"`) is written as `?` by the jar and the native binary, and as U+FFFD (`ef bf bd`) by
   Node (seen 2026-11-08 in the raw output bytes), so the platforms' JSON differs. Escape it as `\uXXXX` on every
   platform, with a case in `scripts/cli-cases`. OpenSpec's own output can't produce one.
+- **Bidirectional overrides in text output.** escape-text-output escapes control characters and
+  line separators from the input, but not Unicode's bidirectional formatting characters (U+202A
+  to U+202E, U+2066 to U+2069), which aren't control characters: a requirement or file name
+  carrying them can make a finding display in a different order than it's written ("Trojan
+  Source"). Few terminals act on them; editors and web views of saved output do. Escape them in
+  text output and messages as well, with a test and a case in `scripts/cli-cases` (a non-goal of
+  escape-text-output, 2026-11-11).
 - **Directories as input** (`ears-check docs/`), and **a CI snippet or GitHub Action** for
   checking requirements in other projects.
 - **A size limit on each input**, for untrusted input (SECURITY.md counts it as in scope, with

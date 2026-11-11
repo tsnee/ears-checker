@@ -4,10 +4,11 @@
 # same standard output, the same messages on standard error (log lines aside), and the same exit
 # status, on the cases in scripts/cli-cases. A development check, run by contributors and CI; it
 # isn't part of either package.
-# Needs node, npm, java, jq, git, and openspec on the PATH.
+# Needs node, npm, java, jq, git, openspec, and openssl on the PATH.
 #
 # --out <dir> keeps the tarball it installed and the jar it compared it with (as ears-check.jar)
-# in <dir>, for a release to attach.
+# in <dir>, for a release to attach: copied before any dependency's code runs, and checked
+# unchanged at the end.
 set -e
 
 usage() {
@@ -77,6 +78,23 @@ fi
 echo "check-npm-cli: checking $(basename "$tarball"), sha256 $(sha256 "$tarball")"
 echo "check-npm-cli: against $jar, sha256 $(sha256 "$jar")"
 
+# With --out, the files a release attaches are kept now, before any dependency's code runs. Every
+# file in <dir> then, these two and any an earlier check kept there (CI's check-npm-package puts
+# the library's tarball in the same kept/), is checked against its checksum at the end. The main
+# control is the pinned lockfile below; this is a second line.
+if [ -n "$out" ]; then
+  mkdir -p "$out"
+  cp "$tarball" "$out/$(basename "$tarball")"
+  cp "$jar" "$out/ears-check.jar"
+  kept_list="$tmp/kept.sha256"
+  find "$out" -type f | sort | while IFS= read -r kept; do
+    printf '%s %s\n' "$(sha256 "$kept")" "$kept"
+  done >"$kept_list"
+  while IFS= read -r line; do
+    echo "check-npm-cli: kept ${line#* }, sha256 ${line%% *}"
+  done <"$kept_list"
+fi
+
 # No file may name a path on this machine, such as the repository's path compiled into the
 # code.
 if tar -xOzf "$tarball" | grep -q -F -e "$root" -e "$HOME"; then
@@ -103,11 +121,12 @@ if [ "$size" -gt "$limit" ]; then
   exit 1
 fi
 
-# An empty project with only the packed package installed.
+# An empty project with only the packed package installed, from a pinned lockfile and with no
+# install scripts (scripts/npm-cli-project).
+check='check-npm-cli'
 project="$tmp/user"
-mkdir "$project"
-printf '{"name": "user", "private": true}\n' >"$project/package.json"
-(cd "$project" && npm install "$tarball" --cache "$cache" --no-audit --no-fund --silent)
+. "$root/scripts/npm-cli-project"
+install_cli_project "$project" "$tarball" "$cache"
 
 # Every package installed, by name, must be the CLI, the Markdown parser, or one of the parser's
 # dependencies in the lockfile the conformance suite installs from. `npm ls --all --parseable`
@@ -136,14 +155,17 @@ fi
 node_cli() { "$project/node_modules/.bin/ears-check" "$@"; }
 
 # The cases, shared with check-native-cli.
-check=check-npm-cli subject=node label="the Node CLI"
+subject=node label="the Node CLI"
 . "$root/scripts/cli-cases"
+# The kept files must be as they were before anything ran.
 if [ -n "$out" ]; then
-  mkdir -p "$out"
-  cp "$tarball" "$out/"
-  cp "$jar" "$out/ears-check.jar"
-  for kept in "$out/$(basename "$tarball")" "$out/ears-check.jar"; do
-    echo "check-npm-cli: kept $kept, sha256 $(sha256 "$kept")"
-  done
+  while IFS= read -r line; do
+    file=${line#* } before=${line%% *}
+    after=$(sha256 "$file")
+    if [ "$after" != "$before" ]; then
+      echo "check-npm-cli: $file changed while the check ran: sha256 $before, now $after" >&2
+      exit 1
+    fi
+  done <"$kept_list"
 fi
 echo "check-npm-cli: the Node CLI installs and matches the JVM CLI on every case"

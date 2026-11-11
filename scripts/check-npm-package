@@ -4,7 +4,8 @@
 # ears/npm/smoke/consumer.ts under Node and bundler module resolution, then run it on Node.
 # Needs node, npm, jq, tsc, publint, and attw on the PATH; CI installs pinned versions.
 #
-# --out <dir> keeps the tarball it checked in <dir>, for a release to attach.
+# --out <dir> keeps the tarball it checked in <dir>, for a release to attach: copied before the
+# tools run, and checked unchanged at the end.
 set -e
 
 usage() {
@@ -65,6 +66,16 @@ if [ ! -f "$tarball" ]; then
 fi
 echo "check-npm-package: checking $(basename "$tarball"), sha256 $(sha256 "$tarball")"
 
+# With --out, the tarball is kept now, before the tools below run, and checked unchanged at the
+# end.
+if [ -n "$out" ]; then
+  mkdir -p "$out"
+  kept="$out/$(basename "$tarball")"
+  cp "$tarball" "$kept"
+  kept_sha=$(sha256 "$kept")
+  echo "check-npm-package: kept $kept, sha256 $kept_sha"
+fi
+
 # No file may name a path on this machine, such as a source map entry the build failed to make
 # relative.
 if tar -xOzf "$tarball" | grep -q -F -e "$root" -e "$HOME"; then
@@ -118,11 +129,13 @@ publint run "$tarball" --strict
 # An ESM-only package can't be loaded by require(), by design; the profile leaves that out.
 attw "$tarball" --profile esm-only
 
-# An empty ES-module project with only the packed package installed.
+# An empty ES-module project with only the packed package installed. It has no dependencies to
+# pin (checked below), and no install scripts run, as in every install here.
 project="$tmp/consumer"
 mkdir "$project"
 printf '{"name": "consumer", "private": true, "type": "module"}\n' >"$project/package.json"
-(cd "$project" && npm install "$tarball" --cache "$cache" --no-audit --no-fund --silent)
+(cd "$project" &&
+  npm install "$tarball" --ignore-scripts --cache "$cache" --no-audit --no-fund --silent)
 
 # Every installed package, at any depth: `npm ls --all --parseable` prints the project's own
 # directory first, then one line per package. The package must be the only one.
@@ -158,10 +171,9 @@ typecheck() {
 typecheck nodenext nodenext
 typecheck esnext bundler
 node consumer.ts
-if [ -n "$out" ]; then
-  mkdir -p "$out"
-  cp "$tarball" "$out/"
-  kept="$out/$(basename "$tarball")"
-  echo "check-npm-package: kept $kept, sha256 $(sha256 "$kept")"
+if [ -n "$out" ] && [ "$(sha256 "$kept")" != "$kept_sha" ]; then
+  echo "check-npm-package: $kept changed while the check ran: sha256 $kept_sha, now" \
+    "$(sha256 "$kept")" >&2
+  exit 1
 fi
 echo "check-npm-package: the npm package builds, lints, installs, type-checks, and runs"

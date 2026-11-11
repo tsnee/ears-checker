@@ -272,3 +272,24 @@
   the escapes against text built without a format string. The gate passed again: ears.cli
   97.40% / 100%, every other module unchanged, all six scripts, including new escape-sequence
   and vertical-tab cases on every build.
+- 2026-11-11: pin-npm-cli-check (the security review's finding 2): `scripts/check-npm-cli` and
+  `scripts/time-cli` install the packed CLI with `npm ci --ignore-scripts` from a lockfile built
+  from the tarball and the Markdown facade's lockfile (`scripts/npm-cli-project`), and `--out`
+  keeps the release files before any dependency runs; `check-npm-package` adds
+  `--ignore-scripts`. The plan's probe passed under npm 11.21.1 and 10.9.9. Checked here: the
+  check passes with `--out` (both kept files unchanged); a wrong `entities` checksum stops the
+  install with `EINTEGRITY`; a kept jar changed during the cases fails the check, naming the file
+  and both checksums.
+  The documented gate passed (coverage unchanged: ears 95.91% / 92.04%, ears.cli 97.40% / 100%,
+  ears.npm, ears.markdown 100% / 100%, ears.linkCheck 97.28% / 100%, ears.releaseNotes 96.60% /
+  100%), with all six scripts.
+  After the code review's six fixes and the security review (no findings; owner approved all
+  fixes): npm's output goes to standard error (time-cli's table stays clean), check-npm-cli
+  checks every file in its output directory (the library tarball check-npm-package keeps there
+  too), check-npm-package keeps its tarball before its tools run, the digest is a checked step,
+  the helper's variables are prefixed, and the spec has one response per requirement plus an
+  install-script scenario. Probes: a postinstall script in the tarball didn't run; changing the
+  other check's kept tarball mid-run failed the check; both npm checks pass into one directory.
+  Also corrected SECURITY.md (JSON escapes only C0 controls; C1, DEL, and U+2028/U+2029 pass,
+  confirmed with the jar), widened the roadmap's JSON item, and said in the changelog and both
+  package READMEs that the npm packages are release tarballs, not on npm yet (release dry run).

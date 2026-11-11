@@ -57,10 +57,11 @@ if wanted native; then binary=$(built ears.cli.native.nativeLink); fi
 if wanted node; then
   package=$(built ears.cli.js.npmPackage)
   npm pack "$package" --pack-destination "$tmp" --cache "$tmp/cache" --silent >/dev/null
-  mkdir "$tmp/project"
-  printf '{"name": "timing", "private": true}\n' >"$tmp/project/package.json"
-  (cd "$tmp/project" && npm install "$tmp"/tsnee-ears-checker-cli-*.tgz --cache "$tmp/cache" \
-    --no-audit --no-fund --silent)
+  set -- "$tmp"/tsnee-ears-checker-cli-*.tgz
+  # From a pinned lockfile and with no install scripts, as check-npm-cli installs it.
+  check='time-cli' root=$(pwd)
+  . "$root/scripts/npm-cli-project"
+  install_cli_project "$tmp/project" "$1" "$tmp/cache"
 fi
 
 # The units: the specs as Markdown, and their requirements as plain text.

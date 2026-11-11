@@ -65,7 +65,10 @@ These are for working on ears-checker, not part of any package.
   type-checks and runs a TypeScript program that uses it.
 - `scripts/check-npm-cli` builds the command line's npm package and jar, installs the package into
   an empty project, and runs both on this repository's Markdown and specs and on error cases,
-  failing on any difference in output, messages, or exit status.
+  failing on any difference in output, messages, or exit status. It installs with `npm ci
+  --ignore-scripts` from a lockfile pinning commonmark and its dependencies at the versions and
+  checksums the Markdown conformance suite uses (`scripts/npm-cli-project`, which
+  `scripts/time-cli` shares), so nothing is resolved fresh and no install script runs.
 - `scripts/check-native-cli` does the same for the native binary, on the same cases
   (`scripts/cli-cases`), after checking it links no cmark. `--binary` and `--jar` check a binary
   and jar built elsewhere.

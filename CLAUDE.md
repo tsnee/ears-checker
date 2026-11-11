@@ -95,7 +95,10 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
   `./mill ears.cli.js.npmPackage` builds `@tsnee/ears-checker-cli`, minified by esbuild and
   without a source map, which depends on exactly the parser version in the facade's lockfile.
   `scripts/check-npm-cli` packs it, checks that it has no map and that `main.js` is within its
-  size limit, installs it, then runs it and the jar on this repository's Markdown, its specs as
+  size limit, installs it (`scripts/npm-cli-project`: `npm ci --ignore-scripts` from a lockfile
+  of the tarball plus the facade lockfile's pinned packages, so no dependency is resolved fresh
+  or runs an install script; `--out` keeps the tarball and jar before that and checks them
+  unchanged at the end), then runs it and the jar on this repository's Markdown, its specs as
   OpenSpec JSON, and the error cases, and fails on any difference in standard output, messages
   (log lines aside), or exit status; it needs `openspec`. `./mill ears.cli.native.nativeLink`
   builds the native binary (full release mode), and `scripts/check-native-cli` checks it links
@@ -274,7 +277,8 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
 - `scripts/` — `check-openspec` and the Claude Code hook that runs it, `check-npm-package`,
   `check-npm-cli`, `check-native-cli`, `check-coursier-app` (all three sourcing `cli-cases`),
   `check-scalajs-link`, and `time-cli`, which times the three builds on generated inputs for
-  `docs/performance.md`
+  `docs/performance.md`; `check-npm-cli` and `time-cli` install the Node CLI through
+  `npm-cli-project`
 - `coursier/apps.json` — the Coursier channel users install `ears-check` from
 - `.github/` — the CI workflow and the native one it calls (`native.yml`), the release workflow,
   Dependabot's weekly updates to their action pins, and `tools/`, the lockfile CI installs its
