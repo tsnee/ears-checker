@@ -17,6 +17,17 @@ Observations (2026-11-11, at c0460a4):
 - **CI runs:** `gh run view <id> --json jobs` gives each job's `name`, `startedAt`,
   `completedAt`, `conclusion`, and `databaseId`; Claude has been rounding each job up to whole
   minutes and summing (the memory "Report CI minutes"). This branch has 24 runs.
+- **Reruns** (found while backfilling, same day): `gh run view <id> --attempt 2` lists every
+  job under a new id, but the jobs that weren't rerun keep attempt 1's start and end; summing
+  attempt 2 naively gave run 43031719238 51 minutes for a rerun of two jobs (12 minutes). So each
+  record says whether its job was carried over, and the query counts only the jobs that ran. The
+  attempt's own start (`run_started_at` from `gh api .../runs/<id>/attempts/<n>`) separates them:
+  in run 43031719238's attempt 2 (started 14:00:37) the two rerun jobs started after it and the
+  eight carried ones before (checked after the code review; it gave the same flags as comparing
+  with attempt 1 on all 195 records, without depending on job names).
+- **Coverage's time:** scoverage stamps the XML report when it's generated, not when the tests
+  ran; the measurement files the instrumented tests write (`out/<module>/scoverage/data.dest/
+  scoverage.measurements.*`) carry the test time, so the newest one's is recorded.
 - **Rule:** structured records written by the tool, the queries kept, fields added when a
   question needs them (global CLAUDE.md, 2026-11-11).
 
@@ -47,8 +58,13 @@ Observations (2026-11-11, at c0460a4):
   so the printed table and the stored records can't disagree. Each record carries a run id (the
   run's start time) so a query can select one run.
 - `scripts/coverage-records` runs each measured module's `xmlReport` and reads the root
-  attributes with `yq`; `scripts/ci-run-record <run id>` reads `gh run view --json`, skips a run
-  already recorded, and rounds each finished job up to whole minutes.
+  attributes with `yq`; `scripts/ci-run-record <run id>` reads `gh run view --json`, skips an
+  attempt already recorded, and rounds each finished job up to whole minutes.
+- Each script makes a run's records in a temporary file, checks their count (the attempt's jobs,
+  or the six modules), and only then appends them, so a failure partway leaves nothing half
+  recorded; `time-cli` instead appends each record as it's measured, so a run that fails later
+  keeps the timings already taken. A relative `--records` path is relative to where the script
+  is run. Messages go to standard error, and a failure names the command and its input.
 - They're POSIX `sh`, like the other scripts, checked with `sh -n` and `shellcheck`, and tested by
   running them against known inputs (the spec's scenarios), as the other check scripts are.
 
