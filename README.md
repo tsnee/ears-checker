@@ -56,12 +56,20 @@ java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow -jar
 The two flags stop JDK 23 and later from warning about the Scala runtime's use of
 `sun.misc.Unsafe`; older JDKs skip them.
 
-**[Coursier](https://get-coursier.io)**, from Maven Central, on JDK 17 or later:
+**[Coursier](https://get-coursier.io)**, as an app from this repository's channel. It installs
+the latest release's native binary where there is one (Linux on x64 or Arm, macOS on Apple
+silicon), and runs on the JVM (JDK 17 or later) everywhere else:
 
 ```sh
-alias ears-check="cs launch --java-opt -XX:+IgnoreUnrecognizedVMOptions --java-opt --sun-misc-unsafe-memory-access=allow io.github.tsnee:ears-checker-cli_3:0.2.0 --"
+cs install --channel https://raw.githubusercontent.com/tsnee/ears-checker/main/coursier/apps.json ears-check
 ears-check reqs.txt
 ```
+
+`cs update ears-check` moves it to a newer release. The native binary needs cmark to read
+Markdown, as above. Coursier keeps it next to the `ears-check` it installs, as `.ears-check.aux`
+(by default in `~/.local/share/coursier/bin` on Linux and
+`~/Library/Application Support/Coursier/bin` on macOS);
+[docs/release-files.md](docs/release-files.md) shows how to check who built it.
 
 **Node** 22 or later, as the npm package `@tsnee/ears-checker-cli`. It isn't on npm yet; until it
 is, install the tarball from the release, which installs its one dependency too:

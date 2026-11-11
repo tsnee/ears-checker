@@ -70,6 +70,11 @@ These are for working on ears-checker, not part of any package.
   (`scripts/cli-cases`), after checking it links no cmark. `--binary` and `--jar` check a binary
   and jar built elsewhere.
 - With `--out`, each of those three keeps the files it checked, as a release does.
+- `scripts/check-coursier-app` installs `ears-check` with Coursier's `cs` from the channel file
+  `coursier/apps.json`, pointed at this build, and runs it against the jar on the same cases; it
+  first checks that each platform's download address names that platform's release binary.
+  Without options it installs the JVM launcher; `--binary <file>` makes it install that native
+  binary, and fails if Coursier installs anything else.
 - `scripts/check-scalajs-link` publishes the Scala.js library locally, generates a program that
   references every public operation, and links it in release mode against only that artifact,
   the way a user's application gets it.
@@ -81,7 +86,8 @@ These are for working on ears-checker, not part of any package.
 
 Before calling a change done, run `./mill __.checkFormat`, then `./mill clean __.scoverage`
 (measuring coverage from a clean slate, as CI does), `./mill -j 1 '__:ScalaNativeModule.compile'`,
-and `./mill __.test`, every module's `validateCoverageMinimums`, and all five scripts.
+and `./mill __.test`, every module's `validateCoverageMinimums`, and all six check scripts
+(`scripts/check-coursier-app` both without options and with `--binary`).
 
 The Scala Native modules compile one at a time because Scala Native 0.5.12's compiler plugin
 isn't safe to run twice at once in one JVM
@@ -96,11 +102,12 @@ does not have a member method fromScalaFunction", that's the cause: run
 GitHub Actions runs on every push to `main` and every pull request: it checks formatting,
 compiles, runs every test, checks each module's coverage against its minimum (each module's
 percentages are on the run's summary page), checks the changelog's form, checks both npm packages
-and the Node command line against the jar on the oldest and newest Node they support, links the
-Scala.js library as a user gets it, and checks the OpenSpec specs. It also builds the native
-binary for Linux on x64 and Arm and for macOS on Apple silicon, each on its platform's oldest
-runner, and checks it against the jar there and again on the newest (on Linux x64, also with
-less cmark installed).
+and the Node command line against the jar on the oldest and newest Node they support, checks the
+Coursier app's JVM launcher on JDK 17 and 27, links the Scala.js library as a user gets it, and
+checks the OpenSpec specs. It also builds the native binary for Linux on x64 and Arm and for
+macOS on Apple silicon, each on its platform's oldest runner, and checks it against the jar
+there and again on the newest, both directly and installed as the Coursier app (on Linux x64,
+also with less cmark installed).
 
 ## How changes are made
 

@@ -50,6 +50,13 @@ The native binaries read Markdown through cmark 0.30 or later, which they load w
 `brew install cmark` on macOS, `apt install cmark` on Debian and Ubuntu. Plain text and OpenSpec
 JSON need nothing installed. Make a binary executable with `chmod +x` after downloading it.
 
+The Coursier app installs these too:
+`cs install --channel https://raw.githubusercontent.com/tsnee/ears-checker/main/coursier/apps.json ears-check`
+gets this platform's native binary, or runs the jar from Maven Central on the JVM where there's
+none. Coursier keeps the binary as `.ears-check.aux` next to the `ears-check` it installs (by
+default in `~/.local/share/coursier/bin` on Linux and `~/Library/Application Support/Coursier/bin`
+on macOS); to check who built it, run the attestation command above on that file.
+
 ### macOS
 
 The macOS binary isn't signed. macOS refuses to open an unsigned program that a browser

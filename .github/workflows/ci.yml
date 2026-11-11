@@ -110,6 +110,20 @@ jobs:
           path: kept/
           if-no-files-found: error
 
+      # Coursier's CLI, for the app check; it keeps the runner's JVM and installs no apps. After
+      # the release files are uploaded, since it and the check's Mill run download tools.
+      - uses: coursier/setup-action@648df969f41ef15fda2baba8b37f9fa3d16390a3 # v3.0.4
+        with:
+          apps: ""
+
+      # The app installed from coursier/apps.json with no native binary to download: the JVM
+      # launcher, on this job's JDK, against the jar kept above (renamed on a release tag).
+      - name: Check the Coursier app
+        run: |
+          jar=kept/ears-check.jar
+          [ -f "$jar" ] || jar="kept/ears-check-$EARS_RELEASE_VERSION.jar"
+          scripts/check-coursier-app --jar "$jar"
+
       # scala-cli links the Scala.js library's link-check program against the published artifact;
       # it uses the runner's Java from setup-java.
       - uses: VirtusLab/scala-cli-setup@3f5bf11a33bb88343238780c18257c8fa43789e1 # v1.18.0
@@ -204,3 +218,11 @@ jobs:
 
       - name: Check the Node CLI
         run: scripts/check-npm-cli
+
+      - uses: coursier/setup-action@648df969f41ef15fda2baba8b37f9fa3d16390a3 # v3.0.4
+        with:
+          apps: ""
+
+      # The Coursier app's JVM launcher on JDK 17, whose JVM must skip the newer flag.
+      - name: Check the Coursier app
+        run: scripts/check-coursier-app

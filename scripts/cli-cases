@@ -1,10 +1,11 @@
 # shellcheck shell=sh
 # The sourcing script sets the variables below, so shellcheck can't see them assigned here.
 # shellcheck disable=SC2154
-# The cases every build of ears-check must agree with the JVM jar on, sourced by check-npm-cli and
-# check-native-cli. The sourcing script sets:
+# The cases every build of ears-check must agree with the JVM jar on, sourced by check-npm-cli,
+# check-native-cli, and check-coursier-app. The sourcing script sets:
 #   check       its own name, for messages;
-#   subject     the build under test (node, native), whose command is the function ${subject}_cli;
+#   subject     the build under test (node, native, coursier), whose command is the function
+#               ${subject}_cli;
 #   label       that build's name in messages ("the Node CLI");
 #   tmp, jar    a temporary directory it removes, and the JVM jar.
 # Each case runs both builds and stops at the first difference, showing both sides.

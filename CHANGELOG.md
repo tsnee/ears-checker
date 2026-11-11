@@ -17,6 +17,9 @@ release renames Unreleased to its version and date.
   Markdown and says which entry to remove.
 - The classifier as the npm package `@tsnee/ears-checker`, with TypeScript declarations and a
   source map leading back to the Scala sources.
+- `ears-check` as a Coursier app, from this repository's channel (see the README): `cs install`
+  gives the native binary on Linux and macOS (Apple silicon) and the JVM launcher elsewhere, and
+  `cs update ears-check` moves it to the next release.
 - Release notes from this changelog, and a GitHub Release for each version with the jar, both
   npm tarballs, the native binaries, a `SHA256SUMS` file, and build-provenance attestations.
 

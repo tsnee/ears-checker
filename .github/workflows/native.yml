@@ -127,6 +127,13 @@ jobs:
         with:
           persist-credentials: false
 
+      # On a release tag, the Coursier app check publishes the CLI at the tag's version.
+      - name: Set the release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "EARS_RELEASE_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
@@ -314,3 +321,18 @@ jobs:
           name: release-native-${{ matrix.platform }}
           path: release/
           if-no-files-found: error
+
+      # The Coursier app check publishes the CLI to ~/.ivy2/local with Mill, which this job
+      # otherwise doesn't run; the cache keeps Mill's downloads. Coursier's CLI keeps the
+      # runner's JVM and installs no apps. Last, after the release file is uploaded, since they
+      # download tools.
+      - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
+
+      - uses: coursier/setup-action@648df969f41ef15fda2baba8b37f9fa3d16390a3 # v3.0.4
+        with:
+          apps: ""
+
+      # The app installed from coursier/apps.json with this binary at this platform's address:
+      # the installed command must be exactly this binary, and match the jar on the same inputs.
+      - name: Check the Coursier app
+        run: scripts/check-coursier-app --binary kept/ears-check --jar kept/ears-check.jar

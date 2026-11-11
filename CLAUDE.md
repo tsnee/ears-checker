@@ -96,6 +96,20 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
   builds the native binary (full release mode), and `scripts/check-native-cli` checks it links
   no cmark and compares it with the jar on the same cases, which both scripts source from
   `scripts/cli-cases`.
+- The Coursier app: `coursier/apps.json` is a channel with one app, `ears-check`: the CLI from
+  Maven Central at its latest release, its main class and JVM flags, and launcher type
+  `graalvm-native-image` with `prebuiltBinaries` naming each platform's release binary, so
+  Coursier installs the native binary where a release has one and falls back to the JVM
+  elsewhere (the type only selects that fallback; nothing runs `native-image`). Users install it
+  from `main` by URL. `scripts/check-coursier-app` checks each native address names its
+  platform's release file, publishes `ears` and `ears.cli` to `~/.ivy2/local`, installs a copy
+  of the descriptor pointed at that build (every native address a missing local file, so the JVM
+  launcher; with `--binary`, this platform's address that binary, which must be what's
+  installed), and compares it with the jar on `scripts/cli-cases`; it needs `cs`. The copy only
+  changes where things come from (`ivy2Local` in front of the descriptor's repositories, this
+  build's version for `latest.release`, which the descriptor must ask for, and local files for
+  the addresses), so its repositories, launcher type, and flags are checked as written. The
+  launcher runs with `JAVA_HOME` and `JAVA_OPTS` unset, on the `java` the jar runs on.
 - The library must link on Scala.js with only its declared dependencies. zio-test brings
   scala-java-locales into every Scala.js test, which hides a missing class such as
   `java.util.Locale`. `scripts/check-scalajs-link` catches it: it publishes `ears.js` locally,
@@ -113,24 +127,28 @@ as the npm package `@tsnee/ears-checker`, and the command line, on Node, as
 
 Run `./mill __.checkFormat`, `./mill clean __.scoverage`, `./mill -j 1
 '__:ScalaNativeModule.compile'`, then `./mill __.test`, every module's
-`validateCoverageMinimums`, `scripts/check-npm-package`, `scripts/check-npm-cli`, `scripts/check-native-cli`,
-`scripts/check-scalajs-link`, and `scripts/check-openspec` before calling any change done (as
-CONTRIBUTING.md says), and report the coverage.
+`validateCoverageMinimums`, `scripts/check-npm-package`, `scripts/check-npm-cli`,
+`scripts/check-native-cli`, `scripts/check-coursier-app` (and with `--binary` the native
+binary), `scripts/check-scalajs-link`, and `scripts/check-openspec` before calling any change
+done (as CONTRIBUTING.md says), and report the coverage.
 Warnings are errors.
 
 CI (`.github/workflows/ci.yml`) runs the same checks on every push to `main` and every pull
 request: `./mill __.checkFormat`, the compile (the Scala Native modules one at a time),
 `./mill __.test`, the changelog's form
 (`ears.releaseNotes.run check CHANGELOG.md`), `scripts/check-npm-package`,
-`scripts/check-npm-cli`, `scripts/check-scalajs-link`, the coverage minimums (with each module's
-percentages on the run's summary page), and `scripts/check-openspec`. A second job,
-`check-jdk17`, runs on the oldest supported runtimes: `scripts/check-openspec` with JDK 17
-starting the jar, and `scripts/check-npm-package` and `scripts/check-npm-cli` on the oldest Node
-the packages declare. The reusable `native.yml` builds the native binary for linux-x64,
+`scripts/check-npm-cli`, `scripts/check-coursier-app` (the JVM launcher, on JDK 27),
+`scripts/check-scalajs-link`, the coverage minimums (with each module's percentages on the run's
+summary page), and `scripts/check-openspec`. A second job, `check-jdk17`, runs on the oldest
+supported runtimes: `scripts/check-openspec` with JDK 17 starting the jar,
+`scripts/check-npm-package` and `scripts/check-npm-cli` on the oldest Node the packages declare,
+and `scripts/check-coursier-app` with the JVM launcher on JDK 17. Coursier's CLI comes from
+`coursier/setup-action`. The reusable `native.yml` builds the native binary for linux-x64,
 linux-arm64, and macos-arm64, each on its platform's oldest runner (`ubuntu-22.04`,
 `ubuntu-22.04-arm`, `macos-15`) with `scripts/check-native-cli --out`, then checks the same
 binary and jar again on the newest (`ubuntu-26.04`, `ubuntu-26.04-arm`, `macos-26`) with
-`--binary --jar`, and on linux-x64 with less cmark installed. It publishes nothing. On a release
+`--binary --jar`, and with `scripts/check-coursier-app --binary --jar`, and on linux-x64 with
+less cmark installed. It publishes nothing. On a release
 tag every job builds at the tag's version and keeps the files it checked as `release-*`
 artifacts for the release.
 
@@ -162,8 +180,10 @@ how to check it), with `{version}` replaced.
 5. `publish` uploads to the Central Portal for review (`--shouldRelease false`); then
    `draft-release`, the only job with a write token, creates a draft GitHub Release with the
    notes, the files the checks passed on, `SHA256SUMS`, and an attestation for each file.
-6. The owner inspects the deployment on the Central Portal and clicks Publish (or Drop to
-   discard it), then publishes the draft release (or deletes it). A release that exists for the
+6. The owner publishes the draft release (or deletes it), then inspects the deployment on the
+   Central Portal and clicks Publish (or Drop to discard it). In that order, the Coursier app,
+   which installs Maven Central's latest release, finds that release's native binaries already
+   attached; installed in between, it falls back to the JVM. A release that exists for the
    tag fails `draft-release` untouched; delete the draft and rerun the job to redo it. Once
    `publish` has succeeded, rerun only failed or single jobs, never the whole run: that reruns
    `publish`, which uploads to the Central Portal again.
@@ -243,8 +263,10 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
   (the changelog and the draft GitHub Release), `test-coverage` (the coverage minimums), and the
   archived changes that built them
 - `scripts/` — `check-openspec` and the Claude Code hook that runs it, `check-npm-package`,
-  `check-npm-cli`, `check-native-cli` (both sourcing `cli-cases`), `check-scalajs-link`, and
-  `time-cli`, which times the three builds on generated inputs for `docs/performance.md`
+  `check-npm-cli`, `check-native-cli`, `check-coursier-app` (all three sourcing `cli-cases`),
+  `check-scalajs-link`, and `time-cli`, which times the three builds on generated inputs for
+  `docs/performance.md`
+- `coursier/apps.json` — the Coursier channel users install `ears-check` from
 - `.github/` — the CI workflow and the native one it calls (`native.yml`), the release workflow,
   Dependabot's weekly updates to their action pins, and `tools/`, the lockfile CI installs its
   npm tools from (`npm ci --ignore-scripts`)

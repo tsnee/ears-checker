@@ -224,3 +224,17 @@
 - 2026-11-11: compile-native-serially: scala-native#4950 already reported the same crash (Scala
   3.8, a maintainer suspecting the classpath); the owner commented there with the race, the
   reproduction, and the fix instead of opening a new issue. The docs and the CI comment link it.
+- 2026-11-11: add-coursier-app: `coursier/apps.json` and `scripts/check-coursier-app`. The
+  check caught a swapped linux-arm64 address, `launcherType: bootstrap` in native mode, and a
+  dropped `--sun-misc-unsafe-memory-access=allow` on JDK 27 (scratch copies); the real file
+  passed in JVM mode and with this Mac's native binary. The documented gate passed: coverage
+  unchanged (ears 95.91% / 92.04%, ears.cli 97.27% / 100%, ears.npm 100% / 100%, ears.linkCheck
+  97.28% / 100%, ears.markdown 100% / 100%, ears.releaseNotes 96.60% / 100%), and all six
+  scripts passed, the Coursier check in both modes.
+  After the code review's nine fixes (the owner approved all): the check keeps the descriptor's
+  repositories and requires `latest.release`, checks the JVM launcher's preamble, runs it with
+  `JAVA_HOME` and `JAVA_OPTS` unset, and CI runs it after the release uploads. Probed `cs update`
+  instead of deferring it: with the CLI published as 9.0.0 then 9.0.1 to a scratch Ivy
+  repository, it moved the JVM launcher to 9.0.1 and swapped in the 9.0.1 native file. Reran the
+  check (both modes pass) and its faults: a swapped address, `bootstrap`, a dropped JVM flag, a
+  misspelled repository, and a pinned version each fail.
