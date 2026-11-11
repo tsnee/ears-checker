@@ -33,8 +33,8 @@ All work is on branch `batch-npm`. The owner pushes from their own shell, and do
 
 - [x] 6.1 Run the gate (CLAUDE.md's list) and report coverage from `scripts/coverage-records`
 - [x] 6.2 Run `/code-review` in a subagent on this change, and `/security-review` in another (the release workflow gains a job with an OIDC token); the owner chooses which findings to fix. The owner took seven of the code review's eight findings and one security suggestion: the approval script requires the version on Maven Central; the `npm` job stages each package whatever became of the other, with `--ignore-scripts`, and checks only the tarballs' `package.json` (`draft-release` already checks the file names); the `npm` environment was created now, with a `v*` tag rule and no reviewer; CONTRIBUTING.md lists the approval script; the release notes say the packages are on npm only once approved; and two workflow comments were fixed. For the fourth finding (npm's second-factor prompt), only the assumption was recorded
-- [ ] 6.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes, from the records
-- [ ] 6.4 Run `/openspec-verify-change` and report it before archiving
+- [x] 6.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes, from the records
+- [x] 6.4 Run `/openspec-verify-change` and report it before archiving
 
 ## Workflow follow-up
 
