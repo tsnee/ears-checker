@@ -293,3 +293,8 @@
   Also corrected SECURITY.md (JSON escapes only C0 controls; C1, DEL, and U+2028/U+2029 pass,
   confirmed with the jar), widened the roadmap's JSON item, and said in the changelog and both
   package READMEs that the npm packages are release tarballs, not on npm yet (release dry run).
+- 2026-11-11: Canonical's outage (actions/runner-images#15296; Canonical's DNS Operational again
+  at 16:58 UTC) blocked every Linux CI job from 13:48 UTC. CI run 43065132303 on dd744b9 then
+  passed (45 job-minutes), covering both security fixes, the release-doc corrections, and the
+  update-openspec archive; check and check-jdk17 installed the Node CLI's 5 pinned packages (npm
+  11 and 10). Verify found escape-text-output and pin-npm-cli-check complete; both archived.

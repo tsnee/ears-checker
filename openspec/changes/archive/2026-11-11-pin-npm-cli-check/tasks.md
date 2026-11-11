@@ -23,8 +23,8 @@ runs with `gh`.
 
 - [x] 4.1 Run the full gate as documented (`./mill __.checkFormat`, `./mill clean __.scoverage`, `./mill -j 1 '__:ScalaNativeModule.compile'`, `./mill __.test`, every module's `validateCoverageMinimums`, and the six check scripts). Report coverage, and add a dated line to `docs/worklog.md`
 - [x] 4.2 Run `/code-review` in a subagent on this change, and let the owner choose which findings to fix
-- [ ] 4.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes, including that `check` and `check-jdk17` installed the pinned packages
-- [ ] 4.4 Run `/openspec-verify-change` and report it before archiving
+- [x] 4.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes, including that `check` and `check-jdk17` installed the pinned packages
+- [x] 4.4 Run `/openspec-verify-change` and report it before archiving
 
 ## Workflow follow-up
 
