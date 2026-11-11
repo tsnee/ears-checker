@@ -131,6 +131,31 @@ Observations (2026-11-08, Coursier 2.1.26 from Homebrew, macOS 27.2 on Apple sil
   publish the draft release before the Central Portal deployment. After 0.2.0 is published, its
   release change installs the app from `main` on this Mac and records the result.
 
+### 5. Intel macOS and Windows in CI (added 2026-11-11, the owner's choice)
+
+- Neither has a native binary, so both test the case the release depends on there: a platform
+  with no entry in `prebuiltBinaries` gets the JVM launcher. Docker can't stand in (it runs
+  Linux; there are no macOS containers, and Windows containers need a Windows host); GitHub's
+  `macos-15-intel` and `windows-latest` runners can, free for this public repository.
+- No Mill there: `check` uploads its published `ears` and `ears.cli` (its `~/.ivy2/local`
+  entries) and the jar it compared with as an artifact, and the two jobs install from it with
+  `--repo <dir>`, which takes the version from the repository instead of from Mill.
+- Intel macOS runs every case, like the Linux jobs, on JDK 25: Temurin has no JDK 27 for macOS
+  on x64 (Adoptium's API, 2026-11-11: JDK 25 has x64 and aarch64 builds for macOS, JDK 27
+  aarch64 only). Windows runs JDK 27 and `--cases smoke` (help, a passing file, a failing file,
+  JSON output): the shared cases' unreadable file (`chmod 000`) and C-locale case (`LC_ALL=C`)
+  don't hold on Windows, and they need the OpenSpec CLI, which that job doesn't install.
+- The script runs under the runner's Git Bash. From Coursier 2.1.26's sources (read in the code
+  review, 2026-11-11): with no `prebuiltBinaries` entry for `x86_64-pc-win32`, Coursier writes
+  its JVM launcher as `ears-check.bat`, a batch preamble with the descriptor's JVM options as
+  text and the launcher jar appended, which ends with `exit /B %ERROR_CODE%`; a native binary
+  would be `.ears-check.aux.exe`. The script turns paths into Windows form (`cygpath -m`) for
+  `file:` addresses and `cs`, runs Windows' jq (a native build) with `-b` so it writes LF line
+  endings, keeps Git Bash from rewriting the URL arguments (`MSYS2_ARG_CONV_EXCL`), and prints
+  the descriptor it installs.
+- Not tested before CI: the Windows branch (this Mac has no Windows and no PowerShell); its
+  first run is the test, and a failure there is fixed before archiving.
+
 ## Risks / Trade-offs
 
 - **[Coursier changes the fallback]** A later Coursier could stop falling back for
@@ -138,8 +163,8 @@ Observations (2026-11-08, Coursier 2.1.26 from Homebrew, macOS 27.2 on Apple sil
   keeps the jar route.
 - **[Native without cmark]** A user who installs on Linux or macOS gets the native binary, which
   needs cmark for Markdown; its error says how to install it, and the README says so up front.
-- **[Unverified platforms]** Windows and Intel macOS take the JVM path by Coursier's code; no probe
-  ran there, and CI has no such job.
+- **[Fewer cases on Windows]** Windows runs four cases, not all of them; Intel macOS runs all.
+  Windows on Arm (`windows-11-arm`) isn't checked.
 - **[`main` serves the channel]** A change to `coursier/apps.json` reaches users as soon as it
   merges. CI checks it on every pull request first.
 - **[Unchecked downloads in CI]** Coursier's CLI comes without a hash check, and the native recheck

@@ -27,3 +27,10 @@ If the Coursier app's download address for linux-x64, linux-arm64, or macos-arm6
 #### Scenario: Swapped platforms
 - **WHEN** a pushed commit gives the app's linux-arm64 address the linux-x64 file name
 - **THEN** the run fails at the Coursier app check, naming linux-arm64 and both file names
+
+### Requirement: Coursier app without a native binary
+The CI workflow SHALL check the Coursier app's JVM launcher on Intel macOS and on Windows on x64, which have no native binary in the release.
+
+#### Scenario: Intel macOS and Windows
+- **WHEN** a CI run checks a commit
+- **THEN** the Coursier app check installs the JVM launcher on `macos-15-intel` and on `windows-latest` and compares it with the jar
