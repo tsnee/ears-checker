@@ -124,6 +124,24 @@ jobs:
           [ -f "$jar" ] || jar="kept/ears-check-$EARS_RELEASE_VERSION.jar"
           scripts/check-coursier-app --jar "$jar"
 
+      # The ears and ears.cli that check published to ~/.ivy2/local, and the jar it compared with,
+      # for the Coursier app jobs on platforms with no native binary.
+      - name: Collect the Coursier app's inputs
+        run: |
+          jar=kept/ears-check.jar
+          [ -f "$jar" ] || jar="kept/ears-check-$EARS_RELEASE_VERSION.jar"
+          mkdir -p coursier-inputs/repo
+          cp -R ~/.ivy2/local/io.github.tsnee coursier-inputs/repo/
+          cp "$jar" coursier-inputs/ears-check.jar
+          find coursier-inputs -maxdepth 4
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coursier-inputs
+          path: coursier-inputs/
+          if-no-files-found: error
+          retention-days: 7
+
       # scala-cli links the Scala.js library's link-check program against the published artifact;
       # it uses the runner's Java from setup-java.
       - uses: VirtusLab/scala-cli-setup@3f5bf11a33bb88343238780c18257c8fa43789e1 # v1.18.0
@@ -173,6 +191,72 @@ jobs:
   # checked again on its newest.
   native:
     uses: ./.github/workflows/native.yml
+
+  # The Coursier app where the release has no native binary, so it installs the JVM launcher:
+  # Intel macOS with every case, and Windows with the smoke cases (the others need a Unix
+  # system). Both install this build from check's artifact, so Mill doesn't run here.
+  coursier-jvm:
+    name: Coursier app (${{ matrix.platform }})
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Temurin has no JDK 27 for Intel macOS, so 25, the newest it has there (an LTS).
+          - platform: macos-x64
+            runner: macos-15-intel
+            cases: full
+            java: "25"
+          - platform: windows-x64
+            runner: windows-latest
+            cases: smoke
+            java: "27"
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Windows checks files out with CRLF line endings by default, which sh scripts can't run.
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      # Every case reads this repository's specs as OpenSpec JSON, with the OpenSpec CLI.
+      - if: matrix.cases == 'full'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+
+      - if: matrix.cases == 'full'
+        name: Install the npm tools
+        run: |
+          npm ci --prefix .github/tools --ignore-scripts --no-audit --no-fund
+          echo "$PWD/.github/tools/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - uses: coursier/setup-action@648df969f41ef15fda2baba8b37f9fa3d16390a3 # v3.0.4
+        with:
+          apps: ""
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: coursier-inputs
+          path: coursier-inputs/
+
+      - name: Check the Coursier app
+        env:
+          CASES: ${{ matrix.cases }}
+        run: >-
+          scripts/check-coursier-app --repo coursier-inputs/repo
+          --jar coursier-inputs/ears-check.jar --cases "$CASES"
 
   # The oldest supported runtimes: the OpenSpec check again with JDK 17, the oldest JDK the jar
   # supports, starting it; and the npm package and Node CLI checks on Node 22, the oldest Node the

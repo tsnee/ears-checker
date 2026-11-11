@@ -250,6 +250,39 @@ jobs:
             fail "$variable=\"${unsafe[0]}\": plain text wasn't checked as usual"
           fi
 
+      # On a release tag, the binary that passed on both runners, named for the release.
+      - name: Name the binary for the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          mkdir release
+          cp kept/ears-check "release/ears-check-${TAG#v}-$PLATFORM"
+          ls -l release
+
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-native-${{ matrix.platform }}
+          path: release/
+          if-no-files-found: error
+
+      # The Coursier app check publishes the CLI to ~/.ivy2/local with Mill, which this job
+      # otherwise doesn't run; the cache keeps Mill's downloads. Coursier's CLI keeps the
+      # runner's JVM and installs no apps. After the release file is uploaded, since they
+      # download tools, and before cmark is removed below, since the cases read Markdown.
+      - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
+
+      - uses: coursier/setup-action@648df969f41ef15fda2baba8b37f9fa3d16390a3 # v3.0.4
+        with:
+          apps: ""
+
+      # The app installed from coursier/apps.json with this binary at this platform's address:
+      # the installed command must be exactly this binary, and match the jar on the same inputs.
+      - name: Check the Coursier app
+        run: scripts/check-coursier-app --binary kept/ears-check --jar kept/ears-check.jar
+
       # Last, since it removes cmark from the runner. With only the runtime package, which has
       # just a versioned libcmark.so.*, the native binary still reads Markdown; with no cmark, it
       # says what to install, and plain text still works. It also shows what the binary does
@@ -303,36 +336,3 @@ jobs:
           name=$(printf 'r\303\251sum\303\251.txt')
           cp "$dir/notes.txt" "$dir/$name"
           (cd "$dir" && LC_ALL=C LANG=C "$binary" "$name") || true
-
-      # On a release tag, the binary that passed on both runners, named for the release.
-      - name: Name the binary for the release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          TAG: ${{ github.ref_name }}
-          PLATFORM: ${{ matrix.platform }}
-        run: |
-          mkdir release
-          cp kept/ears-check "release/ears-check-${TAG#v}-$PLATFORM"
-          ls -l release
-
-      - if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: release-native-${{ matrix.platform }}
-          path: release/
-          if-no-files-found: error
-
-      # The Coursier app check publishes the CLI to ~/.ivy2/local with Mill, which this job
-      # otherwise doesn't run; the cache keeps Mill's downloads. Coursier's CLI keeps the
-      # runner's JVM and installs no apps. Last, after the release file is uploaded, since they
-      # download tools.
-      - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
-
-      - uses: coursier/setup-action@648df969f41ef15fda2baba8b37f9fa3d16390a3 # v3.0.4
-        with:
-          apps: ""
-
-      # The app installed from coursier/apps.json with this binary at this platform's address:
-      # the installed command must be exactly this binary, and match the jar on the same inputs.
-      - name: Check the Coursier app
-        run: scripts/check-coursier-app --binary kept/ears-check --jar kept/ears-check.jar

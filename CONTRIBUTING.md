@@ -74,7 +74,9 @@ These are for working on ears-checker, not part of any package.
   `coursier/apps.json`, pointed at this build, and runs it against the jar on the same cases; it
   first checks that each platform's download address names that platform's release binary.
   Without options it installs the JVM launcher; `--binary <file>` makes it install that native
-  binary, and fails if Coursier installs anything else.
+  binary, and fails if Coursier installs anything else. `--repo <dir>` installs from an Ivy
+  repository that already holds this build (with `--jar`, so Mill doesn't run), and
+  `--cases smoke` runs four cases that work anywhere, Windows included (under Git Bash).
 - `scripts/check-scalajs-link` publishes the Scala.js library locally, generates a program that
   references every public operation, and links it in release mode against only that artifact,
   the way a user's application gets it.
@@ -103,11 +105,11 @@ GitHub Actions runs on every push to `main` and every pull request: it checks fo
 compiles, runs every test, checks each module's coverage against its minimum (each module's
 percentages are on the run's summary page), checks the changelog's form, checks both npm packages
 and the Node command line against the jar on the oldest and newest Node they support, checks the
-Coursier app's JVM launcher on JDK 17 and 27, links the Scala.js library as a user gets it, and
-checks the OpenSpec specs. It also builds the native binary for Linux on x64 and Arm and for
-macOS on Apple silicon, each on its platform's oldest runner, and checks it against the jar
-there and again on the newest, both directly and installed as the Coursier app (on Linux x64,
-also with less cmark installed).
+Coursier app's JVM launcher on JDK 17 and 27 and on Intel macOS and Windows, links the Scala.js
+library as a user gets it, and checks the OpenSpec specs. It also builds the native binary for
+Linux on x64 and Arm and for macOS on Apple silicon, each on its platform's oldest runner, and
+checks it against the jar there and again on the newest, both directly and installed as the
+Coursier app (on Linux x64, also with less cmark installed).
 
 ## How changes are made
 

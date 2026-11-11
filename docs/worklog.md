@@ -238,3 +238,14 @@
   repository, it moved the JVM launcher to 9.0.1 and swapped in the 9.0.1 native file. Reran the
   check (both modes pass) and its faults: a swapped address, `bootstrap`, a dropped JVM flag, a
   misspelled repository, and a pinned version each fail.
+  CI run 43016453462 (21694c0) failed in the linux-x64 recheck: moving the Coursier check after
+  the release upload had put it after "Check the native binary with less cmark", which removes
+  cmark, so the native binary couldn't read Markdown (status 2 against the jar's 1). That step
+  is last again. The other new Coursier steps passed (check, check-jdk17, linux-arm64,
+  macos-arm64).
+  Added the Coursier app's JVM launcher on Intel macOS (every case, JDK 25: Temurin has no JDK
+  27 there) and Windows (smoke cases, under Git Bash), installing from `check`'s published CLI
+  (`--repo`), as the owner asked instead of leaving those platforms unverified. Their code
+  review's eight fixes (all approved) include jq `-b` on Windows, the `.ears-check.aux.exe`
+  name, and printing the installed descriptor. Here, `--repo` with the smoke and full cases, the
+  default path, and native mode pass; the Windows branch is first run in CI.

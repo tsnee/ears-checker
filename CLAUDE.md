@@ -143,14 +143,17 @@ summary page), and `scripts/check-openspec`. A second job, `check-jdk17`, runs o
 supported runtimes: `scripts/check-openspec` with JDK 17 starting the jar,
 `scripts/check-npm-package` and `scripts/check-npm-cli` on the oldest Node the packages declare,
 and `scripts/check-coursier-app` with the JVM launcher on JDK 17. Coursier's CLI comes from
-`coursier/setup-action`. The reusable `native.yml` builds the native binary for linux-x64,
-linux-arm64, and macos-arm64, each on its platform's oldest runner (`ubuntu-22.04`,
-`ubuntu-22.04-arm`, `macos-15`) with `scripts/check-native-cli --out`, then checks the same
-binary and jar again on the newest (`ubuntu-26.04`, `ubuntu-26.04-arm`, `macos-26`) with
-`--binary --jar`, and with `scripts/check-coursier-app --binary --jar`, and on linux-x64 with
-less cmark installed. It publishes nothing. On a release
-tag every job builds at the tag's version and keeps the files it checked as `release-*`
-artifacts for the release.
+`coursier/setup-action`. The `coursier-jvm` jobs check the Coursier app where no native binary
+is released, so it installs the JVM launcher: on `macos-15-intel` with every case (on JDK 25,
+since Temurin has no JDK 27 for Intel macOS) and on `windows-latest` (under Git Bash, JDK 27)
+with `--cases smoke`, both with `--repo` from the ears, ears.cli, and jar that `check` uploads
+(`coursier-inputs`), so Mill doesn't run there. The reusable `native.yml` builds the native
+binary for linux-x64, linux-arm64, and macos-arm64, each on its platform's oldest runner
+(`ubuntu-22.04`, `ubuntu-22.04-arm`, `macos-15`) with `scripts/check-native-cli --out`, then
+checks the same binary and jar again on the newest (`ubuntu-26.04`, `ubuntu-26.04-arm`,
+`macos-26`) with `--binary --jar`, and with `scripts/check-coursier-app --binary --jar`, and on
+linux-x64 with less cmark installed. It publishes nothing. On a release tag every job builds at
+the tag's version and keeps the files it checked as `release-*` artifacts for the release.
 
 ## Releasing
 
