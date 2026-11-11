@@ -5,6 +5,8 @@ release renames Unreleased to its version and date.
 
 ## Unreleased
 
+## 0.2.0 - 2026-11-11
+
 ### Added
 
 - The `ears-check` command line on Node, as the npm package `@tsnee/ears-checker-cli`, with the
