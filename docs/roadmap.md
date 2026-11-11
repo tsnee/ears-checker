@@ -17,10 +17,13 @@ from a clean slate, compiling the Scala Native modules one at a time, the CLI as
 skills only.
 
 1. **Release 0.2.0**, after a security review of the whole repository (CLAUDE.md's Releasing
-   steps). It's a minor release: inline code changes some of the classifier's verdicts. The
-   pull request merges just before the tag, since a release is tagged on `main`. Once it's
-   published, install the Coursier app from `main` on a Mac and check that it runs the release's
-   macos-arm64 binary (add-coursier-app's follow-up).
+   steps). The review (2026-11-11) found two medium findings, each fixed by its own change first:
+   escape-text-output (in progress: control characters from the input reach the terminal), then
+   pin-npm-cli-check (the Node CLI check installs unpinned npm packages with install scripts in a
+   job that builds release files). It's a minor release: inline code changes some of the
+   classifier's verdicts. The pull request merges just before the tag, since a release is tagged
+   on `main`. Once it's published, install the Coursier app from `main` on a Mac and check that
+   it runs the release's macos-arm64 binary (add-coursier-app's follow-up).
 
 ### npm
 

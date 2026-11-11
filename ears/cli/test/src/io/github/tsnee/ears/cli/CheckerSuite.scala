@@ -28,6 +28,26 @@ object CheckerSuite extends ZIOSpecDefault:
 
   private def lines(text: String): List[String] = text.linesIterator.filter(_.nonEmpty).toList
 
+  /** A character a terminal or a line-based tool could act on. */
+  private def acted(c: Char): Boolean =
+    Character.isISOControl(c) || c.toInt == 0x2028 || c.toInt == 0x2029
+
+  /** Every such character: C0, DEL and C1, and Unicode's line and paragraph separators. */
+  private val controls = Gen.oneOf(
+    Gen.char('\u0000', '\u001f'),
+    Gen.char('\u007f', '\u009f'),
+    Gen.elements('\u2028', '\u2029')
+  )
+
+  /** Space, tab, line feed, vertical tab, form feed, and carriage return. */
+  private def spacing(c: Char): Boolean = c == ' ' || (c >= '\t' && c <= '\r')
+
+  /** How text output shows a character: a backslash, u, and four lowercase hexadecimal digits,
+    * built here without a format string.
+    */
+  private def hex(c: Char): String =
+    "\\u" + Integer.toHexString(c.toInt).reverse.padTo(4, '0').reverse
+
   /** How every JSON document starts: the format version, then the release that wrote it. */
   private val head = "{\"version\":1,\"checker\":\"" + CheckerBuild.version + "\","
 
@@ -155,6 +175,74 @@ object CheckerSuite extends ZIOSpecDefault:
       )
       assertTrue(outcome.exitCode == 2, outcome.stderr.contains("missing.txt"))
     ,
+    suite("characters a terminal acts on")(
+      test("an escape sequence in a requirement shows as \\u001b in its fix"):
+        val outcome = Checker.outcome(
+          plain,
+          Right("When an order arrives the scheduler shall list events \u001b[2K\u001b[1A.")
+        )
+        assertTrue(
+          outcome.stdout.contains("list events \\u001b[2K\\u001b[1A.\""),
+          !outcome.stdout.filterNot(_ == '\n').exists(acted)
+        )
+      ,
+      test("a line separator in a requirement name keeps the finding on one line"):
+        val spec =
+          """{"id": "reminders", "requirements": [
+            |  {"name": "Up\u2028coming", "text": "The scheduler lists upcoming events."}
+            |]}""".stripMargin
+        val outcome =
+          Checker.outcome(settings(None, Some(InputFormat.OpenSpecJson), None, None), Right(spec))
+        assertTrue(
+          lines(outcome.stdout).size == 1,
+          outcome.stdout.contains("reminders/\"Up\\u2028coming\""),
+          !outcome.stdout.filterNot(_ == '\n').exists(acted)
+        )
+      ,
+      test("a message from an unreadable input shows its control characters as \\uXXXX"):
+        val outcome = Checker.outcome(plain, Left("Cannot read mis\u001b[1Asing.txt"))
+        assertTrue(outcome.stderr == "Cannot read mis\\u001b[1Asing.txt\n")
+      ,
+      test("backslashes in a fix are left as they are"):
+        val outcome = Checker.outcome(
+          plain,
+          Right("When a file arrives in C:\\orders\\new the importer shall queue it.")
+        )
+        assertTrue(outcome.stdout.contains("Fix: \"When a file arrives in C:\\orders\\new, the"))
+      ,
+      test("a vertical tab in a requirement shows as one space in its fix"):
+        val outcome = Checker.outcome(
+          plain,
+          Right("When an order\u000barrives the scheduler shall list events.")
+        )
+        assertTrue(outcome.stdout.contains("Fix: \"When an order arrives, the scheduler"))
+      ,
+      test("a character inside a word of a fix shows as \\u and its four hexadecimal digits"):
+        // Inside "events", which the fix carries through; whitespace would split the word instead.
+        val sentence = "When an order arrives the scheduler shall list events."
+        val word = sentence.indexOf("events")
+        check(controls.filterNot(spacing), Gen.int(1, 5)) { (c, at) =>
+          val position = word + at
+          val text = sentence.take(position) + c.toString + sentence.drop(position)
+          val outcome = Checker.outcome(plain, Right(text))
+          // The fix adds a comma after "arrives"; the end of the sentence is as written.
+          val shown = "shall list " + "events".take(at) + hex(c) + "events".drop(at) + ".\""
+          assertTrue(
+            outcome.stdout.contains(shown),
+            !outcome.stdout.filterNot(_ == '\n').exists(acted)
+          )
+        }
+      ,
+      test("a character in a missing file's name shows as \\u and its four hexadecimal digits"):
+        check(controls, Gen.int(0, 8)) { (c, at) =>
+          val name = "missing.txt"
+          val position = at.min(name.length)
+          val message = "Cannot read " + name.take(position) + c.toString + name.drop(position)
+          val outcome = Checker.outcome(plain, Left(message))
+          val shown = "Cannot read " + name.take(position) + hex(c) + name.drop(position)
+          assertTrue(outcome.stderr == shown + "\n")
+        }
+    ),
     suite("several inputs")(
       test("every input is checked: JSON counts the requirements of both"):
         val outcome = combined(

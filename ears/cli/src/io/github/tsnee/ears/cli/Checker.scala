@@ -36,7 +36,7 @@ object Checker:
     */
   def outcome(found: Either[String, NonEmptyList[(Settings, List[Candidate])]]): Outcome =
     found match
-      case Left(message) => Outcome(2, "", s"$message\n", 0)
+      case Left(message) => Outcome(2, "", s"${Visible.escape(message)}\n", 0)
       case Right(inputs) =>
         val findings = inputs.toList.flatMap { (settings, candidates) =>
           candidates.flatMap(findingsFor(settings.profile, _))
@@ -74,11 +74,19 @@ object Checker:
     case Location.SpecRequirement(spec, requirement) => s"$spec/\"$requirement\""
 
   /** Text output keeps one line per finding: text taken from the input (a corrected sentence, a
-    * file or requirement name) has each whitespace run, line breaks included, shown as one space.
-    * JSON output keeps the exact text.
+    * file or requirement name) has each whitespace run, line breaks included, shown as one space,
+    * and any other character a terminal would act on shown as `\uXXXX` (`Visible`). JSON output
+    * keeps the exact text.
     */
   private def singleLine(text: String): String =
-    text.split("\\s+").filter(_.nonEmpty).mkString(" ")
+    Visible.escape(
+      text.map(c => if spacing(c) then ' ' else c).split(' ').filter(_.nonEmpty).mkString(" ")
+    )
+
+  /** Space, tab, line feed, vertical tab, form feed, and carriage return: Java's `\s`, spelled out,
+    * since Scala Native's regex `\s` leaves out the vertical tab.
+    */
+  private def spacing(c: Char): Boolean = c == ' ' || (c >= '\t' && c <= '\r')
 
   private def report(output: OutputFormat, checked: Int, findings: List[Finding]): String =
     output match
@@ -86,7 +94,7 @@ object Checker:
         findings.map { finding =>
           val fix = finding.fixed.fold("")(sentence => s" Fix: \"${singleLine(sentence)}\"")
           val location = singleLine(locationText(finding.location))
-          s"$location: ${kindName(finding)}: ${finding.diagnostic.message}$fix\n"
+          s"$location: ${kindName(finding)}: ${Visible.escape(finding.diagnostic.message)}$fix\n"
         }.mkString
       case OutputFormat.Json =>
         // The format version (docs/json-output.md): it changes only when a field is removed,

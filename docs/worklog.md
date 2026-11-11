@@ -258,3 +258,17 @@
   skills and removed `.claude/commands/opsx/`, as the scratch probe predicted. CI's tools pin
   1.17.0 (only its lockfile entry changed); `scripts/check-openspec` passed on 1.17.0 (24 of 24)
   and `npm ci --ignore-scripts` of `.github/tools` installed 1.17.0.
+- 2026-11-11: escape-text-output (the security review's finding 1): text output and the plain
+  messages on standard error show control characters and U+2028/U+2029 from the input as
+  `\uXXXX` (`Visible`); backslashes stay, the owner's choice after examples. Tests first (10
+  failed against a stub); `scripts/cli-cases` gained an escape-sequence case. The documented gate
+  passed: ears 95.91% / 92.04%, ears.cli 97.37% / 100%, ears.npm 100% / 100%, ears.linkCheck
+  97.28% / 100%, ears.markdown 100% / 100%, ears.releaseNotes 96.60% / 100%, and all six scripts
+  (the Coursier check in both modes).
+  After the code review's six fixes (all approved): messages escape line feeds too (a file name
+  could forge a line), argument errors are escaped through decline's Help, `singleLine` tests
+  its six whitespace characters itself (Scala Native's regex `\s` has no vertical tab, so the
+  native binary had kept one), the spec's raw U+2028 became text, and the properties now check
+  the escapes against text built without a format string. The gate passed again: ears.cli
+  97.40% / 100%, every other module unchanged, all six scripts, including new escape-sequence
+  and vertical-tab cases on every build.

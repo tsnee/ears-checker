@@ -40,6 +40,12 @@ release renames Unreleased to its version and date.
   is UTF-8 whatever the locale.
 - An empty file name is a bad argument (exit status 2).
 
+### Fixed
+
+- Text output and messages no longer pass control characters from the input to the terminal: an
+  escape sequence, bell, or line separator in a requirement, a file name, or an OpenSpec name
+  shows as `\uXXXX`, so a file can't hide or forge findings on screen. Backslashes are unchanged.
+
 ## 0.1.1 - 2026-11-05
 
 ### Added

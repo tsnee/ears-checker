@@ -126,6 +126,19 @@ for spec in $specs; do
 done
 set +f
 compare openspec-byte-order-mark "0 1" "$inputs/bom.json"
+# A requirement carrying terminal escape sequences (ESC [2K ESC [1A) and a missing comma: its fix
+# must show them as \u001b, so no build writes the escape character itself.
+printf 'When an order arrives the scheduler shall list events \033[2K\033[1A.\n' \
+  >"$inputs/escapes.txt"
+compare escape-sequences 1 "$inputs/escapes.txt"
+if LC_ALL=C grep -q "$(printf '\033')" "$tmp/$subject/escape-sequences.out"; then
+  echo "$check: case escape-sequences: the output still has the escape character" >&2
+  exit 1
+fi
+# A vertical tab between two words of a requirement with a missing comma: every build shows one
+# space in the fix (Scala Native's regex \s has no vertical tab, so the code doesn't use it).
+printf 'When an order\013arrives the scheduler shall list events.\n' >"$inputs/vertical-tab.txt"
+compare vertical-tab 1 "$inputs/vertical-tab.txt"
 compare missing 2 "$inputs/missing.txt"
 compare directory 2 "$inputs/notes"
 if [ "$(id -u)" -ne 0 ]; then
