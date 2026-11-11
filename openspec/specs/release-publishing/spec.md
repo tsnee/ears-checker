@@ -72,12 +72,12 @@ The release workflow SHALL publish every module at the version the tag names, wi
 
 ### Requirement: Snapshot version outside releases
 
-While no release version is set, the build SHALL use version `0.2.0-SNAPSHOT`.
+While no release version is set, the build SHALL use the next minor version after the latest release, with the suffix `-SNAPSHOT`.
 
 #### Scenario: Local publish
 
-- **WHEN** `./mill __.publishLocal` runs on a developer machine
-- **THEN** it publishes version `0.2.0-SNAPSHOT`
+- **WHEN** the latest release is 0.2.0 and `./mill __.publishLocal` runs on a developer machine
+- **THEN** it publishes version `0.3.0-SNAPSHOT`
 
 ### Requirement: Malformed release version
 
@@ -91,7 +91,7 @@ If the release version is set to anything but `<major>.<minor>.<patch>`, then th
 #### Scenario: Empty value
 
 - **WHEN** `EARS_RELEASE_VERSION` is set but empty
-- **THEN** the build uses `0.2.0-SNAPSHOT`, as when it is unset
+- **THEN** the build uses the same snapshot version as when it is unset
 
 ### Requirement: Review before publishing
 
@@ -154,17 +154,22 @@ The release workflow SHALL reference each action by a full commit SHA.
 
 ### Requirement: Read-only token in releases
 
-The release workflow SHALL limit its GitHub token to reading the repository's contents in every job except the one that creates the draft GitHub Release.
+The release workflow SHALL limit its GitHub token to reading the repository's contents in every job except the one that creates the draft GitHub Release and the one that stages the npm packages.
 
 #### Scenario: Token permissions
 
 - **WHEN** a release run starts
-- **THEN** every job's token but the draft-release job's can read the repository and can't push commits, create releases, or move tags
+- **THEN** every job's token but the draft-release job's and the npm job's can read the repository and can't push commits, create releases, or move tags
 
 #### Scenario: The draft-release job
 
 - **WHEN** the draft-release job runs
 - **THEN** its token can create releases and attestations, and the job runs no code from the repository or its dependencies: it only downloads the run's files and calls GitHub
+
+#### Scenario: The npm job
+
+- **WHEN** the npm job runs
+- **THEN** its token can read the repository and request an OIDC token for npm, and can't push commits, create releases, or move tags, and the job runs no code from the repository or its dependencies but the pinned npm
 
 ### Requirement: Release notes before upload
 
