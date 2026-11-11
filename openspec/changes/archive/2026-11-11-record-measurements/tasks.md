@@ -26,10 +26,10 @@ runs with `gh`.
 
 ## 5. Checks, review, commits
 
-- [ ] 5.1 Run the gate's affected checks (`sh -n` and `shellcheck` on every changed script, `scripts/check-openspec`), and record this change's own CI run with the new script
+- [x] 5.1 Run the gate's affected checks (`sh -n` and `shellcheck` on every changed script, `scripts/check-openspec`), and record this change's own CI run with the new script
 - [x] 5.2 Run `/code-review` in a subagent on this change, and let the owner choose which findings to fix
-- [ ] 5.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes, from the records
-- [ ] 5.4 Run `/openspec-verify-change` and report it before archiving
+- [x] 5.3 Commit (plan, then implementation); the owner pushes. Report the CI run's result and minutes, from the records
+- [x] 5.4 Run `/openspec-verify-change` and report it before archiving
 
 ## Workflow follow-up
 

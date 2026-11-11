@@ -272,7 +272,8 @@ Strongly typed functional Scala 3, written for a reader who knows Haskell and Pu
   file), `openspec-check` (the OpenSpec gate:
   `scripts/check-openspec` and its hook), and `continuous-integration` (the GitHub
   Actions workflow), `release-publishing` (the Maven Central release workflow), `github-release`
-  (the changelog and the draft GitHub Release), `test-coverage` (the coverage minimums), and the
+  (the changelog and the draft GitHub Release), `test-coverage` (the coverage minimums),
+  `measurement-records` (the developer scripts' records in `docs/measurements/`), and the
   archived changes that built them
 - `scripts/` — `check-openspec` and the Claude Code hook that runs it, `check-npm-package`,
   `check-npm-cli`, `check-native-cli`, `check-coursier-app` (all three sourcing `cli-cases`),

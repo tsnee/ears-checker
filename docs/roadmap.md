@@ -16,14 +16,14 @@ from a clean slate, compiling the Scala Native modules one at a time, the CLI as
 (checked in CI on Linux, Apple silicon and Intel macOS, and Windows), OpenSpec 1.17.0 with
 skills only, and the whole-repository security review's two fixes: control characters from the
 input escaped in text output and messages, and the Node CLI check installing pinned packages
-with no install scripts (a follow-up review of both found nothing).
+with no install scripts (a follow-up review of both found nothing), and measurements as JSON
+Lines in `docs/measurements/`, with the queries behind each figure.
 
-1. **Release 0.2.0** (CLAUDE.md's Releasing steps), after record-measurements (in progress:
-   measurements as JSON Lines in `docs/measurements/`, so the release's CI run is recorded too).
-   It's a minor release: inline code changes some of the classifier's verdicts. The pull request
-   merges just before the tag, since a release is tagged on `main`. Once it's published, install
-   the Coursier app from `main` on a Mac and check that it runs the release's macos-arm64 binary
-   (add-coursier-app's follow-up).
+1. **Release 0.2.0** (CLAUDE.md's Releasing steps); record its CI runs with
+   `scripts/ci-run-record`. It's a minor release: inline code changes some of the classifier's
+   verdicts. The pull request merges just before the tag, since a release is tagged on `main`.
+   Once it's published, install the Coursier app from `main` on a Mac and check that it runs the
+   release's macos-arm64 binary (add-coursier-app's follow-up).
 
 ### npm
 
