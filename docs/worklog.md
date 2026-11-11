@@ -249,3 +249,7 @@
   review's eight fixes (all approved) include jq `-b` on Windows, the `.ears-check.aux.exe`
   name, and printing the installed descriptor. Here, `--repo` with the smoke and full cases, the
   default path, and native mode pass; the Windows branch is first run in CI.
+  CI run 43019564325 (5d42f01): Intel macOS passed every case; Windows installed the JVM
+  launcher (ears-check.bat) but its standard error had four JDK 27 warnings about Coursier's
+  launcher calling System.load. The descriptor now also passes --enable-native-access=ALL-UNNAMED
+  (Temurin 17.0.21 and JDK 27 both start with it); Windows' next run is the test.

@@ -3,7 +3,11 @@
     "repositories": ["central"],
     "dependencies": ["io.github.tsnee:ears-checker-cli_3:latest.release"],
     "mainClass": "io.github.tsnee.ears.cli.Main",
-    "javaOptions": ["-XX:+IgnoreUnrecognizedVMOptions", "--sun-misc-unsafe-memory-access=allow"],
+    "javaOptions": [
+      "-XX:+IgnoreUnrecognizedVMOptions",
+      "--sun-misc-unsafe-memory-access=allow",
+      "--enable-native-access=ALL-UNNAMED"
+    ],
     "launcherType": "graalvm-native-image",
     "prebuiltBinaries": {
       "x86_64-pc-linux": "https://github.com/tsnee/ears-checker/releases/download/v${version}/ears-check-${version}-linux-x64",
