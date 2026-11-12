@@ -1,4 +1,7 @@
-# Keeps the SHA pins in .github/workflows/ current: one grouped pull request a week.
+# Keeps the SHA pins in .github/workflows/ current, and the npm lockfiles of the tools CI and the
+# release workflow install (.github/tools: OpenSpec, tsc, publint, attw; .github/npm: the npm that
+# stages releases): one grouped pull request a week for each. A bump to .github/tools' OpenSpec
+# also means updating the local openspec to match (CLAUDE.md's Workflow).
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -7,4 +10,18 @@ updates:
       interval: weekly
     groups:
       github-actions:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /.github/tools
+    schedule:
+      interval: weekly
+    groups:
+      ci-tools:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /.github/npm
+    schedule:
+      interval: weekly
+    groups:
+      release-npm:
         patterns: ["*"]
