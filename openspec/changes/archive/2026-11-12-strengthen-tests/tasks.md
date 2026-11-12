@@ -38,7 +38,7 @@ All work is on branch `batch-tests`. The owner pushes from their own shell. For 
 
 ## 5. Records and docs
 
-- [ ] 5.1 The work log, and the roadmap's tests item marked done when the theme merges; CI records committed with the change
+- [x] 5.1 The work log, and the roadmap's tests item marked done when the theme merges; CI records committed with the change
 
 ## 6. Checks, review, commits
 
