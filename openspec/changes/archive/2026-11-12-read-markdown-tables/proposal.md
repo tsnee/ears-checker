@@ -6,7 +6,7 @@ None of the parsers the Markdown reader uses recognizes GitHub-style tables, so 
 
 ## What Changes
 
-- **Tables are recognized by GitHub's rules**, the same on the JVM, Node, and Scala Native: a header row followed by a delimiter row (`|---|---|`) with the same number of cells starts a table, which may interrupt a paragraph, and runs to the paragraph's end. Lines with pipes but no matching delimiter row stay ordinary text.
+- **Tables are recognized by GitHub's rules**, the same on the JVM, Node, and Scala Native: a header row followed by a delimiter row (`|---|---|`) with the same number of cells starts a table, which may interrupt a paragraph, and ends where GitHub ends it (the rest of the paragraph is read as the Markdown it is). Lines with pipes but no matching delimiter row stay ordinary text.
 - **Each cell is read as text of its own**, on its row's line: a sentence ends at the cell's end, so every requirement in a table is checked separately.
 - **Cells split as GitHub splits them**: at every pipe, inside inline code too, except a backslash-escaped pipe (`\|`) or a pipe written as a character reference (`&#124;`), which stay in their cell. A body row with fewer cells than its header is fine.
 - **A body row with more cells than its header is a warning.** GitHub doesn't show the extra cells, so their text is silently hidden from readers; the reader leaves them unread, as GitHub does, and says so.
@@ -25,7 +25,7 @@ None.
 
 ## Impact
 
-- `ears/markdown/src` (shared): table recognition and cell splitting, from the pieces each parser already gives plus the paragraph's original lines; the facade returns sentences and warnings. The three platform parsers don't change.
+- `ears/markdown/src` (shared): table recognition and cell splitting, from the paragraph's raw lines, with each cell re-parsed as inline text; the facade returns sentences and warnings. Each of the three platform parsers also reports a paragraph's last line.
 - `ears/cli/src` (shared): warnings carried from the Markdown input to the report, written in both output formats, and logged.
 - Tests: conformance fixtures for each table case, run on all three platforms; CLI tests for the warning in both formats and the exit status; a `scripts/cli-cases` case with a table.
 - Docs: `docs/json-output.md` (the `warnings` field), README (what the Markdown reader reads), CHANGELOG.

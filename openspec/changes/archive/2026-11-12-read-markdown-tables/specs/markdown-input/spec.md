@@ -18,7 +18,7 @@ When the Markdown reader reads a document, the Markdown reader SHALL return each
 
 ### Requirement: Tables
 
-When a line of a paragraph is followed by a delimiter row with as many cells, the Markdown reader SHALL read that line, the delimiter row, and every later line of the paragraph as a table.
+When a line of a paragraph is followed by a delimiter row with as many cells, the Markdown reader SHALL read that line, the delimiter row, and every later line of the paragraph up to the table's end as a table.
 
 #### Scenario: A table with outer pipes
 
