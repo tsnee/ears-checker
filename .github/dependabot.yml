@@ -1,7 +1,9 @@
 # Keeps the SHA pins in .github/workflows/ current, and the npm lockfiles of the tools CI and the
 # release workflow install (.github/tools: OpenSpec, tsc, publint, attw; .github/npm: the npm that
 # stages releases): one grouped pull request a week for each. A bump to .github/tools' OpenSpec
-# also means updating the local openspec to match (CLAUDE.md's Workflow).
+# also means updating the local openspec to match (CLAUDE.md's Workflow). The release npm takes
+# no major version from Dependabot: the npm job relies on `npm stage`, so a major is checked by hand
+# (Dependabot's first try, 11.21.2 to 12.2.2, also failed with dependency_file_not_supported).
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -25,3 +27,7 @@ updates:
     groups:
       release-npm:
         patterns: ["*"]
+    ignore:
+      - dependency-name: npm
+        update-types:
+          - version-update:semver-major
