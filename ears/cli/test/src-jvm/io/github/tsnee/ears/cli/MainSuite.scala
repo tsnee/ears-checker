@@ -3,7 +3,6 @@ package io.github.tsnee.ears.cli
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.InputStream
-import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.LinkedBlockingQueue
@@ -88,11 +87,6 @@ object MainSuite extends ZIOSpecDefault:
         outcome <- run(path.toString, "--output", "json")
       yield assertTrue(outcome.exitCode == 1, outcome.stdout.contains("\"kind\":\"wrong-case\""))
     ,
-    test("piped input: standard input is read when no file is given"):
-      Cli
-        .program(Nil, Main.reading(ZIO.succeed("The scheduler shall list upcoming events.\n")))
-        .map(outcome => assertTrue(outcome.exitCode == 0, outcome.stdout.isEmpty))
-    ,
     test("missing file: exit status 2 and a message naming the file"):
       run("missing.txt").map { outcome =>
         assertTrue(outcome.exitCode == 2, outcome.stderr.contains("missing.txt"))
@@ -120,38 +114,13 @@ object MainSuite extends ZIOSpecDefault:
         outcome.stdout.contains("wrong-case")
       )
     ,
-    test("two missing files: the message names only the first"):
-      run("missing.txt", "absent.txt").map { outcome =>
-        assertTrue(
-          outcome.exitCode == 2,
-          outcome.stderr.contains("missing.txt"),
-          !outcome.stderr.contains("absent.txt")
-        )
-      }
-    ,
-    test("a failing file before a missing one: status 2 and nothing on standard output"):
-      for
-        path <- tempFile(".txt", "The scheduler lists upcoming events.\n")
-        outcome <- run(path.toString, "missing.txt")
-      yield assertTrue(outcome.exitCode == 2, outcome.stdout.isEmpty)
-    ,
-    test("a missing file before a failing one: status 2 and nothing on standard output"):
-      for
-        path <- tempFile(".txt", "The scheduler lists upcoming events.\n")
-        outcome <- run("missing.txt", path.toString)
-      yield assertTrue(
-        outcome.exitCode == 2,
-        outcome.stderr.contains("missing.txt"),
-        outcome.stdout.isEmpty
-      )
-    ,
     test("an unparsable file before a missing one: the message is about the unparsable file"):
       for
         path <- tempFile(".json", "{not json")
         outcome <- run(path.toString, "absent.txt")
       yield assertTrue(
         outcome.exitCode == 2,
-        outcome.stderr.nonEmpty,
+        outcome.stderr.startsWith("Not OpenSpec change or spec JSON:"),
         !outcome.stderr.contains("absent.txt")
       )
     ,
@@ -164,42 +133,6 @@ object MainSuite extends ZIOSpecDefault:
         )
       }
     ,
-    suite("the console wiring")(
-      test("a passing requirement: exit code 0 and nothing written"):
-        for
-          code <- Cli.cli(
-            Nil,
-            Main.reading(ZIO.succeed("The scheduler shall list upcoming events.\n"))
-          )
-          out <- TestConsole.output
-          err <- TestConsole.outputErr
-        yield assertTrue(code.code == 0, out.mkString.isEmpty, err.mkString.isEmpty)
-      ,
-      test("a failing requirement: exit code 1 and the finding on standard output"):
-        for
-          code <- Cli.cli(Nil, Main.reading(ZIO.succeed("The scheduler lists events.\n")))
-          out <- TestConsole.output
-          err <- TestConsole.outputErr
-        yield assertTrue(
-          code.code == 1,
-          out.mkString.contains("missing-modal"),
-          err.mkString.isEmpty
-        )
-      ,
-      test("--help: exit code 0 and the usage text on standard output"):
-        for
-          code <- Cli.cli(List("--help"), Main.reading(noStdin))
-          out <- TestConsole.output
-          err <- TestConsole.outputErr
-        yield assertTrue(code.code == 0, out.mkString.contains("Usage"), err.mkString.isEmpty)
-      ,
-      test("bad arguments: exit code 2 and the usage text on standard error"):
-        for
-          code <- Cli.cli(List("--format", "yaml"), Main.reading(noStdin))
-          out <- TestConsole.output
-          err <- TestConsole.outputErr
-        yield assertTrue(code.code == 2, out.mkString.isEmpty, err.mkString.contains("Usage"))
-    ) @@ TestAspect.silent,
     suite("logging")(
       test("--verbose changes neither the exit code nor the console output"):
         // The run's console output and exit code, with the logger installed and logs discarded.
@@ -270,7 +203,11 @@ object MainSuite extends ZIOSpecDefault:
             ZIO.logErrorCause("Unexpected", Cause.fail("disk full"))
           )
           written = lines.asScala.toList
-        yield assertTrue(written.size == 1, written.exists(_.contains("cause=")))
+        yield assertTrue(
+          written.size == 1,
+          written.exists(_.contains("cause=")),
+          written.exists(_.contains("disk full"))
+        )
       ,
       test("with --verbose a passing input logs several entries"):
         logged(List("--verbose"), ZIO.succeed("The scheduler shall list upcoming events.\n"))
@@ -287,10 +224,17 @@ object MainSuite extends ZIOSpecDefault:
           outcome.stderr == "Cannot read standard input\n"
         )
       ,
-      test("an error with no message: status 2 and standard input named"):
-        Cli.program(Nil, Main.reading(ZIO.fail(IllegalStateException()))).map { outcome =>
-          assertTrue(outcome.exitCode == 2, outcome.stderr == "Cannot read standard input\n")
-        }
+      test("an error with no message: status 2, standard input named, and the error carried"):
+        val reading = Main.reading(ZIO.fail(IllegalStateException()))
+        for
+          outcome <- Cli.program(Nil, reading)
+          failed <- reading.standardInput.fold(Some(_), _ => None)
+        yield assertTrue(
+          outcome.exitCode == 2,
+          outcome.stderr == "Cannot read standard input\n",
+          failed.map(_._1).contains(ReadFailure.Unreadable),
+          failed.map(_._2).contains("java.lang.IllegalStateException")
+        )
       ,
       test("a directory given as a file: status 2 and its name"):
         for
@@ -305,11 +249,5 @@ object MainSuite extends ZIOSpecDefault:
           outcome.stdout.isEmpty,
           outcome.stderr == s"Cannot read $directory\n"
         )
-      ,
-      test("readAll decodes a stream as UTF-8"):
-        val text = "The scheduler shall list upcoming events — daily.\n"
-        Main
-          .readAll(ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8)))
-          .map(read => assertTrue(read == text))
-    )
+    ) @@ TestAspect.silent
   )

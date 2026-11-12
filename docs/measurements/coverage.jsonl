@@ -10,3 +10,15 @@
 {"date":"2026-11-11","commit":"e92da13-dirty","module":"ears.linkCheck","measured":"2026-11-11T20:44:50Z","statements":294,"invoked":286,"statement_rate":97.28,"branch_rate":100.00}
 {"date":"2026-11-11","commit":"e92da13-dirty","module":"ears.markdown","measured":"2026-11-11T20:44:50Z","statements":558,"invoked":558,"statement_rate":100.00,"branch_rate":100.00}
 {"date":"2026-11-11","commit":"e92da13-dirty","module":"ears.releaseNotes","measured":"2026-11-11T20:44:50Z","statements":235,"invoked":227,"statement_rate":96.60,"branch_rate":100.00}
+{"date":"2026-11-11","commit":"3def2c9-dirty","module":"ears","measured":"2026-11-12T02:10:29Z","statements":684,"invoked":657,"statement_rate":96.05,"branch_rate":92.92}
+{"date":"2026-11-11","commit":"3def2c9-dirty","module":"ears.cli","measured":"2026-11-12T02:10:32Z","statements":542,"invoked":529,"statement_rate":97.60,"branch_rate":100.00}
+{"date":"2026-11-11","commit":"3def2c9-dirty","module":"ears.npm","measured":"2026-11-12T02:10:24Z","statements":56,"invoked":56,"statement_rate":100.00,"branch_rate":100.00}
+{"date":"2026-11-11","commit":"3def2c9-dirty","module":"ears.linkCheck","measured":"2026-11-12T02:10:24Z","statements":294,"invoked":286,"statement_rate":97.28,"branch_rate":100.00}
+{"date":"2026-11-11","commit":"3def2c9-dirty","module":"ears.markdown","measured":"2026-11-12T02:10:25Z","statements":558,"invoked":558,"statement_rate":100.00,"branch_rate":100.00}
+{"date":"2026-11-11","commit":"3def2c9-dirty","module":"ears.releaseNotes","measured":"2026-11-12T02:10:25Z","statements":235,"invoked":227,"statement_rate":96.60,"branch_rate":100.00}
+{"date":"2026-11-11","commit":"3def2c9-dirty","module":"ears","measured":"2026-11-12T02:23:27Z","statements":684,"invoked":657,"statement_rate":96.05,"branch_rate":92.92}
+{"date":"2026-11-11","commit":"3def2c9-dirty","module":"ears.cli","measured":"2026-11-12T02:25:38Z","statements":542,"invoked":529,"statement_rate":97.60,"branch_rate":100.00}
+{"date":"2026-11-11","commit":"3def2c9-dirty","module":"ears.npm","measured":"2026-11-12T02:23:25Z","statements":56,"invoked":56,"statement_rate":100.00,"branch_rate":100.00}
+{"date":"2026-11-11","commit":"3def2c9-dirty","module":"ears.linkCheck","measured":"2026-11-12T02:23:24Z","statements":294,"invoked":286,"statement_rate":97.28,"branch_rate":100.00}
+{"date":"2026-11-11","commit":"3def2c9-dirty","module":"ears.markdown","measured":"2026-11-12T02:23:24Z","statements":558,"invoked":558,"statement_rate":100.00,"branch_rate":100.00}
+{"date":"2026-11-11","commit":"3def2c9-dirty","module":"ears.releaseNotes","measured":"2026-11-12T02:23:24Z","statements":235,"invoked":227,"statement_rate":96.60,"branch_rate":100.00}

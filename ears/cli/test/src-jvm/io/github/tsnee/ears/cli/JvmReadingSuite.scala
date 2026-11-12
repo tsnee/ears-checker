@@ -80,12 +80,20 @@ object JvmReadingSuite extends ZIOSpecDefault:
         .fold(failed => Some(failed._1), _ => None)
         .map(found => assertTrue(found.contains(ReadFailure.NotUtf8(2, 2))))
     ,
-    test("the JVM's bootstrap installs its logger"):
+    test("the JVM's log lines reach the given stream, one per line"):
+      val err = ByteArrayOutputStream()
       ZIO
-        .scoped((ZLayer.succeed(ZIOAppArgs(Chunk.empty)) >>> Main.bootstrap).build)
-        .as(assertCompletes)
+        .scoped(
+          (ZLayer.succeed(ZIOAppArgs(Chunk.empty)) >>> Main.bootstrapTo(err)).build *>
+            ZIO.logError("é")
+        )
+        .as(
+          assertTrue(err.toByteArray.toList.takeRight(3) == List(0xc3, 0xa9, '\n').map(_.toByte))
+        )
     ,
-    test("the console writes UTF-8, whatever the platform's default"):
+    // Since JDK 18 the default charset is UTF-8, so this can't tell the explicit one from the
+    // default; scripts/cli-cases' c-locale case is what holds the jar to UTF-8 under the C locale.
+    test("the console's two streams carry each line, out and err apart"):
       val out = ByteArrayOutputStream()
       val err = ByteArrayOutputStream()
       for _ <- ZIO.withConsole(Main.utf8Console(out, err))(
