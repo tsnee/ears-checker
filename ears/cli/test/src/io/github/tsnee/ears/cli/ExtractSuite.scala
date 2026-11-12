@@ -5,10 +5,14 @@ import zio.test.*
 object ExtractSuite extends ZIOSpecDefault:
 
   private val changeJson =
-    """{"id": "add-reminders", "title": "add-reminders", "deltaCount": 2, "deltas": [
+    """{"id": "add-reminders", "title": "add-reminders", "deltaCount": 3, "deltas": [
       |  {"spec": "reminders", "operation": "ADDED", "description": "Add requirement",
       |   "requirement": {"name": "Reminder sent",
       |                   "text": "When a reminder is due, the scheduler SHALL send a notice.",
+      |                   "scenarios": []}},
+      |  {"spec": "reminders", "operation": "MODIFIED", "description": "Modify requirement",
+      |   "requirement": {"name": "Upcoming",
+      |                   "text": "The scheduler SHALL list upcoming events in order.",
       |                   "scenarios": []}},
       |  {"spec": "reminders", "operation": "REMOVED", "description": "Remove requirement",
       |   "requirement": {"name": "Old reminder"}}
@@ -64,6 +68,10 @@ object ExtractSuite extends ZIOSpecDefault:
               Candidate(
                 Location.ChangeRequirement("add-reminders", "reminders", "Reminder sent"),
                 "When a reminder is due, the scheduler SHALL send a notice."
+              ),
+              Candidate(
+                Location.ChangeRequirement("add-reminders", "reminders", "Upcoming"),
+                "The scheduler SHALL list upcoming events in order."
               )
             )
           )

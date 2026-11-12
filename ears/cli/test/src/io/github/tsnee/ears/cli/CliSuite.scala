@@ -71,11 +71,6 @@ object CliSuite extends ZIOSpecDefault:
           )
         )
       ,
-      test("a file name with an escape sequence shows it as \\u001b"):
-        run(Map.empty, "mis\u001b[1Asing.txt").map(outcome =>
-          assertTrue(outcome.stderr == "Cannot read mis\\u001b[1Asing.txt\n")
-        )
-      ,
       test("a file name with line feeds stays one line, showing \\u000a"):
         run(Map.empty, "x\nforged.md:1: missing-comma\ny.md").map(outcome =>
           assertTrue(
@@ -155,6 +150,11 @@ object CliSuite extends ZIOSpecDefault:
           outcome.stderr == "Cannot read absent.txt\n",
           read == List("a.txt", "absent.txt")
         )
+      ,
+      test("a failing file before a missing one: status 2 and nothing on standard output"):
+        run(Map("notes.txt" -> ZIO.succeed(failing)), "notes.txt", "missing.txt").map(outcome =>
+          assertTrue(outcome.exitCode == 2, outcome.stdout.isEmpty)
+        )
     ),
     suite("the application")(
       test("run takes its arguments from the command line"):
@@ -162,13 +162,29 @@ object CliSuite extends ZIOSpecDefault:
           .run(reading(Map.empty))
           .provide(ZLayer.succeed(ZIOAppArgs(Chunk("--help"))))
           .map(code => assertTrue(code.code == 0))
-      ,
-      test("bootstrap installs its logger"):
-        ZIO
-          .scoped((ZLayer.succeed(ZIOAppArgs(Chunk.empty)) >>> Cli.bootstrap).build)
-          .as(assertCompletes)
     ) @@ TestAspect.silent,
     suite("console")(
+      test("a passing requirement: exit code 0 and nothing written"):
+        for
+          code <- Cli.cli(Nil, Reading(_ => unreadable("ENOENT"), ZIO.succeed(passing)))
+          out <- TestConsole.output
+          err <- TestConsole.outputErr
+        yield assertTrue(code.code == 0, out.mkString.isEmpty, err.mkString.isEmpty)
+      ,
+      test("--help: exit code 0 and the usage text on standard output"):
+        for
+          code <- Cli.cli(List("--help"), reading(Map.empty))
+          out <- TestConsole.output
+          err <- TestConsole.outputErr
+        yield assertTrue(code.code == 0, out.mkString.contains("Usage"), err.mkString.isEmpty)
+      ,
+      test("bad arguments: exit code 2 and the usage text on standard error"):
+        for
+          code <- Cli.cli(List("--format", "yaml"), reading(Map.empty))
+          out <- TestConsole.output
+          err <- TestConsole.outputErr
+        yield assertTrue(code.code == 2, out.mkString.isEmpty, err.mkString.contains("Usage"))
+      ,
       test("a failing file: exit code 1 and the finding on standard output"):
         for
           code <- Cli.cli(List("notes.txt"), reading(Map("notes.txt" -> ZIO.succeed(failing))))

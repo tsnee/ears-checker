@@ -53,7 +53,7 @@ object FacadeSuite extends ZIOSpecDefault:
 
   def spec = suite("JavaScript export")(
     test("every result is the core's value as a JavaScript object"):
-      check(damagedSentenceOrText, Gen.elements(Profile.Classic, Profile.OpenSpec)) {
+      check(Generators.damagedSentenceOrText, Gen.elements(Profile.Classic, Profile.OpenSpec)) {
         (sentence, profile) =>
           val result = Facade.classify(sentence, options(profileName(profile)))
           assertTrue(js.JSON.stringify(result) == json(Api.classify(profile, sentence)))
@@ -114,7 +114,3 @@ object FacadeSuite extends ZIOSpecDefault:
         )
     )
   )
-
-  /** Generated requirement sentences, and arbitrary text as well. */
-  private val damagedSentenceOrText: Gen[Any, String] =
-    Gen.oneOf(Generators.damagedSentence, Gen.string)

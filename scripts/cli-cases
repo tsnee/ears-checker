@@ -17,7 +17,8 @@ jvm_cli() {
   java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow -jar "$jar" "$@"
 }
 
-# Inputs: plain text, a passing file, a directory, every spec as OpenSpec JSON.
+# Inputs: plain text, a passing file, a directory, every spec as OpenSpec JSON, and OpenSpec JSON
+# fixtures with findings.
 inputs="$tmp/inputs"
 mkdir -p "$inputs/notes"
 printf '%s\n' 'The scheduler shall list upcoming events.' 'The scheduler lists events.' \
@@ -26,6 +27,26 @@ printf '%s\n' 'The scheduler shall list upcoming events.' >"$inputs/passing.txt"
 for spec in $(openspec list --specs --json | jq -r '.specs[].id'); do
   openspec show "$spec" --type spec --json >"$inputs/spec-$spec.json"
 done
+# OpenSpec JSON with findings, in `openspec show --json`'s shape (the real specs have none, since
+# check-openspec holds them to zero): a change with a failing ADDED delta (a missing comma), a
+# failing MODIFIED one (a weak modal), and a REMOVED one, which has no text to check; and a spec
+# with a passing requirement and a failing one (an If clause with no comma or "then").
+printf '%s\n' '{"id": "add-reminders", "title": "add-reminders", "deltaCount": 3, "deltas": [' \
+  '{"spec": "reminders", "operation": "ADDED", "description": "Add requirement",' \
+  ' "requirement": {"name": "Reminder sent", "scenarios": [],' \
+  '  "text": "When a reminder is due the scheduler SHALL send a notice."}},' \
+  '{"spec": "reminders", "operation": "MODIFIED", "description": "Modify requirement",' \
+  ' "requirement": {"name": "Upcoming", "scenarios": [],' \
+  '  "text": "The scheduler SHOULD list upcoming events in order."}},' \
+  '{"spec": "reminders", "operation": "REMOVED", "description": "Remove requirement",' \
+  ' "requirement": {"name": "Old reminder"}}' \
+  ']}' >"$inputs/fixture-change.json"
+printf '%s\n' '{"id": "invoices", "title": "invoices", "requirementCount": 2, "requirements": [' \
+  '{"name": "Issue", "scenarios": [],' \
+  ' "text": "The billing service SHALL issue an invoice each month."},' \
+  '{"name": "Overdue", "scenarios": [],' \
+  ' "text": "If an invoice is overdue the billing service SHALL notify the account owner."}' \
+  ']}' >"$inputs/fixture-spec.json"
 
 # Runs one build on a case, with $stdin piped to it: <build>/<case>.out, .err (with log lines
 # removed), and .status. Log lines start with an ISO timestamp and a level; their details differ
@@ -103,11 +124,14 @@ set -f # the lists below are split into arguments but never globbed
 compare markdown-text "0 1" $markdown
 # shellcheck disable=SC2086
 compare markdown-json "0 1" --output json $markdown
+# The real specs, as the large case: check-openspec holds them to zero findings.
 # shellcheck disable=SC2086
-compare openspec-text "0 1" $specs
-# shellcheck disable=SC2086
-compare openspec-json "0 1" --output json $specs
+compare openspec-json 0 --output json $specs
 set +f
+compare openspec-change-text 1 "$inputs/fixture-change.json"
+compare openspec-change-json 1 --output json "$inputs/fixture-change.json"
+compare openspec-spec-text 1 "$inputs/fixture-spec.json"
+compare openspec-spec-json 1 --output json "$inputs/fixture-spec.json"
 compare plain-text 1 "$inputs/plain.txt"
 compare plain-json 1 --output json "$inputs/plain.txt"
 compare invalid-utf-8 2 "$inputs/latin1.txt"
@@ -125,7 +149,7 @@ for spec in $specs; do
   break
 done
 set +f
-compare openspec-byte-order-mark "0 1" "$inputs/bom.json"
+compare openspec-byte-order-mark 0 --output json "$inputs/bom.json"
 # A requirement carrying terminal escape sequences (ESC [2K ESC [1A) and a missing comma: its fix
 # must show them as \u001b, so no build writes the escape character itself.
 printf 'When an order arrives the scheduler shall list events \033[2K\033[1A.\n' \
@@ -150,6 +174,12 @@ compare help 0 --help
 compare bad-arguments 2 --format yaml
 compare empty-file-name 2 "$inputs/plain.txt" ""
 compare verbose 0 --verbose "$inputs/passing.txt"
+# The comparison strips log lines, so a build ignoring --verbose would match: its log must have a
+# debug line, which only --verbose writes.
+if ! grep -q -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z DEBUG ' "$tmp/$subject/verbose.log"; then
+  echo "$check: case verbose: $label's log has no DEBUG line" >&2
+  exit 1
+fi
 # Non-ASCII output under the C locale, whose charset is ASCII: both write UTF-8 regardless (the
 # JVM's own streams would write é as ?). In a subshell, so the locale applies to this case only.
 printf 'When an order is placed the caf\303\251 shall print a receipt.\n' >"$inputs/accents.txt"

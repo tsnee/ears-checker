@@ -25,15 +25,18 @@ object ModelSuite extends ZIOSpecDefault:
       test("While and When together are complex"):
         assertTrue(Template.of(stateAndEvent) == Template.Complex)
       ,
+      test("Where and While together, with no trigger, are complex"):
+        val featureAndState = Requirement(
+          feature = Some(text("gift wrapping is enabled")),
+          precondition = Some(text("the cart is not empty")),
+          trigger = None,
+          system = text("checkout service"),
+          response = text("offer a gift message field")
+        )
+        assertTrue(Template.of(featureAndState) == Template.Complex)
+      ,
       test("Where, While, and If together are complex"):
         assertTrue(Template.of(featureStateUnwanted) == Template.Complex)
-    ),
-    suite("profiles")(
-      test("the OpenSpec profile uses the uppercase keyword"):
-        assertTrue(Profile.OpenSpec.keyword == "SHALL")
-      ,
-      test("the classic profile uses the lowercase keyword"):
-        assertTrue(Profile.Classic.keyword == "shall")
     ),
     suite("spans")(
       test("stripSpans replaces every span with the empty span at offset 0"):

@@ -181,6 +181,11 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
         Sentence(3, "The e SHALL f.")
       ),
       fixture(
+        "an escaped first word after inline HTML across lines",
+        "Intro. <span\nclass=x>\\*b\\* shall c.\n",
+        Sentence(2, "*b* shall c.")
+      ),
+      fixture(
         "text decoded from an entity, then the same text written plainly, later",
         "Tom &amp; Jerry SHALL run.\nThe x SHALL y.\nTom & Jerry SHALL run.\n",
         Sentence(1, "Tom & Jerry SHALL run."),
@@ -280,6 +285,8 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
         val content = "> " * 10000 + "The scheduler shall list.\n"
         assertTrue(Markdown.sentences(content).exists(_.size <= 1))
     ),
+    // Meaningful on Scala Native, where the parser is an installed cmark found when it runs; on the
+    // JVM and Node the parser is a dependency, and the name is a constant.
     test("the platform's parser is found and named"):
       assertTrue(Markdown.parser().exists(_.nonEmpty))
   )

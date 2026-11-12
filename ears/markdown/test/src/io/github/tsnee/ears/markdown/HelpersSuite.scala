@@ -1,5 +1,7 @@
 package io.github.tsnee.ears.markdown
 
+import java.util.concurrent.atomic.AtomicReference
+
 import zio.test.*
 
 /** The pure helpers behind the parsers, on every platform: `CmarkLines` (cmark's lines, which only
@@ -146,13 +148,21 @@ object HelpersSuite extends ZIOSpecDefault:
           )
         }
       ,
-      test("the first candidate that loads is used, and the ones after it aren't needed"):
-        val attempt: String => Either[CmarkAttempt, String] =
-          case "/b" => Right("loaded /b")
-          case path => Left(CmarkAttempt.Unopened(path, "no file"))
+      test("the first candidate that loads is used, and the ones after it aren't tried"):
+        // `/b` and `/c` both load; the record of what was tried shows the search stops at `/b`.
+        val tried = AtomicReference(List.empty[String])
+        val attempt: String => Either[CmarkAttempt, String] = path =>
+          tried.set(path :: tried.get.nn)
+          path match
+            case "/b" | "/c" => Right(s"loaded $path")
+            case _           => Left(CmarkAttempt.Unopened(path, "no file"))
+        val found = CmarkLibrary.firstLoaded(List("/a", "/b", "/c", "/d"), attempt)
+        val unopened: String => Either[CmarkAttempt, String] =
+          path => Left(CmarkAttempt.Unopened(path, "no file"))
         assertTrue(
-          CmarkLibrary.firstLoaded(List("/a", "/b", "/c"), attempt) == Right("loaded /b"),
-          CmarkLibrary.firstLoaded(List("/a", "/c"), attempt) ==
+          found == Right("loaded /b"),
+          tried.get.nn.reverse == List("/a", "/b"),
+          CmarkLibrary.firstLoaded(List("/a", "/c"), unopened) ==
             Left(
               List(CmarkAttempt.Unopened("/a", "no file"), CmarkAttempt.Unopened("/c", "no file"))
             )

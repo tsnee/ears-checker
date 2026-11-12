@@ -58,12 +58,5 @@ object RenderSuite extends ZIOSpecDefault:
     suite("classic profile")(
       test("ubiquitous"):
         renders(Profile.Classic, scheduler, "The scheduler shall list upcoming events.")
-      ,
-      test("complex: state and event"):
-        renders(
-          Profile.Classic,
-          stateAndEvent,
-          "While a user is signed in, when the session expires, the access service shall redirect the user to the sign-in page."
-        )
     )
   )

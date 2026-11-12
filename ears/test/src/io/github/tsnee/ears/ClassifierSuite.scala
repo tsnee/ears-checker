@@ -11,56 +11,6 @@ object ClassifierSuite extends ZIOSpecDefault:
   private def classifiesTo(input: String, expected: Requirement) =
     assertTrue(tree(Profile.OpenSpec, input).contains(expected))
 
-  // Generated requirements avoid commas, clause keywords, "the", "then", and modal verbs, which
-  // the classifier treats as structure (see design.md, "Two-stage classification").
-  private val vocabulary = Gen.elements(
-    "order",
-    "cart",
-    "customer",
-    "door",
-    "alarm",
-    "user",
-    "session",
-    "page",
-    "item",
-    "stock",
-    "sign-in",
-    "total",
-    "empty",
-    "open",
-    "closed",
-    "is",
-    "are",
-    "a",
-    "an",
-    "of",
-    "to",
-    "for",
-    "with",
-    "list",
-    "show",
-    "send",
-    "log"
-  )
-  private val phrase = Gen.listOfBounded(1, 5)(vocabulary).map(_.mkString(" "))
-  private val trigger = Gen.oneOf(
-    phrase.map(words => Trigger.Event(text(words))),
-    phrase.map(words => Trigger.Unwanted(text(words)))
-  )
-  private val requirement =
-    for
-      feature <- Gen.option(phrase)
-      precondition <- Gen.option(phrase)
-      trigger <- Gen.option(trigger)
-      system <- phrase
-      response <- phrase
-    yield Requirement(
-      feature.map(text),
-      precondition.map(text),
-      trigger,
-      text(system),
-      text(response)
-    )
   private val profile = Gen.elements(Profile.values.toList*)
 
   def spec = suite("EARS classifier")(
@@ -105,11 +55,6 @@ object ClassifierSuite extends ZIOSpecDefault:
         )
     ),
     suite("profiles")(
-      test("the OpenSpec profile accepts the uppercase keyword"):
-        assertTrue(
-          tree(Profile.OpenSpec, "The scheduler SHALL list upcoming events.").contains(scheduler)
-        )
-      ,
       test("the classic profile accepts the lowercase keyword"):
         assertTrue(
           tree(Profile.Classic, "The scheduler shall list upcoming events.").contains(scheduler)
@@ -119,7 +64,8 @@ object ClassifierSuite extends ZIOSpecDefault:
       assertTrue(Requirement.classify(Profile.OpenSpec, "").isLeft)
     ,
     test("round trip: rendering a tree and classifying it again gives an equal tree"):
-      check(requirement, profile) { (generated, chosen) =>
-        assertTrue(tree(chosen, generated.render(chosen)).contains(generated))
+      check(profile.flatMap(chosen => Generators.validRequirement(chosen).map((chosen, _)))) {
+        case (chosen, (generated, rendered)) =>
+          assertTrue(tree(chosen, rendered).contains(generated))
       }
   )

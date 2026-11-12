@@ -78,12 +78,9 @@ object LoggingSuite extends ZIOSpecDefault:
         )
       ,
       test("whatever the details hold, an entry is one line of printable characters"):
-        check(Gen.string, Gen.string) { (message, value) =>
+        check(TerminalText.texts, TerminalText.texts) { (message, value) =>
           val written = Logging.line(noon, LogLevel.Error, message, Map("key" -> value))
-          assertTrue(
-            !written.exists(Character.isISOControl),
-            !written.exists(c => c.toInt == 0x2028 || c.toInt == 0x2029)
-          )
+          assertTrue(!written.exists(TerminalText.acted))
         }
     ),
     suite("arguments")(

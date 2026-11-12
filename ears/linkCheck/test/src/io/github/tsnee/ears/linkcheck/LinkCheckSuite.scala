@@ -126,10 +126,13 @@ object LinkCheckSuite extends ZIOSpecDefault:
         val member = method(s"${pkg}Hidden.run().")
         assertTrue(symbolsOf(operationsOf(owner, apply, hidden, member)) == List(apply.symbol))
       ,
-      test("a public member of a private object isn't one"):
+      test("a public member of a public object inside a private one isn't one"):
         val hidden = obj(s"${pkg}Owner.Hidden.").copy(access = PrivateAccess())
-        val member = method(s"${pkg}Owner.Hidden.run().")
-        assertTrue(symbolsOf(operationsOf(owner, apply, hidden, member)) == List(apply.symbol))
+        val inner = obj(s"${pkg}Owner.Hidden.Inner.")
+        val member = method(s"${pkg}Owner.Hidden.Inner.run().")
+        assertTrue(
+          symbolsOf(operationsOf(owner, apply, hidden, inner, member)) == List(apply.symbol)
+        )
       ,
       test("a protected member isn't one: users can't call it"):
         val guarded = method(s"${pkg}Owner.guarded().").copy(access = ProtectedAccess())
@@ -275,7 +278,20 @@ object LinkCheckSuite extends ZIOSpecDefault:
         )
       ,
       test("the line the generator prints matches the one the program will print"):
-        assertTrue(LinkCheck.summary(7) == "link-check: 7 operations reachable")
+        // The program prints its `println` template with `reached.size`, one per operation, in it.
+        val operations = List(
+          Operation("p/Owner.applyTo().", "(_root_.p.Owner.applyTo: AnyRef)"),
+          Operation("p/Owner.limit.", "(_root_.p.Owner.limit: Any)"),
+          Operation("p/Owner.render().", "(_root_.p.Owner.render: AnyRef)")
+        )
+        val Println = """\s*println\(s"(.*)"\)""".r
+        val printed = LinkCheck
+          .program(operations)
+          .linesIterator
+          .collectFirst { case Println(template) => template }
+          .flatMap(Option(_))
+          .map(_.replace(s"$${reached.size}", operations.size.toString))
+        assertTrue(printed == Some(LinkCheck.summary(operations.size)))
     ),
     suite("real compiler output")(
       test("the fixture: every shape, each with the reference its program compiles with"):

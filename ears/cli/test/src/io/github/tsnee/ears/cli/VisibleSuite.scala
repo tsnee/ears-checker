@@ -1,24 +1,12 @@
 package io.github.tsnee.ears.cli
 
+import io.github.tsnee.ears.cli.TerminalText.acted
+import io.github.tsnee.ears.cli.TerminalText.characters
+import io.github.tsnee.ears.cli.TerminalText.texts
 import zio.test.*
 
-/** What text output and messages show of characters a terminal would act on. */
+/** What text output and messages show of characters a terminal would act on (`TerminalText`). */
 object VisibleSuite extends ZIOSpecDefault:
-
-  /** A character a terminal or a line-based tool could act on: what `Visible` escapes. */
-  private def acted(c: Char): Boolean =
-    Character.isISOControl(c) || c.toInt == 0x2028 || c.toInt == 0x2029
-
-  /** Characters mixing the escaped kinds (C0, DEL, C1, the separators) with plain text,
-    * backslashes, and a no-break space.
-    */
-  private val characters = Gen.oneOf(
-    Gen.char('\u0000', '\u001f'),
-    Gen.char('\u007f', '\u009f'),
-    Gen.elements('\u2028', '\u2029', '\\', 'u', '0', 'é', '\u00a0'),
-    Gen.char(' ', '~')
-  )
-  private val texts = Gen.listOfBounded(0, 20)(characters).map(_.mkString)
 
   def spec = suite("Visible")(
     test("the escape character becomes \\u001b"):

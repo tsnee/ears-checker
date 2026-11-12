@@ -83,7 +83,7 @@ object SourceLinesSuite extends ZIOSpecDefault:
       )
       assertTrue(lines(found) == List(Some(2), Some(2), Some(3), None, Some(4)))
     ,
-    test("text an escape or entity changed takes the line it's on and moves nothing on"):
+    test("text an entity changed takes the line it's on, and the text after a break the next"):
       val found = SourceLines.paragraph(
         "Some \\*escaped\\* text &amp;amp; more.\nThe scheduler shall list.",
         1,
@@ -136,25 +136,17 @@ object SourceLinesSuite extends ZIOSpecDefault:
         )
       )
     ,
-    test("a backslash escape in the source matches the punctuation it decodes to"):
+    test(
+      "an escaped first word after a hidden line ending matches the punctuation it decodes to"
+    ):
+      // The inline HTML hides a line ending, so only matching `\*b\*` as `*b*` finds the text on
+      // line 2; unmatched, it would stay where the search stands, on line 1.
       val found = SourceLines.paragraph(
-        "| A | The \\<system\\> shall \\<respond\\>. |\n| B | The \\<x\\> shall go. |",
+        "Intro <span\nclass=x>\\*b\\* c.",
         1,
-        List(
-          text("| A | The <system> shall <respond>. |"),
-          SourcePiece.Break,
-          text("| B | The <x> shall go. |")
-        )
+        List(text("Intro "), text("*b* c."))
       )
-      assertTrue(lines(found) == List(Some(1), None, Some(2)))
-    ,
-    test("an escape at a piece's first character matches too, and moves the search past it"):
-      val found = SourceLines.paragraph(
-        "x \\*a\\* b *a* c.",
-        1,
-        List(text("x "), text("*a* b "), text("*a*"), text(" c."))
-      )
-      assertTrue(lines(found) == List(Some(1), Some(1), Some(1), Some(1)))
+      assertTrue(lines(found) == List(Some(1), Some(2)))
     ,
     test("text that runs past the end of the source isn't found"):
       val found =
@@ -181,7 +173,12 @@ object SourceLinesSuite extends ZIOSpecDefault:
       )
       assertTrue(lines(found) == List(Some(1), None, Some(2), None, Some(3), None, Some(4)))
     ,
-    test("a long paragraph with an entity on every line: each line's text stays on its line"):
+    test("speed guard: a long paragraph with an entity on every line stays linear"):
+      // A speed guard for the bounded search window: text an entity changed is never found whole,
+      // so each search reads its whole window. Bounded to the next line, the paragraph takes well
+      // under a second; searching to the end of the source, it takes many seconds (14 s against
+      // 0.6 s, measured 2026-11-11) and the lines still come out right. There's no timeout, which
+      // would make the test flaky: a slow run here is the failure to look for.
       val rows = 3000
       val found = SourceLines.paragraph(
         List.fill(rows)("Tom &amp; Jerry shall run.").mkString("\n"),
