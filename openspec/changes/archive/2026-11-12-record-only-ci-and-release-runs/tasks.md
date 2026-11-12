@@ -16,8 +16,8 @@ All work is on branch `ci-run-record-workflows`. The owner pushes from their own
 
 - [x] 3.1 `scripts/check-openspec` passes (the change touches no Scala, so the rest of the gate has nothing to check; CI runs it all)
 - [x] 3.2 Run `/code-review` in a subagent on this change; the owner chooses which findings to fix. (Eight findings, all applied: the workflow checked first and nothing created before the checks; the existing "CI run records" requirement modified rather than contradicted; the Release scenario as an accepted run; the refusal split into two single-response requirements; the repeatable test and its CI step; comments beside the workflows' names; the header reflowed.)
-- [ ] 3.3 Commit (plan, then implementation); the owner pushes; open a PR, whose CI runs. Report the run's result and minutes, from the records
-- [ ] 3.4 Run `/openspec-verify-change` and report it before archiving
+- [x] 3.3 Commit (plan, then implementation); the owner pushes; open a PR, whose CI runs. Report the run's result and minutes, from the records
+- [x] 3.4 Run `/openspec-verify-change` and report it before archiving
 
 ## Workflow follow-up
 
