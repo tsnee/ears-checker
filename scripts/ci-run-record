@@ -1,10 +1,12 @@
 #!/usr/bin/env sh
-# Records a finished GitHub Actions run of this repository: one JSON line per job of each of the
-# run's attempts (a rerun is a later attempt), with the run, attempt, commit, branch, event,
-# workflow, job, conclusion, start, end, minutes (the job's wall-clock time rounded up to a whole
-# minute), and whether the job was carried over from an earlier attempt rather than run in this
-# one (it started before the attempt did), appended to docs/measurements/ci-runs.jsonl. An attempt
-# is written whole or not at all, and one already in the file isn't recorded again.
+# Records a finished CI or Release run of this repository (any other workflow's run is refused,
+# with nothing written): one JSON line per job of each of the run's attempts (a rerun is a later
+# attempt), with the run, attempt, commit, branch, event, workflow, job, conclusion, start, end,
+# minutes (the job's wall-clock time rounded up to a whole minute), and whether the job was
+# carried over from an earlier attempt rather than run in this one (it started before the attempt
+# did), appended to docs/measurements/ci-runs.jsonl. An attempt is written whole or not at all,
+# and one already in the file isn't recorded again. scripts/test-ci-run-record tests its choice of
+# runs.
 # docs/measurements/ci-runs.jq reports from the records.
 # Needs gh (signed in) and jq.
 #
@@ -45,19 +47,26 @@ esac
 
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 [ -n "$records" ] || records=$(pwd)/docs/measurements/ci-runs.jsonl
+
+command="gh run view $run --json attempt,status,headSha,headBranch,event,workflowName"
+summary=$($command) || fail "$command failed (gh's error is above)"
+# Only this repository's CI and release runs: GitHub lists others (Dependabot's) beside them.
+# Checked first, and before anything is written, so a refused run leaves no trace.
+workflow=$(printf '%s' "$summary" | jq -r .workflowName)
+case $workflow in
+  CI | Release) ;;
+  *) fail "run $run is a \"$workflow\" run; only CI and Release runs are recorded" ;;
+esac
+status=$(printf '%s' "$summary" | jq -r .status)
+[ "$status" = completed ] || fail "run $run is $status, not finished; record it when it is"
+attempts=$(printf '%s' "$summary" | jq -r .attempt)
+
 mkdir -p "$(dirname "$records")"
 touch "$records"
-
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-
-command="gh run view $run --json attempt,status,headSha,headBranch,event,workflowName"
-summary=$($command) || fail "$command failed (gh's error is above)"
-status=$(printf '%s' "$summary" | jq -r .status)
-[ "$status" = completed ] || fail "run $run is $status, not finished; record it when it is"
-attempts=$(printf '%s' "$summary" | jq -r .attempt)
 
 attempt=1
 while [ "$attempt" -le "$attempts" ]; do

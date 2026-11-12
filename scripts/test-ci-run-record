@@ -1,0 +1,98 @@
+#!/usr/bin/env sh
+# The test of scripts/ci-run-record's choice of runs: which runs it records and which it refuses,
+# and that a refused run leaves the records file (and its directory) as they were. A stand-in `gh`
+# on the PATH answers the three calls the script makes, from the case's workflow name and status;
+# nothing reaches GitHub. A developer check, run by contributors and CI. Needs jq.
+set -e
+
+here=$(cd "$(dirname "$0")" && pwd)
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# The stand-in gh: `run view <id> --json …` gives the summary, `api …/attempts/1` the attempt's
+# start, and `run view <id> --attempt 1 --json jobs` one five-minute job.
+mkdir "$tmp/bin"
+cat >"$tmp/bin/gh" <<'EOF'
+#!/usr/bin/env sh
+case "$*" in
+  *"--attempt 1 --json jobs"*)
+    printf '%s\n' '{"jobs":[{"name":"check","conclusion":"success","startedAt":"2026-01-01T00:00:00Z","completedAt":"2026-01-01T00:05:00Z"}]}' ;;
+  "run view "*)
+    jq -n -c --argjson name "$FAKE_WORKFLOW" --arg status "$FAKE_STATUS" \
+      '{attempt: 1, status: $status, headSha: "abc", headBranch: "main", event: "push", workflowName: $name}' ;;
+  "api "*) printf '%s\n' '2026-01-01T00:00:00Z' ;;
+  *) echo "stand-in gh: unexpected call: $*" >&2; exit 1 ;;
+esac
+EOF
+chmod +x "$tmp/bin/gh"
+
+failures=0
+check() {
+  if [ "$2" = ok ]; then
+    echo "ok: $1"
+  else
+    echo "FAILED: $1: $2" >&2
+    failures=$((failures + 1))
+  fi
+}
+
+# Runs the recorder on a case: workflow name (a JSON value), status, records file. Prints the
+# exit status; its messages go to $tmp/err.
+record() {
+  if FAKE_WORKFLOW=$1 FAKE_STATUS=$2 PATH="$tmp/bin:$PATH" \
+    "$here/ci-run-record" --records "$3" 1234 2>"$tmp/err"; then
+    echo 0
+  else
+    echo $?
+  fi
+}
+
+for name in CI Release; do
+  file="$tmp/$name.jsonl"
+  : >"$file"
+  status=$(record "\"$name\"" completed "$file")
+  lines=$(grep -c . "$file" || true)
+  if [ "$status" = 0 ] && [ "$lines" = 1 ]; then
+    check "a $name run is recorded" ok
+  else
+    check "a $name run is recorded" "exit $status, $lines records"
+  fi
+done
+
+refused() {
+  label=$1 workflow=$2 status=$3
+  file="$tmp/kept.jsonl"
+  printf '%s\n' '{"run":1}' >"$file"
+  cp "$file" "$tmp/before.jsonl"
+  code=$(record "$workflow" "$status" "$file")
+  if [ "$code" != 0 ] && cmp -s "$file" "$tmp/before.jsonl" &&
+    grep -q "only CI and Release runs are recorded" "$tmp/err"; then
+    check "$label is refused, the file unchanged" ok
+  else
+    check "$label is refused, the file unchanged" "exit $code: $(cat "$tmp/err")"
+  fi
+}
+refused "a Dependabot run" '"Dependabot Updates"' completed
+if grep -q '"Dependabot Updates"' "$tmp/err"; then
+  check "the message names the workflow" ok
+else
+  check "the message names the workflow" "$(cat "$tmp/err")"
+fi
+refused "a run with no workflow name" null completed
+refused "an unfinished Dependabot run" '"Dependabot Updates"' in_progress
+
+missing="$tmp/new/dir/runs.jsonl"
+code=$(record '"Dependabot Updates"' completed "$missing")
+if [ "$code" != 0 ] && [ ! -e "$tmp/new" ]; then
+  check "a refused run creates no records file or directory" ok
+else
+  check "a refused run creates no records file or directory" "exit $code, $tmp/new exists"
+fi
+
+[ "$failures" = 0 ] || {
+  echo "test-ci-run-record: $failures failed" >&2
+  exit 1
+}
+echo "test-ci-run-record: every case passed"

@@ -2,6 +2,8 @@
 # and on a release tag when release.yml calls it before publishing. Publishes nothing itself. On a
 # release tag every job builds at the tag's version, and the files the checks passed on are kept
 # as artifacts named release-* for release.yml to attach; any other run keeps none.
+# scripts/ci-run-record records only runs of the workflows named "CI" and "Release": renaming this
+# one means changing the script too.
 name: CI
 
 on:
@@ -186,6 +188,10 @@ jobs:
 
       - name: Check OpenSpec
         run: scripts/check-openspec
+
+      # Which runs scripts/ci-run-record records, with a stand-in gh: nothing reaches GitHub.
+      - name: Test the CI run recorder
+        run: scripts/test-ci-run-record
 
   # The native binary for each released platform, built and checked on its oldest runner and
   # checked again on its newest.
