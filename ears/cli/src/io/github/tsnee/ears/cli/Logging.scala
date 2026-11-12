@@ -48,6 +48,14 @@ private[cli] object Logging:
       )
     )
 
+  /** The details of one warning: its line, kind, and message. */
+  def warningDetails(warning: Warning): Map[String, String] =
+    Map(
+      "line" -> warning.location.line.toString,
+      "kind" -> warning.kind.name,
+      "message" -> warning.kind.message
+    )
+
   /** The command line exactly, as a JSON array, so arguments with spaces keep their boundaries. */
   def argumentsDetail(arguments: List[String]): String = arguments.toJson
 

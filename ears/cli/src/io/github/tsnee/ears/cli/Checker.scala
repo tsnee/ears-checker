@@ -8,10 +8,16 @@ import zio.json.*
 import zio.json.ast.Json
 
 /** What the program prints and its exit status: 0 when every requirement passes, 1 when any fails,
-  * 2 when an input can't be read or parsed. `findings` counts what was reported, for the log.
+  * 2 when an input can't be read or parsed; warnings don't change it. `findings` and `warnings`
+  * count what was reported, for the log.
   */
-final case class Outcome(exitCode: Int, stdout: String, stderr: String, findings: Int)
-    derives CanEqual
+final case class Outcome(
+    exitCode: Int,
+    stdout: String,
+    stderr: String,
+    findings: Int,
+    warnings: Int
+) derives CanEqual
 
 /** One diagnostic for one requirement, with the corrected sentence when it has a fix. */
 final case class Finding(location: Location, requirement: String, diagnostic: Diagnostic)
@@ -26,37 +32,50 @@ object Checker:
 
   /** The outcome of checking `input`, which is the input text or why it couldn't be read. */
   def outcome(settings: Settings, input: Either[String, String]): Outcome =
-    outcome(
-      input.flatMap(candidates(settings, _)).map(found => NonEmptyList.one(settings -> found))
-    )
+    outcome(input.flatMap(read(settings, _)).map(found => NonEmptyList.one(settings -> found)))
 
-  /** The outcome of checking every input's candidates, each under its own settings' profile, or of
-    * the first input that couldn't be read or parsed. The output format is the first input's: it
-    * comes from options shared by every input.
+  /** The outcome of checking every input's candidates, each under its own settings' profile, with
+    * its warnings, or of the first input that couldn't be read or parsed. The output format is the
+    * first input's: it comes from options shared by every input.
     */
-  def outcome(found: Either[String, NonEmptyList[(Settings, List[Candidate])]]): Outcome =
+  def outcome(found: Either[String, NonEmptyList[(Settings, Found)]]): Outcome =
     found match
-      case Left(message) => Outcome(2, "", s"${Visible.escape(message)}\n", 0)
+      case Left(message) =>
+        Outcome(
+          exitCode = 2,
+          stdout = "",
+          stderr = s"${Visible.escape(message)}\n",
+          findings = 0,
+          warnings = 0
+        )
       case Right(inputs) =>
-        val findings = inputs.toList.flatMap { (settings, candidates) =>
-          candidates.flatMap(findingsFor(settings.profile, _))
+        val checked = inputs.toList.map { (settings, found) =>
+          Checked(found.candidates.flatMap(findingsFor(settings.profile, _)), found.warnings)
         }
-        val checked = inputs.toList.map((_, candidates) => candidates.size).sum
+        val findings = checked.flatMap(_.findings)
         val output = inputs.head match
           case (settings, _) => settings.output
         Outcome(
-          if findings.isEmpty then 0 else 1,
-          report(output, checked, findings),
-          "",
-          findings.size
+          exitCode = if findings.isEmpty then 0 else 1,
+          stdout =
+            report(output, inputs.toList.map((_, found) => found.candidates.size).sum, checked),
+          stderr = "",
+          findings = findings.size,
+          warnings = checked.map(_.warnings.size).sum
         )
 
-  /** The requirements in one input's content, or why the content can't be parsed. */
-  def candidates(settings: Settings, content: String): Either[String, List[Candidate]] =
+  /** The requirements in one input's content and its reader's warnings, or why the content can't be
+    * parsed. Only Markdown has warnings.
+    */
+  def read(settings: Settings, content: String): Either[String, Found] =
     settings.inputFormat match
-      case InputFormat.PlainText    => Right(Candidate.fromPlainText(settings.sourceName, content))
-      case InputFormat.Markdown     => Candidate.fromMarkdown(settings.sourceName, content)
-      case InputFormat.OpenSpecJson => Candidate.fromOpenSpec(content)
+      case InputFormat.PlainText =>
+        Right(Found(Candidate.fromPlainText(settings.sourceName, content), Nil))
+      case InputFormat.Markdown     => MarkdownInput.read(settings.sourceName, content)
+      case InputFormat.OpenSpecJson => Candidate.fromOpenSpec(content).map(Found(_, Nil))
+
+  /** One input's findings and warnings, each in the input's order. */
+  private final case class Checked(findings: List[Finding], warnings: List[Warning])
 
   private def findingsFor(profile: Profile, candidate: Candidate): List[Finding] =
     Requirement.classify(profile, candidate.text) match
@@ -88,14 +107,9 @@ object Checker:
     */
   private def spacing(c: Char): Boolean = c == ' ' || (c >= '\t' && c <= '\r')
 
-  private def report(output: OutputFormat, checked: Int, findings: List[Finding]): String =
+  private def report(output: OutputFormat, requirements: Int, inputs: List[Checked]): String =
     output match
-      case OutputFormat.Text =>
-        findings.map { finding =>
-          val fix = finding.fixed.fold("")(sentence => s" Fix: \"${singleLine(sentence)}\"")
-          val location = singleLine(locationText(finding.location))
-          s"$location: ${kindName(finding)}: ${Visible.escape(finding.diagnostic.message)}$fix\n"
-        }.mkString
+      case OutputFormat.Text => inputs.flatMap(textLines).mkString
       case OutputFormat.Json =>
         // The format version (docs/json-output.md): it changes only when a field is removed,
         // renamed, or changes meaning or type, or a location type is added. Then the release
@@ -103,10 +117,36 @@ object Checker:
         val document = Json.Obj(
           "version" -> Json.Num(1),
           "checker" -> Json.Str(CheckerBuild.version),
-          "checked" -> Json.Num(checked),
-          "findings" -> Json.Arr(findings.map(findingJson)*)
+          "checked" -> Json.Num(requirements),
+          "findings" -> Json.Arr(inputs.flatMap(_.findings).map(findingJson)*),
+          "warnings" -> Json.Arr(inputs.flatMap(_.warnings).map(warningJson)*)
         )
         s"${document.toJson}\n"
+
+  /** One input's text output: its findings and warnings in the order of their lines, a finding
+    * first on a tie. The sort is stable, so findings keep their order among themselves, as do
+    * warnings; a location with no line sorts as line 0.
+    */
+  private def textLines(input: Checked): List[String] =
+    val findings =
+      input.findings.map(finding => (lineOf(finding.location), 0, findingText(finding)))
+    val warnings =
+      input.warnings.map(warning => (lineOf(warning.location), 1, warningText(warning)))
+    (findings ++ warnings).sortBy((line, rank, _) => (line, rank)).map((_, _, text) => text)
+
+  private def lineOf(location: Location): Int = location match
+    case Location.Line(_, line)              => line
+    case Location.ChangeRequirement(_, _, _) => 0
+    case Location.SpecRequirement(_, _)      => 0
+
+  private def findingText(finding: Finding): String =
+    val fix = finding.fixed.fold("")(sentence => s" Fix: \"${singleLine(sentence)}\"")
+    val location = singleLine(locationText(finding.location))
+    s"$location: ${kindName(finding)}: ${Visible.escape(finding.diagnostic.message)}$fix\n"
+
+  private def warningText(warning: Warning): String =
+    val location = singleLine(locationText(warning.location))
+    s"$location: warning: ${warning.kind.name}: ${Visible.escape(warning.kind.message)}\n"
 
   private def locationJson(location: Location): Json = location match
     case Location.Line(file, line) =>
@@ -138,4 +178,11 @@ object Checker:
       "message" -> Json.Str(finding.diagnostic.message),
       "span" -> Json.Obj("start" -> Json.Num(span.start), "end" -> Json.Num(span.end)),
       "fix" -> finding.fixed.fold[Json](Json.Null)(Json.Str(_))
+    )
+
+  private def warningJson(warning: Warning): Json =
+    Json.Obj(
+      "location" -> locationJson(warning.location),
+      "kind" -> Json.Str(warning.kind.name),
+      "message" -> Json.Str(warning.kind.message)
     )

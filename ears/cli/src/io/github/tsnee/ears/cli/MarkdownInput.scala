@@ -1,6 +1,7 @@
 package io.github.tsnee.ears.cli
 
 import io.github.tsnee.ears.markdown.Markdown
+import io.github.tsnee.ears.markdown.MarkdownWarning
 
 /** Requirement sentences in Markdown, from the Markdown facade (`ears/markdown`), which reads them
   * the same way on every platform. Only lines are reported: Markdown parsers give positions in
@@ -8,8 +9,24 @@ import io.github.tsnee.ears.markdown.Markdown
   */
 private[cli] object MarkdownInput:
 
-  /** The candidates, or why the Markdown couldn't be read (only on Scala Native, without cmark). */
-  def candidates(file: String, content: String): Either[String, List[Candidate]] =
+  /** The candidates and the reader's warnings, each located in `file`; or why the Markdown couldn't
+    * be read (only on Scala Native, without cmark).
+    */
+  def read(file: String, content: String): Either[String, Found] =
     Markdown
-      .sentences(content)
-      .map(_.map(sentence => Candidate(Location.Line(file, sentence.line), sentence.text)))
+      .read(content)
+      .map(text =>
+        Found(
+          text.sentences
+            .map(sentence => Candidate(Location.Line(file, sentence.line), sentence.text)),
+          text.warnings.map(warning(file, _))
+        )
+      )
+
+  /** The facade's warning as the CLI's, located on its line in `file`. */
+  private def warning(file: String, seen: MarkdownWarning): Warning = seen match
+    case MarkdownWarning.ExtraCells(line, cells, headerCells) =>
+      Warning(
+        Location.Line(file, line),
+        WarningKind.TableExtraCells(cells = cells, headerCells = headerCells)
+      )

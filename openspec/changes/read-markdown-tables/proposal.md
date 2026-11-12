@@ -2,7 +2,7 @@
 
 ## Why
 
-None of the parsers the Markdown reader uses recognizes GitHub-style tables, so a table is read as one paragraph: its rows run together into one long "sentence" that gives a misleading finding, the second and later requirements in it are never checked, and a table right after a paragraph merges into that paragraph, so a weak modal in it goes unreported. Requirements are often written in tables (ID, requirement, rationale), so these are exactly the sentences users want checked. Seen on all three builds of 0.2.0 on 2026-11-11.
+None of the parsers the Markdown reader uses recognizes GitHub-style tables, so a table is read as one paragraph: its rows run together into one long "sentence" that gives a misleading finding, the second and later requirements in it are never checked, and a table right after a paragraph merges into that paragraph, so its requirements go unchecked (only sentences with "shall" are read from Markdown, and the merged text's sentence boundaries hide them). Requirements are often written in tables (ID, requirement, rationale), so these are exactly the sentences users want checked. Seen on all three builds of 0.2.0 on 2026-11-11.
 
 ## What Changes
 

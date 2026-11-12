@@ -109,11 +109,13 @@ private[markdown] object MarkdownParser:
   /** The loaded cmark's release and path, for the log; or why there's none. */
   def name(): Either[MarkdownUnavailable, String] = CmarkLoader.load().map(_._2)
 
-  /** The paragraphs, or what to install when no usable cmark is found. */
-  def paragraphs(content: String): Either[String, List[Paragraph]] =
-    CmarkLoader.load().left.map(_.message).map((cmark, _) => parsed(cmark, content))
+  /** The parser, reading a document into its paragraphs with the cmark loaded here, once, however
+    * many documents it reads; or what to install when no usable cmark is found.
+    */
+  def loaded(): Either[String, String => List[ParsedParagraph]] =
+    CmarkLoader.load().left.map(_.message).map((cmark, _) => content => parsed(cmark, content))
 
-  private def parsed(cmark: Cmark, content: String): List[Paragraph] =
+  private def parsed(cmark: Cmark, content: String): List[ParsedParagraph] =
     Zone.acquire { zone =>
       given Zone = zone
       // The content's UTF-8 bytes, once, with the terminating NUL C strings end with; the length
@@ -127,16 +129,24 @@ private[markdown] object MarkdownParser:
       finally cmark.free(document)
     }
 
-  private def paragraphNodes(cmark: Cmark, document: Ptr[Byte]): List[Paragraph] =
+  private def paragraphNodes(cmark: Cmark, document: Ptr[Byte]): List[ParsedParagraph] =
     Walk
       .preorder(document, children(cmark, _))
       .filter(kind(cmark, _) == "paragraph")
-      .map(paragraph =>
-        CmarkLines.paragraph(
+      .map { paragraph =>
+        val endLine = cmark.endLine(paragraph)
+        val placed = CmarkLines.paragraph(
           Walk.preorder(paragraph, children(cmark, _)).flatMap(piece(cmark, _)),
-          cmark.endLine(paragraph)
+          endLine
         )
-      )
+        // The block's first line, which cmark counts from the link reference definitions that
+        // open it, as commonmark.js does; no later than the first line `CmarkLines` places.
+        val blockStart = cmark.startLine(paragraph)
+        ParsedParagraph(
+          placed.copy(line = if blockStart >= 1 then blockStart.min(placed.line) else placed.line),
+          endLine
+        )
+      }
 
   /** A node's own piece; containers (emphasis, links, images) have none, only their children. */
   private def piece(cmark: Cmark, node: Ptr[Byte]): List[CmarkPiece] = kind(cmark, node) match

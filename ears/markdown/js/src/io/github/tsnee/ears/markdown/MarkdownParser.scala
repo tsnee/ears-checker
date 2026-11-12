@@ -22,24 +22,29 @@ private[markdown] object MarkdownParser:
   /** The parser's name, for the log; it's part of the program, so always there. */
   def name(): Either[MarkdownUnavailable, String] = Right("commonmark.js")
 
-  /** The paragraphs; always found, since this parser is part of the program. */
-  def paragraphs(content: String): Either[String, List[Paragraph]] = Right(parsed(content))
+  /** The parser, reading a document into its paragraphs; always found, since it's part of the
+    * program.
+    */
+  def loaded(): Either[String, String => List[ParsedParagraph]] = Right(parsed)
 
-  private def parsed(content: String): List[Paragraph] =
-    val starts = lineStarts(content)
+  private def parsed(content: String): List[ParsedParagraph] =
+    val starts = Lines.starts(content)
     Walk
       .preorder(CommonmarkParser().parse(content), children)
       .filter(kind(_) == "paragraph")
       .map { paragraph =>
         val first = line(paragraph, 0)
         val last = line(paragraph, 1).max(first)
-        SourceLines.paragraph(
-          source(content, starts, first, last),
-          first,
-          SourceLines.joined(
-            Walk.preorder(paragraph, children).flatMap(node => piece(node).map(_ -> node)),
-            (earlier, later) => later.prev eq earlier
-          )
+        ParsedParagraph(
+          SourceLines.paragraph(
+            source(content, starts, first, last),
+            first,
+            SourceLines.joined(
+              Walk.preorder(paragraph, children).flatMap(node => piece(node).map(_ -> node)),
+              (earlier, later) => later.prev eq earlier
+            )
+          ),
+          last
         )
       }
 
@@ -49,16 +54,6 @@ private[markdown] object MarkdownParser:
     case "code"                    => List(SourcePiece.Inline(literal(node), true))
     case "softbreak" | "linebreak" => List(SourcePiece.Break)
     case _                         => Nil
-
-  /** The offset each line starts at: 0, then after each `\r\n`, `\r`, or `\n`. */
-  private def lineStarts(content: String): Vector[Int] =
-    0 +: content.indices
-      .filter { i =>
-        content.charAt(i) == '\n' || (content.charAt(i) == '\r' &&
-          (i + 1 >= content.length || content.charAt(i + 1) != '\n'))
-      }
-      .map(_ + 1)
-      .toVector
 
   /** Lines `first` to `last` (1-based) of the document, whole. */
   private def source(content: String, starts: Vector[Int], first: Int, last: Int): String =

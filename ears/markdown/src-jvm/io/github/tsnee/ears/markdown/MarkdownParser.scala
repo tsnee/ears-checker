@@ -1,9 +1,11 @@
 package io.github.tsnee.ears.markdown
 
+import scala.annotation.tailrec
 import scala.jdk.CollectionConverters.*
 
 import org.commonmark.node.Code
 import org.commonmark.node.HardLineBreak
+import org.commonmark.node.LinkReferenceDefinition
 import org.commonmark.node.Node
 import org.commonmark.node.SoftLineBreak
 import org.commonmark.node.Text
@@ -22,17 +24,35 @@ private[markdown] object MarkdownParser:
   /** The parser's name, for the log; it's part of the program, so always there. */
   def name(): Either[MarkdownUnavailable, String] = Right("commonmark-java")
 
-  /** The paragraphs; always found, since this parser is part of the program. */
-  def paragraphs(content: String): Either[String, List[Paragraph]] = Right(parsed(content))
+  /** The parser, reading a document into its paragraphs; always found, since it's part of the
+    * program.
+    */
+  def loaded(): Either[String, String => List[ParsedParagraph]] = Right(parsed)
 
-  private def parsed(content: String): List[Paragraph] =
+  private def parsed(content: String): List[ParsedParagraph] =
     Walk.preorder(parser.parse(content), children).collect {
       case paragraph: org.commonmark.node.Paragraph =>
-        Paragraph(
-          line(paragraph).getOrElse(1),
-          Walk.preorder[Node](paragraph, children).flatMap(piece)
+        val first = line(paragraph).getOrElse(1)
+        ParsedParagraph(
+          Paragraph(
+            blockStart(paragraph, first),
+            Walk.preorder[Node](paragraph, children).flatMap(piece)
+          ),
+          paragraph.getSourceSpans.asScala.lastOption.fold(first)(_.getLineIndex + 1)
         )
     }
+
+  /** The first line of the paragraph's block, which starts `first`: commonmark-java gives the link
+    * reference definitions that open a block as nodes of their own, right before the paragraph,
+    * each ending on the line before the next; commonmark.js and cmark count them in the paragraph.
+    */
+  @tailrec
+  private def blockStart(node: Node, first: Int): Int =
+    Option(node.getPrevious) match
+      case Some(definition: LinkReferenceDefinition)
+          if definition.getSourceSpans.asScala.lastOption.exists(_.getLineIndex + 2 == first) =>
+        blockStart(definition, line(definition).getOrElse(first))
+      case _ => first
 
   private def children(node: Node): List[Node] =
     List.unfold(Option(node.getFirstChild))(child => child.map(c => (c, Option(c.getNext))))

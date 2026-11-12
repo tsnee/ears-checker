@@ -217,6 +217,31 @@ object CliSuite extends ZIOSpecDefault:
           )
           .as(assertTrue(lines.toList == List("2026-11-04T12:00:00Z ERROR Shown")))
       ,
+      test("a warning is logged at WARN with the input, its line, kind, and message"):
+        val noon = Instant.parse("2026-11-04T12:00:00Z")
+        val lines = ListBuffer.empty[String]
+        val notes =
+          "# Reminders\n\nEvents are listed weekly.\n\n| Name | Requirement |\n| --- | --- |\n" +
+            "| A | The scheduler shall list upcoming events. |\n| B | x |\n| C | one | two | three |\n"
+        val message =
+          "This table row has 4 cells and its header 2, so GitHub doesn't show the last 2."
+        ZIO
+          .withLogger(Cli.logger(LogLevel.Warning, line => lines += line, () => noon))(
+            run(Map("notes.md" -> ZIO.succeed(notes)), "notes.md")
+          )
+          .map(outcome =>
+            val written = lines.toList
+            assertTrue(
+              outcome.exitCode == 0,
+              written.size == 1,
+              written.forall(_.startsWith("2026-11-04T12:00:00Z WARN ")),
+              written.forall(_.contains(" file=notes.md ")),
+              written.forall(_.contains(" line=9 ")),
+              written.forall(_.contains(" kind=table-extra-cells ")),
+              written.forall(_.contains(s" message=\"$message\""))
+            )
+          )
+      ,
       test("--verbose shows every level from debug"):
         val noon = Instant.parse("2026-11-04T12:00:00Z")
         val lines = ListBuffer.empty[String]
