@@ -56,11 +56,22 @@ object SettingsSuite extends ZIOSpecDefault:
         assertTrue(Settings.parse(Nil) == Right(NonEmptyList.one(Settings(None, None, None, None))))
     ),
     suite("invocation")(
-      test("without --verbose: not verbose, and the same inputs as parse"):
-        val arguments = List("--output", "json", "notes.md")
+      test("without --verbose: not verbose, with the inputs and their options"):
         assertTrue(
-          Settings.parseInvocation(arguments).map(_.verbose) == Right(false),
-          Settings.parseInvocation(arguments).map(_.inputs) == Settings.parse(arguments)
+          Settings.parseInvocation(List("--output", "json", "notes.md")) ==
+            Right(
+              Invocation(
+                verbose = false,
+                NonEmptyList.one(
+                  Settings(
+                    file = Some("notes.md"),
+                    formatOption = None,
+                    profileOption = None,
+                    outputOption = Some(OutputFormat.Json)
+                  )
+                )
+              )
+            )
         )
       ,
       test("--verbose before the files"):

@@ -21,11 +21,16 @@ object MainSuite extends ZIOSpecDefault:
       dir
     }
 
+  /** Runs the tool and returns what it wrote, then clears both streams, so each run sees only its
+    * own output. `TestConsole.clearOutput` clears only standard output, and the companion has no
+    * accessor for the service's `clearOutputErr`, hence `testConsoleWith`.
+    */
   private def run(arguments: String*): UIO[(Int, String, String)] =
     for
       code <- Main.cli(arguments.toList)
       out <- TestConsole.output
       err <- TestConsole.outputErr
+      _ <- TestConsole.clearOutput *> testConsoleWith(_.clearOutputErr)
     yield (code.code, out.mkString, err.mkString)
 
   def spec = suite("release-notes tool")(
@@ -83,9 +88,7 @@ object MainSuite extends ZIOSpecDefault:
         dir <- directory()
         missing = dir.resolve("CHANGELOG.md").toString
         (checkCode, _, checkErr) <- run("check", missing)
-        _ <- TestConsole.clearOutput
         (notesCode, _, notesErr) <- run("notes", "0.1.0", missing)
-        _ <- TestConsole.clearOutput
         files = dir.resolve("files.md").toString
         _ <- ZIO.attemptBlocking(Files.writeString(dir.resolve("CHANGELOG.md"), changelog))
         (filesCode, _, filesErr) <- run("notes", "0.1.0", missing, files)
@@ -109,6 +112,6 @@ object MainSuite extends ZIOSpecDefault:
             List("notes", "0.1.0", "CHANGELOG.md", "files.md", "extra"),
             List("publish", "CHANGELOG.md")
           )
-        )(arguments => run(arguments*) <* TestConsole.clearOutput)
+        )(arguments => run(arguments*))
       yield assertTrue(results.forall((code, _, err) => code == 2 && err.contains("Usage")))
   )

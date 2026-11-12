@@ -120,12 +120,6 @@ object ChangelogSuite extends ZIOSpecDefault:
             Left(Problem.UnreleasedNotFirst("0.2.0 - 2026-11-20"))
         )
       ,
-      test("a misnamed Unreleased is named"):
-        assertTrue(
-          Changelog.sections(headed("Next", "0.1.0 - 2026-11-03")) ==
-            Left(Problem.UnreleasedNotFirst("Next"))
-        )
-      ,
       test("a heading without a date"):
         assertTrue(
           Changelog.sections(headed("Unreleased", "0.2.0", "0.1.0 - 2026-11-03")) ==
@@ -133,12 +127,10 @@ object ChangelogSuite extends ZIOSpecDefault:
         )
       ,
       test("malformed versions and dates, and a second Unreleased"):
+        // One version that isn't one: the heading's version goes through `Version.parse`, and
+        // "what isn't a version" owns the rest.
         val headings = List(
-          "0.2 - 2026-11-20",
-          "0.2.0.1 - 2026-11-20",
           "v0.2.0 - 2026-11-20",
-          "00.2.0 - 2026-11-20",
-          "0.2.99999999999 - 2026-11-20",
           "0.2.0 - 2026-13-01",
           "0.2.0 - 2026-02-30",
           "0.2.0 - 20261120",

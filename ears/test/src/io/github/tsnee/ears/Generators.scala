@@ -92,6 +92,58 @@ object Generators:
         s"$prefix$article $systemName SHALL $response."
       )
 
+  // A valid requirement's words avoid commas, clause keywords, "the", "then", and modal verbs,
+  // which the classifier treats as structure (see design.md, "Two-stage classification").
+  private val validWord: Gen[Any, String] = Gen.elements(
+    "order",
+    "cart",
+    "customer",
+    "door",
+    "alarm",
+    "user",
+    "session",
+    "page",
+    "item",
+    "stock",
+    "sign-in",
+    "total",
+    "empty",
+    "open",
+    "closed",
+    "is",
+    "are",
+    "a",
+    "an",
+    "of",
+    "to",
+    "for",
+    "with",
+    "list",
+    "show",
+    "send",
+    "log"
+  )
+
+  private val validPhrase: Gen[Any, Located[String]] =
+    Gen.listOfBounded(1, 5)(validWord).map(words => Located(words.mkString(" "), SourceSpan(0, 0)))
+
+  private val validTrigger: Gen[Any, Trigger] =
+    Gen.oneOf(validPhrase.map(Trigger.Event(_)), validPhrase.map(Trigger.Unwanted(_)))
+
+  /** A requirement of any template, with every span empty, and its canonical text under `profile`,
+    * which classifies back to the same requirement.
+    */
+  def validRequirement(profile: Profile): Gen[Any, (Requirement, String)] =
+    for
+      feature <- Gen.option(validPhrase)
+      precondition <- Gen.option(validPhrase)
+      trigger <- Gen.option(validTrigger)
+      system <- validPhrase
+      response <- validPhrase
+    yield
+      val requirement = Requirement(feature, precondition, trigger, system, response)
+      (requirement, requirement.render(profile))
+
   /** A sentence built from generated parts with the given damage applied. */
   val damagedSentence: Gen[Any, String] =
     for
@@ -121,3 +173,6 @@ object Generators:
         else s"${if atStart then "The" else "the"} $system"
       val period = if harm.missingPeriod then "" else "."
       s"${leading.mkString}$thenWord$main ${harm.modal} $response$period"
+
+  /** Generated requirement sentences, and arbitrary text as well. */
+  val damagedSentenceOrText: Gen[Any, String] = Gen.oneOf(damagedSentence, Gen.string)

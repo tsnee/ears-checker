@@ -124,6 +124,22 @@ object ApiSuite extends ZIOSpecDefault:
   private def diagnostics(profile: Profile, sentence: String): List[Value] =
     at(Api.classify(profile, sentence), "diagnostics")(elements).toList.flatten
 
+  /** A profile and a sentence: a valid requirement rendered under that profile, a damaged sentence,
+    * or arbitrary text.
+    */
+  private val sentenceUnderProfile: Gen[Any, (String, Profile)] =
+    Gen
+      .elements(Profile.Classic, Profile.OpenSpec)
+      .flatMap(profile =>
+        Gen
+          .oneOf(
+            Generators.validRequirement(profile).map((_, sentence) => sentence),
+            Generators.damagedSentence,
+            Gen.string
+          )
+          .map((_, profile))
+      )
+
   def spec = suite("npm package results")(
     suite("matching sentences")(
       test("event-driven: the template and every clause"):
@@ -206,11 +222,10 @@ object ApiSuite extends ZIOSpecDefault:
         )
       ,
       test("every result has the library's diagnostics, or its requirement, read back exactly"):
-        check(damagedSentenceOrText, Gen.elements(Profile.Classic, Profile.OpenSpec)) {
-          (sentence, profile) =>
-            assertTrue(
-              decode(sentence, Api.classify(profile, sentence)) == Some(library(profile, sentence))
-            )
+        check(sentenceUnderProfile) { (sentence, profile) =>
+          assertTrue(
+            decode(sentence, Api.classify(profile, sentence)) == Some(library(profile, sentence))
+          )
         }
     ),
     suite("names")(
@@ -244,7 +259,3 @@ object ApiSuite extends ZIOSpecDefault:
         )
     )
   )
-
-  /** Generated requirement sentences, and arbitrary text as well. */
-  private val damagedSentenceOrText: Gen[Any, String] =
-    Gen.oneOf(Generators.damagedSentence, Gen.string)

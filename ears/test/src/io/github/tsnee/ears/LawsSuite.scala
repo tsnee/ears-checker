@@ -17,6 +17,12 @@ object LawsSuite extends ZIOSpecDefault:
 
   private val anyInput = Gen.oneOf(Gen.string, damagedSentence)
 
+  /** Inputs that often yield a tree: arbitrary text never does, and the skeleton's totality test
+    * owns it.
+    */
+  private val treeInput =
+    Gen.oneOf(validRequirement(Profile.OpenSpec).map((_, sentence) => sentence), damagedSentence)
+
   def spec = suite("Laws")(
     test("fix soundness: applying a fix removes that kind of diagnostic"):
       check(damagedSentence) { input =>
@@ -46,7 +52,7 @@ object LawsSuite extends ZIOSpecDefault:
       }
     ,
     test("span sanity: each tree element's span covers exactly its text"):
-      check(anyInput) { input =>
+      check(treeInput) { input =>
         val mismatched = Requirement
           .classify(Profile.OpenSpec, input)
           .toOption

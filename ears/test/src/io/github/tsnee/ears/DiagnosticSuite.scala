@@ -50,7 +50,8 @@ object DiagnosticSuite extends ZIOSpecDefault:
         )
       ,
       test("a weak modal is not also a missing modal"):
-        assertTrue(!kinds("The scheduler should list upcoming events.").contains(MissingModal))
+        val found = kinds("The scheduler should list upcoming events.")
+        assertTrue(found.contains(WeakModal), !found.contains(MissingModal))
       ,
       test("empty response"):
         assertTrue(kinds("The scheduler SHALL.").contains(EmptyResponse))
@@ -91,7 +92,7 @@ object DiagnosticSuite extends ZIOSpecDefault:
           )
         )
       ,
-      test("missing then is reported for an If clause that is not the last clause"):
+      test("an If clause that isn't last gets both a clause-order and a missing-then finding"):
         val found = kinds(
           "If the door opens, while the alarm is armed, the access service SHALL sound the alarm."
         )

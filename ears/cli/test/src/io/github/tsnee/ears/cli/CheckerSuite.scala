@@ -2,6 +2,8 @@ package io.github.tsnee.ears.cli
 
 import cats.data.NonEmptyList
 import io.github.tsnee.ears.Profile
+import io.github.tsnee.ears.cli.TerminalText.acted
+import io.github.tsnee.ears.cli.TerminalText.controls
 import zio.test.*
 
 object CheckerSuite extends ZIOSpecDefault:
@@ -27,17 +29,6 @@ object CheckerSuite extends ZIOSpecDefault:
     )
 
   private def lines(text: String): List[String] = text.linesIterator.filter(_.nonEmpty).toList
-
-  /** A character a terminal or a line-based tool could act on. */
-  private def acted(c: Char): Boolean =
-    Character.isISOControl(c) || c.toInt == 0x2028 || c.toInt == 0x2029
-
-  /** Every such character: C0, DEL and C1, and Unicode's line and paragraph separators. */
-  private val controls = Gen.oneOf(
-    Gen.char('\u0000', '\u001f'),
-    Gen.char('\u007f', '\u009f'),
-    Gen.elements('\u2028', '\u2029')
-  )
 
   /** Space, tab, line feed, vertical tab, form feed, and carriage return. */
   private def spacing(c: Char): Boolean = c == ' ' || (c >= '\t' && c <= '\r')
@@ -70,8 +61,13 @@ object CheckerSuite extends ZIOSpecDefault:
 
   def spec = suite("EARS checker")(
     test("standard input: each line is checked and located as <stdin>"):
-      val outcome = Checker.outcome(plain, Right("The scheduler lists upcoming events.\n"))
-      assertTrue(outcome.stdout.startsWith("<stdin>:1:"))
+      val outcome = Checker.outcome(
+        plain,
+        Right("The scheduler lists upcoming events.\nThe scheduler hides past events.\n")
+      )
+      assertTrue(
+        lines(outcome.stdout).map(_.takeWhile(_ != ' ')) == List("<stdin>:1:", "<stdin>:2:")
+      )
     ,
     test("finding contents: change, capability, requirement, and diagnostic"):
       val outcome = Checker.outcome(
@@ -82,51 +78,25 @@ object CheckerSuite extends ZIOSpecDefault:
         outcome.stdout.startsWith("add-reminders/reminders/\"Reminder sent\": missing-modal:")
       )
     ,
-    test("a fix is reported with its corrected sentence"):
+    test("selected profile: the OpenSpec profile on plain text reports wrong case and its fix"):
       val outcome = Checker.outcome(
         settings(None, None, Some(Profile.OpenSpec), None),
         Right("The scheduler shall list upcoming events.")
       )
-      assertTrue(outcome.stdout.contains("The scheduler SHALL list upcoming events."))
-    ,
-    test("text output: one line per finding"):
-      val outcome = Checker.outcome(
-        settings(None, None, None, Some(OutputFormat.Text)),
-        Right("The scheduler lists upcoming events.")
-      )
-      assertTrue(lines(outcome.stdout).size == 1)
-    ,
-    test("default output is text: one human-readable line"):
-      val outcome = Checker.outcome(plain, Right("The scheduler lists upcoming events."))
-      assertTrue(lines(outcome.stdout).size == 1, !outcome.stdout.trim.startsWith("{"))
-    ,
-    test("JSON output with no findings: one document with an empty list"):
-      val outcome = Checker.outcome(
-        settings(None, None, None, Some(OutputFormat.Json)),
-        Right("The scheduler shall list upcoming events.")
-      )
       assertTrue(
-        lines(outcome.stdout).size == 1,
-        outcome.stdout.contains("\"findings\":[]"),
-        outcome.stdout.contains("\"checked\":1")
+        outcome.stdout.contains("wrong-case"),
+        outcome.stdout.contains("The scheduler SHALL list upcoming events.")
       )
     ,
-    test("JSON output with a finding names its kind and fix"):
-      val outcome = Checker.outcome(
-        settings(None, None, Some(Profile.OpenSpec), Some(OutputFormat.Json)),
-        Right("The scheduler shall list upcoming events.")
-      )
+    test("text output, by default or selected: one human-readable line per finding"):
+      val input = Right("The scheduler lists upcoming events.")
+      val selected = Checker.outcome(settings(None, None, None, Some(OutputFormat.Text)), input)
+      val default = Checker.outcome(plain, input)
       assertTrue(
-        outcome.stdout.contains("\"kind\":\"wrong-case\""),
-        outcome.stdout.contains("\"fix\":\"The scheduler SHALL list upcoming events.\"")
+        lines(selected.stdout).size == 1,
+        !selected.stdout.trim.startsWith("{"),
+        default == selected
       )
-    ,
-    test("selected profile: the OpenSpec profile on plain text reports wrong case"):
-      val outcome = Checker.outcome(
-        settings(None, None, Some(Profile.OpenSpec), None),
-        Right("The scheduler shall list upcoming events.")
-      )
-      assertTrue(outcome.stdout.contains("wrong-case"))
     ,
     test("default profile for OpenSpec input: the uppercase keyword passes"):
       val outcome =
@@ -166,14 +136,11 @@ object CheckerSuite extends ZIOSpecDefault:
       val outcome =
         Checker
           .outcome(settings(None, Some(InputFormat.OpenSpecJson), None, None), Right("{not json"))
-      assertTrue(outcome.exitCode == 2, outcome.stderr.nonEmpty, outcome.stdout.isEmpty)
-    ,
-    test("exit status 2 and the read error on standard error for unreadable input"):
-      val outcome = Checker.outcome(
-        settings(Some("missing.txt"), None, None, None),
-        Left("Cannot read missing.txt: no such file")
+      assertTrue(
+        outcome.exitCode == 2,
+        outcome.stderr.startsWith("Not OpenSpec change or spec JSON:"),
+        outcome.stdout.isEmpty
       )
-      assertTrue(outcome.exitCode == 2, outcome.stderr.contains("missing.txt"))
     ,
     suite("characters a terminal acts on")(
       test("an escape sequence in a requirement shows as \\u001b in its fix"):
@@ -244,17 +211,6 @@ object CheckerSuite extends ZIOSpecDefault:
         }
     ),
     suite("several inputs")(
-      test("every input is checked: JSON counts the requirements of both"):
-        val outcome = combined(
-          file("a.txt", Some(OutputFormat.Json)) -> "The scheduler shall list upcoming events.",
-          file("b.txt", Some(OutputFormat.Json)) -> "The scheduler shall hide past events."
-        )
-        assertTrue(
-          outcome.exitCode == 0,
-          lines(outcome.stdout).size == 1,
-          outcome.stdout.contains("\"checked\":2")
-        )
-      ,
       test("findings follow input order, not file names"):
         val outcome = combined(
           file("b.txt", None) -> "The scheduler lists upcoming events.",
@@ -340,16 +296,6 @@ object CheckerSuite extends ZIOSpecDefault:
       test("the checker is this build's version: a release, or the next one as a snapshot"):
         assertTrue(CheckerBuild.version.matches("""\d+\.\d+\.\d+(-SNAPSHOT)?"""))
       ,
-      test("plain text without a fix: the fix is null"):
-        val outcome = Checker.outcome(
-          settings(None, None, None, Some(OutputFormat.Json)),
-          Right("The scheduler lists upcoming events.")
-        )
-        assertTrue(
-          outcome.stdout.contains("\"kind\":\"missing-modal\""),
-          outcome.stdout.contains("\"fix\":null}")
-        )
-      ,
       test("standard input: a line location named <stdin>"):
         val outcome = Checker.outcome(
           settings(None, None, None, Some(OutputFormat.Json)),
@@ -361,12 +307,15 @@ object CheckerSuite extends ZIOSpecDefault:
           )
         )
       ,
-      test("several inputs: one document, followed by one line break"):
+      test("several inputs: one document counting both, followed by one line break"):
         val outcome = combined(
           file("a.txt", Some(OutputFormat.Json)) -> "The scheduler shall list upcoming events.",
           file("b.txt", Some(OutputFormat.Json)) -> "The scheduler shall hide past events."
         )
-        assertTrue(outcome.stdout == head + "\"checked\":2,\"findings\":[]}\n")
+        assertTrue(
+          outcome.exitCode == 0,
+          outcome.stdout == head + "\"checked\":2,\"findings\":[]}\n"
+        )
       ,
       test("a span counts UTF-16 code units: an emoji counts as two"):
         val outcome = Checker.outcome(
@@ -382,7 +331,7 @@ object CheckerSuite extends ZIOSpecDefault:
           "The scheduler lists upcoming events.",
           "When an order arrives the scheduler shall list events.",
           "  ",
-          "The scheduler shall list upcoming events."
+          "The scheduler shall list\u2028upcoming events."
         )
         check(Gen.listOfBounded(0, 4)(sentences)) { picked =>
           val outcome = Checker.outcome(

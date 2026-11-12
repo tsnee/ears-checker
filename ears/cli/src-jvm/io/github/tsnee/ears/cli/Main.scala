@@ -19,9 +19,13 @@ import zio.*
 object Main extends ZIOAppDefault:
 
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] =
+    bootstrapTo(FileOutputStream(FileDescriptor.err))
+
+  /** `Cli`'s logger, writing each line to `err` as UTF-8. `err` is made when the layer is built. */
+  def bootstrapTo(err: => OutputStream): ZLayer[ZIOAppArgs, Nothing, Unit] =
     ZLayer
-      .fromZIO(ZIO.succeed(utf8(FileOutputStream(FileDescriptor.err))))
-      .flatMap(err => Cli.bootstrapWith(line => err.get[PrintStream].println(line)))
+      .fromZIO(ZIO.succeed(utf8(err)))
+      .flatMap(stream => Cli.bootstrapWith(line => stream.get[PrintStream].println(line)))
 
   def run: ZIO[ZIOAppArgs, Nothing, Unit] =
     ZIO
