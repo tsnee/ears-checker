@@ -30,6 +30,8 @@ In this order (set 2026-11-11); their themes are chosen when they're planned.
 
 ## Later
 
+- **`scripts/ci-run-record` records only CI and Release runs.** It takes a run of any workflow: on 2026-11-11 it recorded a "Dependabot Updates" run (43140165200) as if it were CI, caught by its one job and one minute, and the line was removed by hand. Refuse any other workflow by name, with a test.
+
 - **At the 0.3.0 release, npm's follow-ups** (`publish-npm-packages`): set up the stage-only trusted publisher on each npm package within the two days before tagging; after the release, check the shape of `npm stage list --json` against `scripts/approve-npm-release`, and that npm shows provenance for both packages (if not, switch to publishing directly behind an environment approval). Once it does, `docs/release-files.md` and the READMEs can mention npm's provenance.
 
 - **Compile Scala Native in parallel again.** CI, CLAUDE.md, and CONTRIBUTING.md compile the Scala Native modules one at a time because Scala Native 0.5.12's compiler plugin caches its definitions globally with no locking (scala-native#4950). Once a Scala Native release fixes it, raise Scala Native and drop the extra step and the rule.

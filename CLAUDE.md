@@ -1,6 +1,6 @@
 # ears-checker
 
-Checks requirements against the EARS templates (Easy Approach to Requirements Syntax): a pure Scala 3 classifier library for the JVM and Scala.js, and the `ears-check` command-line tool for plain text, Markdown, and OpenSpec JSON. CC0-licensed; released on Maven Central from 0.1.0 (`io.github.tsnee`), with an unstable API while the version is 0.x. The classifier is also built as the npm package `@tsnee/ears-checker`, and the command line, on Node, as `@tsnee/ears-checker-cli`; neither is published yet.
+Checks requirements against the EARS templates (Easy Approach to Requirements Syntax): a pure Scala 3 classifier library for the JVM and Scala.js, and the `ears-check` command-line tool for plain text, Markdown, and OpenSpec JSON. CC0-licensed; released on Maven Central from 0.1.0 (`io.github.tsnee`), with an unstable API while the version is 0.x. The classifier is also built as the npm package `@tsnee/ears-checker`, and the command line, on Node, as `@tsnee/ears-checker-cli`; both are on npm from 0.2.0.
 
 ## Workflow
 

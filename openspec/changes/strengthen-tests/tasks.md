@@ -9,7 +9,7 @@ All work is on branch `batch-tests`. The owner pushes from their own shell. For 
 - [x] 1.3 `ApiSuite`'s read-back property on `oneOf(valid, damagedSentence, Gen.string)`: fails with the precondition span emptied, and with the unwanted trigger's span emptied
 - [x] 1.4 `ModelSuite`: Where + While is Complex; fails with `case (Some(_), None, None)` widened to `(Some(_), _, None)`
 - [x] 1.5 `DiagnosticSuite` "a weak modal is not also a missing modal" requires the weak-modal finding; fails with `should` accepted as the modal, so the sentence classifies
-- [x] 1.6 Remove the duplicates: `ClassifierSuite` "the OpenSpec profile accepts the uppercase keyword"; `DiagnosticSuite` "missing then … not the last clause", its two kinds folded into "applying every fix together"; `RenderSuite`'s classic complex test; `ModelSuite`'s profile keyword tests. `./mill ears.test ears.npm.test` passes
+- [x] 1.6 Remove the duplicates: `ClassifierSuite` "the OpenSpec profile accepts the uppercase keyword"; `DiagnosticSuite` "missing then … not the last clause", its two kinds folded into "applying every fix together" (after review, a test of their own instead: decision 4); `RenderSuite`'s classic complex test; `ModelSuite`'s profile keyword tests. `./mill ears.test ears.npm.test` passes
 
 ## 2. The CLI
 
@@ -44,8 +44,8 @@ All work is on branch `batch-tests`. The owner pushes from their own shell. For 
 
 - [x] 6.1 Run the gate (CLAUDE.md's list) and report coverage from `scripts/coverage-records`, against the last records
 - [x] 6.2 Run `/code-review` in a subagent on this change; the owner chooses which findings to fix
-- [ ] 6.3 Commit (plan, then implementation); the owner pushes; the theme's draft PR runs CI. Report the run's result and minutes, from the records
-- [ ] 6.4 Run `/openspec-verify-change` and report it before archiving
+- [x] 6.3 Commit (plan, then implementation); the owner pushes; the theme's draft PR runs CI. Report the run's result and minutes, from the records
+- [x] 6.4 Run `/openspec-verify-change` and report it before archiving
 
 ## Workflow follow-up
 
