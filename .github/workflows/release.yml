@@ -7,6 +7,8 @@
 # Nothing is published until the owner publishes the draft, clicks Publish on the Central Portal,
 # and approves the staged npm versions, in that order. See openspec/specs/release-publishing,
 # openspec/specs/github-release, and openspec/specs/npm-publishing.
+# scripts/ci-run-record records only runs of the workflows named "CI" and "Release": renaming this
+# one means changing the script too.
 name: Release
 
 on:
