@@ -93,10 +93,11 @@ private object CmarkLoader:
     Option(pointer).filter(_.toLong != 0L)
 
 /** Scala Native's Markdown parser, cmark, CommonMark's reference C implementation: every paragraph,
-  * list items included, as the same pieces commonmark-java gives on the JVM. cmark splits text at
-  * soft breaks and gives an image's alt text as text, as commonmark-java does; its inline lines are
-  * wrong in places, so `CmarkLines` corrects them from what it gets right. Node types are read by
-  * name, since `cmark_node_type`'s values are implicit and not promised across versions.
+  * list items included, and every setext heading (one that spans more than one line), underlined,
+  * as the same pieces commonmark-java gives on the JVM. cmark splits text at soft breaks and gives
+  * an image's alt text as text, as commonmark-java does; its inline lines are wrong in places, so
+  * `CmarkLines` corrects them from what it gets right. Node types are read by name, since
+  * `cmark_node_type`'s values are implicit and not promised across versions.
   */
 private[markdown] object MarkdownParser:
 
@@ -132,19 +133,30 @@ private[markdown] object MarkdownParser:
   private def paragraphNodes(cmark: Cmark, document: Ptr[Byte]): List[ParsedParagraph] =
     Walk
       .preorder(document, children(cmark, _))
-      .filter(kind(cmark, _) == "paragraph")
+      .filter(node =>
+        kind(cmark, node) == "paragraph" ||
+          (kind(cmark, node) == "heading" && cmark.endLine(node) > cmark.startLine(node))
+      )
       .map { paragraph =>
         val endLine = cmark.endLine(paragraph)
-        val placed = CmarkLines.paragraph(
-          Walk.preorder(paragraph, children(cmark, _)).flatMap(piece(cmark, _)),
-          endLine
-        )
         // The block's first line, which cmark counts from the link reference definitions that
         // open it, as commonmark.js does; no later than the first line `CmarkLines` places.
         val blockStart = cmark.startLine(paragraph)
+        val underlined = kind(cmark, paragraph) == "heading"
+        // A setext heading's text ends on the line before its underline, which is the line cmark
+        // reports, or the one before when anything follows the heading (cmark 0.31.2 ends it a
+        // line late). Its pieces are placed from the line before the one reported, so one line
+        // late at most: harmless, since they're never read as sentences, only as the bound
+        // `Tables.firstLine` searches back from, by parsing.
+        val textEnd = if underlined then endLine - 1 else endLine
+        val placed = CmarkLines.paragraph(
+          Walk.preorder(paragraph, children(cmark, _)).flatMap(piece(cmark, _)),
+          textEnd
+        )
         ParsedParagraph(
           placed.copy(line = if blockStart >= 1 then blockStart.min(placed.line) else placed.line),
-          endLine
+          lastLine = endLine,
+          underlined = underlined
         )
       }
 

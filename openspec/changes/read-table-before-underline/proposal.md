@@ -9,7 +9,7 @@ A line of `-` or `=` characters directly under a table (no blank line between) m
 - **A table followed directly by a line of `-` or `=` is read as GitHub reads it.** The line is read as the table's next line, as any other line after a table is. Observed on GitHub's renderer on 2026-11-12:
   - A thematic break (`---`, `- - -`, `-- -`, with up to three spaces of indent or trailing spaces) ends the table and is shown as a rule.
   - `-` alone ends the table and starts an empty list item; `    ---` (four spaces) ends it as indented code.
-  - Any other underline (`===`, `=`, `==`, `--`) is a body row, its first cell holding the line.
+  - Any other underline (`===`, `=`, `==`, `--`) is a body row, its first cell holding the line, and the table goes on: the lines directly after it are its next rows, until a line that ends a table.
   - The same holds in a block quote and in a list item, and for a table with a header row and no body rows.
 - **Paragraph lines before such a table are read as a paragraph**, as they are before any table.
 - **A block of underlined lines with no table in it stays a heading**, as GitHub shows it, and isn't read: for example a one-column `| text |` line over `---`, which has no delimiter row.
@@ -23,12 +23,12 @@ None.
 
 ### Modified Capabilities
 
-- `markdown-input`: two added requirements: a line of `-` or `=` directly after a table's row is read as the table's next line, and a block of underlined lines with no table is a heading, with nothing read.
+- `markdown-input`: three added requirements: a line of `-` or `=` directly after a table's row is read as the table's next line; when that line is a body row, the lines directly after it are the table's too; and a block of underlined lines with no table is a heading, with nothing read.
 
 ## Impact
 
 - The three platform parsers (`ears/markdown/src-jvm`, `js/src`, `native/src`): each also gives setext headings, marked as such, with their lines and pieces, as it gives paragraphs.
-- `ears/markdown/src` (shared): `Tables` reads a marked heading that holds a table as it reads a paragraph, and drops one that doesn't; `Rows` learns that a thematic break ends a table.
+- `ears/markdown/src` (shared): `Tables` finds a marked heading's underline itself (cmark reports the heading's end a line too late), reads a heading that holds a table as it reads a paragraph, continuing the table into the paragraph directly after when the underline is a body row, and drops a heading with no table; `Rows` learns that a thematic break ends a table.
 - Tests: conformance fixtures for each case, each checked against GitHub's renderer, on the JVM, Node, and Scala Native; unit tests for the thematic break and for headings in `Tables`.
 - Docs: README, CHANGELOG (the Unreleased tables entry), roadmap, work log.
 - No change to the CLI, its output, or JSON output.

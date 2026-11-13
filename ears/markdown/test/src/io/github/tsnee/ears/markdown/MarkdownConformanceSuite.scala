@@ -532,7 +532,8 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
         Sentence(4, "The calendar shall sync.")
       ),
       // GitHub: the table, an empty list item, then a paragraph "The calendar shall sync. | a | b".
-      // ("-" alone would make the lines above it a setext heading, which isn't read yet.)
+      // (`+` rather than `-`: the parsers read `-` alone as a setext heading's underline, which
+      // "a single dash under a table is an empty list item" covers.)
       readFixture(
         "an empty list item ends a table",
         oneRow("The scheduler shall list events.") + "+\nThe calendar shall sync. | a | b\n",
@@ -590,6 +591,261 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
         Nil,
         Sentence(2, "The calendar shall sync."),
         Sentence(5, "The scheduler shall list events.")
+      )
+    ),
+    // A line of `-` or `=` directly under a table, which the parsers read as a setext heading's
+    // underline and GitHub as the table's next line: each fixture checked against GitHub's
+    // renderer (`gh api markdown -f mode=gfm`) on 2026-11-12, its result in the comment above it.
+    suite("underline after a table")(
+      // GitHub: the table with rows A and B, then a rule.
+      readFixture(
+        "a rule under a table ends it",
+        oneRow("The scheduler shall list events.") + "| B | The calendar shall sync. |\n---\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events."),
+        Sentence(4, "The calendar shall sync.")
+      ),
+      // GitHub: the table with rows A and "===" (its second cell empty).
+      readFixture(
+        "an equals line under a table is a body row",
+        oneRow("The scheduler shall list events.") + "===\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events.")
+      ),
+      // GitHub: a paragraph "The report shall print.", then the table with rows A and "===".
+      readFixture(
+        "paragraph lines before an underlined table are a paragraph",
+        "The report shall print.\n" + oneRow("The scheduler shall list events.") + "===\n",
+        Nil,
+        Sentence(1, "The report shall print."),
+        Sentence(4, "The scheduler shall list events.")
+      ),
+      // GitHub: in the block quote, the table, then a rule.
+      readFixture(
+        "a rule under a table in a block quote",
+        "> | ID | Requirement |\n> |---|---|\n> | A | The scheduler shall list events. |\n> ---\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events.")
+      ),
+      // GitHub: in the list item, the table, then a rule.
+      readFixture(
+        "a rule under a table in a list item",
+        "- | ID | Requirement |\n  |---|---|\n  | A | The scheduler shall list events. |\n  ---\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events.")
+      ),
+      // GitHub: the table with no body rows, then a rule.
+      readFixture(
+        "a rule under a table with no body rows",
+        "| ID | The scheduler shall list events. |\n|---|---|\n---\n",
+        Nil,
+        Sentence(1, "The scheduler shall list events.")
+      ),
+      // GitHub: the table with one body row, "===" (its second cell empty).
+      readFixture(
+        "an equals line under a table with no body rows is its body row",
+        "| ID | The scheduler shall list events. |\n|---|---|\n===\n",
+        Nil,
+        Sentence(1, "The scheduler shall list events.")
+      ),
+      // GitHub: the table, then a list with one empty item.
+      readFixture(
+        "a single dash under a table is an empty list item",
+        oneRow("The scheduler shall list events.") + "-\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events.")
+      ),
+      // GitHub: the table with rows A and "--" (its second cell empty).
+      readFixture(
+        "two dashes under a table are a body row",
+        oneRow("The scheduler shall list events.") + "--\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events.")
+      ),
+      // GitHub: the table, then a rule.
+      readFixture(
+        "a rule indented three spaces under a table ends it",
+        oneRow("The scheduler shall list events.") + "   ---\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events.")
+      ),
+      // GitHub: the table, then a rule.
+      readFixture(
+        "a rule with a trailing space under a table ends it",
+        oneRow("The scheduler shall list events.") + "--- \n",
+        Nil,
+        Sentence(3, "The scheduler shall list events.")
+      ),
+      // GitHub: the table, then a rule. (Every parser ends the paragraph here already.)
+      readFixture(
+        "a spaced rule under a table ends it",
+        oneRow("The scheduler shall list events.") + "- - -\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events.")
+      ),
+      // GitHub: the table, then a rule. (Every parser ends the paragraph here already.)
+      readFixture(
+        "a rule of two dashes and a spaced one under a table ends it",
+        oneRow("The scheduler shall list events.") + "-- -\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events.")
+      ),
+      // GitHub: the table, then a rule. (Every parser ends the paragraph here already.)
+      readFixture(
+        "a rule of asterisks under a table ends it",
+        oneRow("The scheduler shall list events.") + "***\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events.")
+      ),
+      // GitHub: the table, then a code block "---". (Every parser reads the line as the
+      // paragraph's, not an underline, already.)
+      readFixture(
+        "dashes indented four spaces under a table are code",
+        oneRow("The scheduler shall list events.") + "    ---\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events.")
+      ),
+      // GitHub: an h2, "| The scheduler shall list events. |": no delimiter row, so no table.
+      readFixture(
+        "a one-column line over a rule is a heading, and isn't read",
+        "| The scheduler shall list events. |\n---\n",
+        Nil
+      ),
+      // GitHub: the table with rows A, "===", B, and C, C's third cell not shown.
+      readFixture(
+        "rows after an equals line are the table's",
+        oneRow("The scheduler shall list events.") + "===\n| B | The calendar shall sync. |\n" +
+          "| C | The report shall print. | extra |\n",
+        List(MarkdownWarning.ExtraCells(line = 6, cells = 3, headerCells = 2)),
+        Sentence(3, "The scheduler shall list events."),
+        Sentence(5, "The calendar shall sync."),
+        Sentence(6, "The report shall print.")
+      ),
+      // GitHub: the table with rows A, "=", B, "==", and C.
+      readFixture(
+        "a row underlined again after an equals row: the table goes on",
+        oneRow("The scheduler shall list events.") + "=\n| B | The calendar shall sync. |\n==\n" +
+          "| C | The report shall print. |\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events."),
+        Sentence(5, "The calendar shall sync."),
+        Sentence(7, "The report shall print.")
+      ),
+      // GitHub: the table A in the block quote, a paragraph whose link is resolved, then the table
+      // with rows B and "===". (The lines after the first table, read again with the document for
+      // its definition, end in a heading, which cmark ends on the blank line after it.)
+      readFixture(
+        "an underlined table in the lines after a table, with a reference link",
+        "> | ID | Requirement |\n> |---|---|\n> | A | The scheduler shall list events. |\n" +
+          "[The calendar][c] shall sync.\n| ID | Requirement |\n|---|---|\n" +
+          "| B | The report shall print. |\n===\n\n[c]: https://example.com/calendar\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events."),
+        Sentence(4, "The calendar shall sync."),
+        Sentence(7, "The report shall print.")
+      ),
+      // Found by the code review, each checked against GitHub's renderer on 2026-11-13.
+      // GitHub: the table with rows A and "===", then a block quote "The calendar shall sync.".
+      readFixture(
+        "a block quote after an equals line ends the table",
+        oneRow("The scheduler shall list events.") + "===\n> The calendar shall sync.\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events."),
+        Sentence(5, "The calendar shall sync.")
+      ),
+      // GitHub: the table with rows A, "===", and B, then a block quote "The report shall print.".
+      readFixture(
+        "a block quote after the rows after an equals line ends the table",
+        oneRow("The scheduler shall list events.") + "===\n| B | The calendar shall sync. |\n" +
+          "> The report shall print.\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events."),
+        Sentence(5, "The calendar shall sync."),
+        Sentence(6, "The report shall print.")
+      ),
+      // GitHub: the table with rows A, "===", and B, then an h1 "The report shall print.".
+      readFixture(
+        "a heading after the rows after an equals line ends the table, and isn't read",
+        oneRow("The scheduler shall list events.") + "===\n| B | The calendar shall sync. |\n" +
+          "# The report shall print.\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events."),
+        Sentence(5, "The calendar shall sync.")
+      ),
+      // GitHub: the table with rows A, "===", and B, then a code block "The report shall print.".
+      readFixture(
+        "a code fence after the rows after an equals line ends the table, and isn't read",
+        oneRow("The scheduler shall list events.") + "===\n| B | The calendar shall sync. |\n" +
+          "```\nThe report shall print.\n```\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events."),
+        Sentence(5, "The calendar shall sync.")
+      ),
+      // GitHub: a paragraph "===", the table with row A, then a rule: the definition is
+      // paragraph text there, so `===` is the paragraph's, not an underline.
+      readFixture(
+        "a definition and an equals line over a table",
+        "[a]: /url\n===\n" + oneRow("The scheduler shall list events.") + "---\n",
+        Nil,
+        Sentence(5, "The scheduler shall list events.")
+      ),
+      // GitHub: the table with rows A, "===", "[b]: /url", "==", B, "==", and C. (The parsers read
+      // a definition, then a heading whose text is "==", over the rows from line 7.)
+      readFixture(
+        "a definition and an equals line in the rows after an equals line",
+        oneRow("The scheduler shall list events.") + "===\n[b]: /url\n==\n" +
+          "| B | The calendar shall sync. |\n==\n| C | The report shall print. |\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events."),
+        Sentence(7, "The calendar shall sync."),
+        Sentence(9, "The report shall print.")
+      ),
+      // GitHub: in the list item, the table and a rule; then a paragraph "The calendar shall
+      // sync.".
+      readFixture(
+        "a rule under a table in a list item indented with a tab",
+        "- | ID | Requirement |\n\t|---|---|\n\t| A | The scheduler shall list events. |\n\t---\n" +
+          "The calendar shall sync.\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events."),
+        Sentence(5, "The calendar shall sync.")
+      ),
+      // GitHub: in the block quote, the table, a rule, and a paragraph "The calendar shall sync.".
+      readFixture(
+        "a rule under a table indented with a tab in a block quote",
+        ">\t| ID | Requirement |\n>\t|---|---|\n>\t| A | The scheduler shall list events. |\n" +
+          ">\t---\n> The calendar shall sync.\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events."),
+        Sentence(5, "The calendar shall sync.")
+      ),
+      // GitHub: in the list item, a paragraph "Rules:", the table, a rule, and a paragraph "The
+      // calendar shall sync.".
+      readFixture(
+        "a rule under a table indented three spaces in an ordered list item",
+        "1. Rules:\n\n   | ID | Requirement |\n   |---|---|\n" +
+          "   | A | The scheduler shall list events. |\n   ---\n   The calendar shall sync.\n",
+        Nil,
+        Sentence(5, "The scheduler shall list events."),
+        Sentence(7, "The calendar shall sync.")
+      ),
+      // GitHub: in the inner list item, the table with rows A, "===", and B.
+      readFixture(
+        "rows after an equals line in a nested list item",
+        "1. Rules:\n   - | ID | Requirement |\n     |---|---|\n" +
+          "     | A | The scheduler shall list events. |\n     ===\n" +
+          "     | B | The calendar shall sync. |\n",
+        Nil,
+        Sentence(4, "The scheduler shall list events."),
+        Sentence(6, "The calendar shall sync.")
+      ),
+      // GitHub: the table, a rule, then a paragraph "The calendar shall sync.".
+      readFixture(
+        "a paragraph after a rule under a table",
+        oneRow("The scheduler shall list events.") + "---\nThe calendar shall sync.\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events."),
+        Sentence(5, "The calendar shall sync.")
       )
     ),
     // A cell is inline text, read as GitHub reads it: each fixture checked against GitHub's

@@ -40,6 +40,19 @@ private[markdown] object Rows:
     */
   private val listItem = "(?:[-+*]|[0-9]{1,9}[.)])(?:[ \t].*)?".r
 
+  /** A thematic break, as CommonMark has it, past its indentation: three or more of the same `-`,
+    * `*`, or `_`, with nothing else but spaces and tabs.
+    */
+  private val thematicBreak = "(?:-[ \t]*){3,}|(?:\\*[ \t]*){3,}|(?:_[ \t]*){3,}".r
+
+  /** The other starts of a block that GitHub ends a table at, past their indentation: a block
+    * quote's `>`; an ATX heading, one to six `#` followed by a space, a tab, or the line's end; and
+    * a code fence, three or more backticks (with none in the rest of the line) or tildes. Each
+    * interrupts a paragraph, so a table meets one only in the paragraph that joins it after an
+    * underline row (`Tables`).
+    */
+  private val interruption = ">.*|#{1,6}(?:[ \t].*)?|`{3,}[^`]*|~{3,}.*".r
+
   /** The tag names of CommonMark's sixth kind of HTML block, as of CommonMark 0.31. */
   private val blockTags = List(
     "address",
@@ -202,11 +215,13 @@ private[markdown] object Rows:
     matching(Cursor(0, 0, 0), containers)
 
   /** Whether GitHub ends a table at this line rather than read it as a body row: a lazy line, a
-    * line indented four or more columns past its container's content (a code block), or one whose
-    * text starts a list item (an empty one too) or an HTML block.
+    * line indented four or more columns past its container's content (a code block), a thematic
+    * break, a block quote, an ATX heading, a code fence, or one whose text starts a list item (an
+    * empty one too) or an HTML block.
     */
   def endsTable(line: RowLine): Boolean =
-    line.isLazy || line.indent >= 4 || startsBlock(line.text)
+    line.isLazy || line.indent >= 4 || thematicBreak.matches(line.text) ||
+      interruption.matches(line.text) || startsBlock(line.text)
 
   /** Whether `text`, a line without its prefix and indentation, starts a list item or an HTML
     * block.

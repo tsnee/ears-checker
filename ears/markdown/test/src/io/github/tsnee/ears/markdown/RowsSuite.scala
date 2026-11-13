@@ -144,6 +144,66 @@ object RowsSuite extends ZIOSpecDefault:
           Rows.endsTable(row("2. x | y")),
           !Rows.endsTable(row("| x |").copy(indent = 3))
         )
+      ,
+      test("a thematic break ends a table: three or more of one of `-`, `*`, `_`, spaced or not"):
+        val genBlank = Gen.stringBounded(0, 2)(Gen.elements(' ', '\t'))
+        val genBreak =
+          for
+            marker <- Gen.elements('-', '*', '_')
+            count <- Gen.int(3, 6)
+            gaps <- Gen.listOfN(count)(genBlank)
+          yield gaps.map(marker.toString + _).mkString
+        check(genBreak, Gen.int(0, 3)) { (text, indent) =>
+          assertTrue(
+            Rows.endsTable(RowLine(text = text, inner = text, isLazy = false, indent = indent))
+          )
+        }
+      ,
+      test("a block quote, an ATX heading, or a code fence ends a table"):
+        val row = (text: String) => RowLine(text = text, inner = text, isLazy = false, indent = 0)
+        assertTrue(
+          List(
+            "> The calendar shall sync.",
+            ">",
+            ">x",
+            "# Notes",
+            "###### Notes",
+            "#",
+            "##\tNotes",
+            "```",
+            "````scala",
+            "~~~",
+            "~~~ a`b"
+          ).forall(text => Rows.endsTable(row(text)))
+        )
+      ,
+      test("near misses: seven `#`, `#` before text, two fence characters, a backtick in info"):
+        val row = (text: String) => RowLine(text = text, inner = text, isLazy = false, indent = 0)
+        assertTrue(
+          !List("####### Notes", "#Notes", "#5 | x", "``", "~~", "``` a`b", "x > y", "\\> x")
+            .exists(text => Rows.endsTable(row(text)))
+        )
+      ,
+      test("a line of only `=` and spaces is a row, not a break"):
+        val genEquals =
+          for
+            count <- Gen.int(1, 6)
+            trailing <- Gen.stringBounded(0, 2)(Gen.elements(' ', '\t'))
+          yield "=" * count + trailing
+        check(genEquals)(text =>
+          assertTrue(
+            !Rows.endsTable(RowLine(text = text, inner = text, isLazy = false, indent = 0))
+          )
+        )
+      ,
+      test("near misses aren't breaks: two dashes, mixed markers, or other text after"):
+        val row = (text: String) => RowLine(text = text, inner = text, isLazy = false, indent = 0)
+        assertTrue(
+          !List("--", "-- ", "-=-", "--*", "--- x", "**", "_ _").exists(text =>
+            Rows.endsTable(row(text))
+          ),
+          Rows.endsTable(row("- -"))
+        )
     ),
     suite("Rows.startsBlock")(
       test("a list marker, an empty item's too, with ASCII digits"):

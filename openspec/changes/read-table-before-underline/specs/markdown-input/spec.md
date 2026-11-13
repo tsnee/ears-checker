@@ -29,6 +29,25 @@ When a line of only `-` or `=` characters and spaces directly follows a table's 
 - **WHEN** the reader reads `| ID | Requirement |`, `|---|---|`, `| A | The scheduler shall list events. |`, and `-`
 - **THEN** it returns `The scheduler shall list events.` on line 3, and the `-` line is an empty list item
 
+#### Scenario: A definition and an equals line over a table
+
+- **WHEN** the reader reads `[a]: /url`, `===`, `| ID | Requirement |`, `|---|---|`, `| A | The scheduler shall list events. |`, and `---`
+- **THEN** it returns `The scheduler shall list events.` on line 5, since the `===` line is paragraph text on GitHub, not an underline
+
+### Requirement: Rows after an underline row
+
+When a table's last row is a line of only `-` or `=` characters and spaces that doesn't end the table, the Markdown reader SHALL read the lines directly after it as the table's next lines.
+
+#### Scenario: Rows after an equals line
+
+- **WHEN** the reader reads `| ID | Requirement |`, `|---|---|`, `| A | The scheduler shall list events. |`, `===`, `| B | The calendar shall sync. |`, and `| C | The report shall print. | extra |`
+- **THEN** it returns `The scheduler shall list events.` on line 3, `The calendar shall sync.` on line 5, and `The report shall print.` on line 6, with a warning for line 6, which has 3 cells under a header of 2
+
+#### Scenario: A block quote after an equals line
+
+- **WHEN** the reader reads `| ID | Requirement |`, `|---|---|`, `| A | The scheduler shall list events. |`, `===`, and `> The calendar shall sync.`
+- **THEN** it returns `The scheduler shall list events.` on line 3 and `The calendar shall sync.` on line 5, read from the block quote rather than a row
+
 ### Requirement: Underline without a table
 
 If a block of lines underlined by a line of `-` or `=` characters holds no table, then the Markdown reader SHALL read the block as a heading, with no sentence read from it.

@@ -11,10 +11,16 @@ final case class Piece(text: String, code: Boolean, line: Option[Int]) derives C
 final case class Paragraph(line: Int, pieces: List[Piece]) derives CanEqual
 
 /** A paragraph as a platform's parser gives it, with the 1-based line it ends on, which every
-  * parser knows from the paragraph's block: tables are read from the paragraph's raw lines.
+  * parser knows from the paragraph's block: tables are read from the paragraph's raw lines. A
+  * setext heading (a heading that spans more than one line) is given as a paragraph `underlined`,
+  * whose last line is its underline, or (from cmark, when anything follows) the line after; it's
+  * read only for a table it holds, since GitHub reads the underline as that table's next line.
   */
-private[markdown] final case class ParsedParagraph(paragraph: Paragraph, lastLine: Int)
-    derives CanEqual
+private[markdown] final case class ParsedParagraph(
+    paragraph: Paragraph,
+    lastLine: Int,
+    underlined: Boolean
+) derives CanEqual
 
 /** A requirement sentence and the 1-based line it starts on. */
 final case class Sentence(line: Int, text: String) derives CanEqual

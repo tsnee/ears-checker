@@ -9,13 +9,13 @@ import scala.scalajs.js.annotation.JSImport
 private class CommonmarkParser() extends js.Object:
   def parse(markdown: String): js.Dynamic = js.native
 
-/** Node's Markdown parser, commonmark.js: every paragraph, list items and block quotes included, as
-  * the same pieces commonmark-java gives on the JVM. commonmark.js gives source positions only for
-  * blocks, so each piece's line is found in the paragraph's source (`SourceLines`). Its tree is
-  * otherwise CommonMark's, like the JVM's: text, code with a space for each line ending, soft and
-  * hard breaks as nodes, an image's alt text as its children, and inline HTML (dropped) as nodes.
-  * It splits text at each escape, so text right after its previous sibling is joined
-  * (`SourceLines.joined`).
+/** Node's Markdown parser, commonmark.js: every paragraph, list items and block quotes included,
+  * and every setext heading (one that spans more than one line), underlined, as the same pieces
+  * commonmark-java gives on the JVM. commonmark.js gives source positions only for blocks, so each
+  * piece's line is found in the paragraph's source (`SourceLines`). Its tree is otherwise
+  * CommonMark's, like the JVM's: text, code with a space for each line ending, soft and hard breaks
+  * as nodes, an image's alt text as its children, and inline HTML (dropped) as nodes. It splits
+  * text at each escape, so text right after its previous sibling is joined (`SourceLines.joined`).
   */
 private[markdown] object MarkdownParser:
 
@@ -31,7 +31,9 @@ private[markdown] object MarkdownParser:
     val starts = Lines.starts(content)
     Walk
       .preorder(CommonmarkParser().parse(content), children)
-      .filter(kind(_) == "paragraph")
+      .filter(node =>
+        kind(node) == "paragraph" || (kind(node) == "heading" && line(node, 1) > line(node, 0))
+      )
       .map { paragraph =>
         val first = line(paragraph, 0)
         val last = line(paragraph, 1).max(first)
@@ -44,7 +46,8 @@ private[markdown] object MarkdownParser:
               (earlier, later) => later.prev eq earlier
             )
           ),
-          last
+          lastLine = last,
+          underlined = kind(paragraph) == "heading"
         )
       }
 

@@ -30,9 +30,10 @@ private[markdown] final case class TableLayout(
   * cells from the raw text first (`Rows`), each cell's inline formatting after. In a paragraph, a
   * line followed by a delimiter row with as many cells starts a table, and later lines are body
   * rows until one at which GitHub ends the table (`Rows.endsTable`); the lines before it stay a
-  * paragraph, and the lines from the end on are read again as a document of their own. The cells
-  * and the lines before a table are read again by the platform's parser, all in one document per
-  * source document.
+  * paragraph, and the lines from the end on are read again as a document of their own. A setext
+  * heading's underline under a table is the table's next line, as on GitHub. The cells and the
+  * lines before a table are read again by the platform's parser, all in one document per source
+  * document.
   */
 private[markdown] object Tables:
 
@@ -48,20 +49,23 @@ private[markdown] object Tables:
 
   /** The paragraphs, each table paragraph replaced by its segments read as inline text and the
     * Markdown after its table, and the warnings. `content` is the document; `parse`, the platform's
-    * parser, reads the segments, once, and only when there are some. A document with no pipe has no
-    * table, and isn't looked at.
+    * parser, reads the segments, once, and only when there are some. An underlined paragraph (a
+    * setext heading) is read only for its table, to its underline, and dropped if it holds none, as
+    * headings aren't read. A document with no pipe has no table, and isn't looked at.
     */
   def read(
       parsed: List[ParsedParagraph],
       content: String,
       parse: String => Either[String, List[ParsedParagraph]]
   ): Either[String, TableBlocks] =
-    if !content.contains('|') then Right(TableBlocks(parsed.map(_.paragraph), Nil))
+    if !content.contains('|') then
+      Right(TableBlocks(parsed.filterNot(_.underlined).map(_.paragraph), Nil))
     else
       val lines = Lines.of(content)
       val source = (line: Int) => lines.lift(line - 1).getOrElse("")
       for
-        layouts <- traverse(parsed)(found => table(found, source, parse).map(found -> _))
+        laidOut <- tables(parsed, source, parse)
+        layouts = laidOut.filterNot((found, laid) => found.underlined && laid.isEmpty)
         segments = layouts.flatMap((_, laid) => laid.toList.flatMap(_.segments))
         cells <-
           if segments.isEmpty then Right(Nil)
@@ -95,20 +99,110 @@ private[markdown] object Tables:
       }
     TableBlocks(blocks.toList.flatMap(_.paragraphs), blocks.toList.flatMap(_.warnings))
 
-  /** The paragraph's table, if it holds one. Only a later line with a pipe and a dash can be a
-    * delimiter row, so most paragraphs stop at that check, before their first line is looked for.
+  /** A setext underline's text past its indentation: only `-` or only `=`, then spaces and tabs. */
+  private val underlineText = "(?:-+|=+)[ \t]*".r
+
+  /** The underline of an underlined paragraph whose block starts on `block` and whose text starts
+    * on `first`: the first line after `first`, up to `reported` (the last line its parser gives,
+    * which cmark 0.31.2 gives one line late when anything follows the heading), that matches the
+    * block's containers, is indented less than four columns past their content, and is only `-` or
+    * only `=` characters and spaces; or `reported`, if none is. No later line of a heading's text
+    * can look like that, since it would have been the underline; the first can, after link
+    * definitions (`[a]: /url`, then `===`).
+    */
+  def underline(block: Int, first: Int, reported: Int, source: Int => String): Int =
+    val (containers, _) = Rows.opened(source(block))
+    (first + 1 to reported)
+      .find { line =>
+        val row = Rows.matched(source(line), containers)
+        !row.isLazy && row.indent < 4 && underlineText.matches(row.text)
+      }
+      .getOrElse(reported)
+
+  /** The paragraph, whose text starts on `first`, ending on its underline if it's underlined. */
+  private def toUnderline(
+      found: ParsedParagraph,
+      first: Int,
+      source: Int => String
+  ): ParsedParagraph =
+    if found.underlined then
+      found.copy(lastLine = underline(found.paragraph.line, first, found.lastLine, source))
+    else found
+
+  /** Each paragraph with its table, if it holds one, or its first failure; one with a table ends on
+    * its underline, if it's underlined. When an underlined paragraph's underline is one of its
+    * table's body rows, GitHub reads the lines after it as the table's too, so the paragraph that
+    * starts on the next line joins it (`joined`).
+    */
+  private def tables(
+      parsed: List[ParsedParagraph],
+      source: Int => String,
+      parse: String => Either[String, List[ParsedParagraph]]
+  ): Either[String, List[(ParsedParagraph, Option[TableLayout])]] =
+    @tailrec
+    def loop(
+        rest: List[ParsedParagraph],
+        done: Vector[(ParsedParagraph, Option[TableLayout])]
+    ): Either[String, List[(ParsedParagraph, Option[TableLayout])]] = rest match
+      case Nil            => Right(done.toList)
+      case found :: later =>
+        table(found, source, parse) match
+          case Left(error)                         => Left(error)
+          case Right((_, None))                    => loop(later, done :+ (found -> None))
+          case Right((ended, Some((first, laid)))) =>
+            joined(ended, first, laid, later, source, parse) match
+              case Left(error)                  => Left(error)
+              case Right((block, longer, left)) => loop(left, done :+ (block -> Some(longer)))
+    loop(parsed, Vector.empty)
+
+  /** The table `laid`, of a paragraph whose text starts on `first`, with each paragraph of `later`
+    * that joins it: one that starts on the line after an underlined paragraph's underline, while
+    * that underline is a body row of the table laid out over both; then the paragraphs left. The
+    * joined block is underlined when its last paragraph is, so the next may join it too. Fails when
+    * finding a joining paragraph's first line (for its underline) fails.
+    */
+  @tailrec
+  private def joined(
+      found: ParsedParagraph,
+      first: Int,
+      laid: TableLayout,
+      later: List[ParsedParagraph],
+      source: Int => String,
+      parse: String => Either[String, List[ParsedParagraph]]
+  ): Either[String, (ParsedParagraph, TableLayout, List[ParsedParagraph])] = later match
+    case next :: rest if found.underlined && next.paragraph.line == found.lastLine + 1 =>
+      val ended =
+        if next.underlined then
+          firstLine(next.paragraph, source, parse).map(toUnderline(next, _, source))
+        else Right(next)
+      ended match
+        case Left(error)    => Left(error)
+        case Right(joining) =>
+          layout(found.paragraph.line, first, joining.lastLine, source)
+            .filter(_.after.forall(_.line > found.lastLine)) match
+            case Some(longer) =>
+              val block = found.copy(lastLine = joining.lastLine, underlined = joining.underlined)
+              joined(block, first, longer, rest, source, parse)
+            case None => Right((found, laid, later))
+    case _ => Right((found, laid, later))
+
+  /** The paragraph's table, if it holds one, with the line its text starts on, and the paragraph,
+    * ending on its underline if it holds a table and is underlined. Only a later line with a pipe
+    * and a dash can be a delimiter row, so most paragraphs stop at that check, before their first
+    * line is looked for.
     */
   private def table(
       found: ParsedParagraph,
       source: Int => String,
       parse: String => Either[String, List[ParsedParagraph]]
-  ): Either[String, Option[TableLayout]] =
+  ): Either[String, (ParsedParagraph, Option[(Int, TableLayout)])] =
     val block = found.paragraph.line
-    if !mayHoldDelimiter(block, found.lastLine, source) then Right(None)
+    if !mayHoldDelimiter(block, found.lastLine, source) then Right(found -> None)
     else
-      firstLine(found.paragraph, source, parse).map(first =>
-        layout(block, first, found.lastLine, source)
-      )
+      firstLine(found.paragraph, source, parse).map { first =>
+        val ended = toUnderline(found, first, source)
+        ended -> layout(block, first, ended.lastLine, source).map(first -> _)
+      }
 
   /** Whether a line after `first`, up to `last`, has a pipe and a dash. */
   private def mayHoldDelimiter(first: Int, last: Int, source: Int => String): Boolean =
@@ -193,7 +287,9 @@ private[markdown] object Tables:
 
   /** The lines after a table read as a document of their own (followed, when they hold a `[`, by a
     * blank line and the whole `content`, for its link reference definitions), with tables of their
-    * own, and placed on their lines in the source.
+    * own, and placed on their lines in the source. The blocks kept are those that start in the
+    * lines themselves, which end there too, at the blank line: by its start, since cmark ends a
+    * heading on that blank line.
     */
   private def readAfter(
       after: Segment,
@@ -203,7 +299,7 @@ private[markdown] object Tables:
     val own = after.lines.mkString("", "\n", "\n")
     val document = if own.contains('[') then own + "\n" + content else own
     parse(document)
-      .flatMap(found => read(found.filter(_.lastLine <= after.lines.size), document, parse))
+      .flatMap(found => read(found.filter(_.paragraph.line <= after.lines.size), document, parse))
       .map(blocks => shifted(blocks, after.line - 1))
 
   /** The blocks with every line moved down by `by`. */

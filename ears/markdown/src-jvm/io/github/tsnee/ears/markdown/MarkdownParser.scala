@@ -5,6 +5,7 @@ import scala.jdk.CollectionConverters.*
 
 import org.commonmark.node.Code
 import org.commonmark.node.HardLineBreak
+import org.commonmark.node.Heading
 import org.commonmark.node.LinkReferenceDefinition
 import org.commonmark.node.Node
 import org.commonmark.node.SoftLineBreak
@@ -12,9 +13,9 @@ import org.commonmark.node.Text
 import org.commonmark.parser.IncludeSourceSpans
 import org.commonmark.parser.Parser
 
-/** The JVM's Markdown parser, commonmark-java: every paragraph, list items included, as pieces of
-  * text and inline code with their lines. commonmark-java gives each text and code node its own
-  * source span, so every piece but a line break has a line.
+/** The JVM's Markdown parser, commonmark-java: every paragraph, list items included, and every
+  * setext heading, underlined, as pieces of text and inline code with their lines. commonmark-java
+  * gives each text and code node its own source span, so every piece but a line break has a line.
   */
 private[markdown] object MarkdownParser:
 
@@ -30,17 +31,23 @@ private[markdown] object MarkdownParser:
   def loaded(): Either[String, String => List[ParsedParagraph]] = Right(parsed)
 
   private def parsed(content: String): List[ParsedParagraph] =
-    Walk.preorder(parser.parse(content), children).collect {
-      case paragraph: org.commonmark.node.Paragraph =>
-        val first = line(paragraph).getOrElse(1)
-        ParsedParagraph(
-          Paragraph(
-            blockStart(paragraph, first),
-            Walk.preorder[Node](paragraph, children).flatMap(piece)
-          ),
-          paragraph.getSourceSpans.asScala.lastOption.fold(first)(_.getLineIndex + 1)
-        )
+    Walk.preorder(parser.parse(content), children).flatMap {
+      case paragraph: org.commonmark.node.Paragraph => List(block(paragraph, underlined = false))
+      // A block's source spans are one per line, so a heading with more than one is a setext
+      // heading: an ATX heading is one line.
+      case heading: Heading if heading.getSourceSpans.size > 1 =>
+        List(block(heading, underlined = true))
+      case _ => Nil
     }
+
+  /** A paragraph, or a setext heading, as a parsed paragraph. */
+  private def block(node: Node, underlined: Boolean): ParsedParagraph =
+    val first = line(node).getOrElse(1)
+    ParsedParagraph(
+      Paragraph(blockStart(node, first), Walk.preorder[Node](node, children).flatMap(piece)),
+      lastLine = node.getSourceSpans.asScala.lastOption.fold(first)(_.getLineIndex + 1),
+      underlined = underlined
+    )
 
   /** The first line of the paragraph's block, which starts `first`: commonmark-java gives the link
     * reference definitions that open a block as nodes of their own, right before the paragraph,
