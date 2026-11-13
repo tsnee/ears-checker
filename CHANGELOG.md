@@ -7,6 +7,12 @@ Every release of ears-checker, newest first. Each change adds its lines under Un
 ### Added
 
 - Both npm packages are on npm, from 0.2.0: `npx @tsnee/ears-checker-cli` runs the command line, and `npm install @tsnee/ears-checker` installs the library. From this release on, the release workflow stages them on npm with trusted publishing, and they're published once the owner has checked that they're the GitHub Release's own tarballs.
+- Markdown tables are read as GitHub reads them, each cell on its own: every requirement in a table is checked, on its row's line, the same on the JVM, Node, and Scala Native.
+- Warnings, beside the findings, for problems in the input that aren't a requirement's: a `file:line: warning: …` line in text output, and a `warnings` array in JSON output (still format version 1). The first is `table-extra-cells`, a table row with more cells than its header, which GitHub doesn't show. Warnings don't change the exit status.
+
+### Fixed
+
+- A Markdown table is no longer read as one long sentence, which gave a misleading finding and left the table's other requirements unchecked; a table right after a paragraph no longer merges into it.
 
 ## 0.2.0 - 2026-11-11
 

@@ -40,7 +40,7 @@ The Coursier app installs these too: `cs install --channel https://raw.githubuse
 
 ### macOS
 
-The macOS binary isn't signed. macOS refuses to open an unsigned program that a browser downloaded ("Apple could not verify…"), because the browser marks the file as quarantined. Download it with `curl`, which doesn't mark it:
+The macOS binary is only ad-hoc signed (by the linker, as every Apple silicon binary must be), not signed with a Developer ID or notarized by Apple. macOS refuses to open such a program after a browser downloads it ("Apple could not verify…"), because the browser marks the file as quarantined. Download it with `curl`, which doesn't mark it:
 
 ```sh
 curl -fLO https://github.com/tsnee/ears-checker/releases/download/v{version}/ears-check-{version}-macos-arm64

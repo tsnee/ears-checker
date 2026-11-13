@@ -88,7 +88,13 @@ object Cli:
     */
   def program(arguments: List[String], reading: Reading): UIO[Outcome] =
     check(arguments, reading).tap(outcome =>
-      annotated(Map("findings" -> outcome.findings.toString, "exit" -> outcome.exitCode.toString))(
+      annotated(
+        Map(
+          "findings" -> outcome.findings.toString,
+          "warnings" -> outcome.warnings.toString,
+          "exit" -> outcome.exitCode.toString
+        )
+      )(
         ZIO.logInfo("Finished")
       )
     )
@@ -98,13 +104,16 @@ object Cli:
   private def check(arguments: List[String], reading: Reading): UIO[Outcome] =
     val argumentText = Logging.argumentsDetail(arguments)
     Settings.parseInvocation(arguments) match
-      case Left(Usage(text, true, _))        => ZIO.succeed(Outcome(0, s"$text\n", "", 0))
+      case Left(Usage(text, true, _)) =>
+        ZIO.succeed(
+          Outcome(exitCode = 0, stdout = s"$text\n", stderr = "", findings = 0, warnings = 0)
+        )
       case Left(Usage(text, false, reasons)) =>
         annotated(
           Map("arguments" -> argumentText, "reasons" -> reasons.mkString("; "), "exit" -> "2")
         )(
           ZIO.logError("Invalid arguments")
-        ).as(Outcome(2, "", s"$text\n", 0))
+        ).as(Outcome(exitCode = 2, stdout = "", stderr = s"$text\n", findings = 0, warnings = 0))
       case Right(Invocation(verbose, all)) =>
         // ZIO.foreach is sequential and stops at the first failure: no later file is read.
         val loaded =
@@ -120,13 +129,14 @@ object Cli:
           )
         annotated(details)(ZIO.logDebug("Arguments")) *> loaded.either.map(Checker.outcome)
 
-  /** One input read and split into requirements, with its details on every entry it logs: for
-    * Markdown, those include the parser, or every library tried when there's none.
+  /** One input read and split into requirements and its reader's warnings, each warning logged at
+    * WARN, with its details on every entry it logs: for Markdown, those include the parser, or
+    * every library tried when there's none.
     */
   private def load(
       settings: Settings,
       reading: Reading
-  ): IO[String, (Settings, List[Candidate])] =
+  ): IO[String, (Settings, Found)] =
     ZIO
       .when(settings.inputFormat == InputFormat.Markdown)(ZIO.succeed(Markdown.parser()))
       .flatMap(parser =>
@@ -134,8 +144,8 @@ object Cli:
           for
             _ <- ZIO.logDebug("Reading input")
             content <- read(settings, reading)
-            candidates <- ZIO
-              .fromEither(Checker.candidates(settings, content))
+            found <- ZIO
+              .fromEither(Checker.read(settings, content))
               .tapError(reason =>
                 annotated(Map("error" -> "parse", "reason" -> reason, "exit" -> "2"))(
                   ZIO.logError("Cannot parse input")
@@ -144,10 +154,14 @@ object Cli:
             _ <- annotated(
               Map(
                 "characters" -> content.length.toString,
-                "requirements" -> candidates.size.toString
+                "requirements" -> found.candidates.size.toString,
+                "warnings" -> found.warnings.size.toString
               )
             )(ZIO.logInfo("Read input"))
-          yield settings -> candidates
+            _ <- ZIO.foreachDiscard(found.warnings)(warning =>
+              annotated(Logging.warningDetails(warning))(ZIO.logWarning("Warning"))
+            )
+          yield settings -> found
         }
       )
 

@@ -29,7 +29,7 @@ mv ears-check-0.2.0-linux-x64 ears-check
 ./ears-check reqs.txt
 ```
 
-Use `linux-arm64` or `macos-arm64` in the file names for those platforms, and `shasum -a 256 -c` where there's no `sha256sum`. The checksum shows the download is intact; [docs/release-files.md](docs/release-files.md) also shows how to check who built it. To read Markdown the binary needs [cmark](https://github.com/commonmark/cmark) 0.30 or later: `brew install cmark` on macOS, `apt install cmark` on Debian and Ubuntu, or your system's cmark package. The macOS binary isn't signed: download it with `curl` as above, since macOS won't open an unsigned program a browser downloaded.
+Use `linux-arm64` or `macos-arm64` in the file names for those platforms, and `shasum -a 256 -c` where there's no `sha256sum`. The checksum shows the download is intact; [docs/release-files.md](docs/release-files.md) also shows how to check who built it. To read Markdown the binary needs [cmark](https://github.com/commonmark/cmark) 0.30 or later: `brew install cmark` on macOS, `apt install cmark` on Debian and Ubuntu, or your system's cmark package. The macOS binary is ad-hoc signed but not notarized: download it with `curl` as above, since macOS won't open such a program after a browser downloads it.
 
 **The jar**, on JDK 17 or later, from the same release:
 
@@ -102,8 +102,8 @@ For each requirement that doesn't fit, the checker reports what's wrong, and a c
 ### Limits
 
 - **It checks form, not content.** It doesn't judge vague words ("quickly", "user-friendly"), whether a requirement can be tested, or whether it's the right requirement. It reads English only.
-- **In Markdown, only sentences containing the word `shall`**, in any case and outside inline code, are checked, in paragraphs, list items, and block quotes. A sentence with `should` and no `shall` isn't reported in Markdown (in plain text it's a `weak-modal` finding). Headings, code blocks, and HTML aren't read.
-- **Markdown tables aren't recognized.** A GitHub-style table is read as one paragraph of text, so a table with `shall` in it gives misleading findings. Keep requirements out of tables, or check them as plain text.
+- **In Markdown, only sentences containing the word `shall`**, in any case and outside inline code, are checked, in paragraphs, list items, block quotes, and the cells of GitHub-style tables (each cell on its own, on its row's line). A sentence with `should` and no `shall` isn't reported in Markdown (in plain text it's a `weak-modal` finding). Headings, code blocks, and HTML aren't read.
+- **Markdown tables are read as GitHub reads them**, cell by cell, with one difference: a link definition such as `[s]: …` directly above a table resolves `[…][s]` in its cells, where GitHub shows the definition as text and the link unresolved. A table row with more cells than its header gets a warning beside the findings (`table-extra-cells`), since GitHub doesn't show the extra cells; warnings don't change the exit status.
 - **In plain text, every nonblank line is one requirement.**
 - **In OpenSpec JSON, requirement text only:** each added and modified requirement of a change, or every requirement of a spec. Scenarios aren't checked. A `spec.md` file given directly is read as Markdown, which also checks scenario lines that quote a requirement: check OpenSpec through its JSON, as [below](#openspec).
 
@@ -212,7 +212,7 @@ gh attestation verify <file> --repo tsnee/ears-checker \
 
 The notes end with what each file needs and how to check it ([docs/release-files.md](docs/release-files.md)). Check a file before running it.
 
-The macOS binary isn't signed, so macOS won't open it after a browser downloads it ("Apple could not verify…"). Download it with `curl -fLO <its URL>`, or, once it's checked, clear the browser's quarantine mark with `xattr -d com.apple.quarantine <file>`.
+The macOS binary is only ad-hoc signed (by the linker), not signed with a Developer ID or notarized by Apple, so macOS won't open it after a browser downloads it ("Apple could not verify…"). Download it with `curl -fLO <its URL>`, or, once it's checked, clear the browser's quarantine mark with `xattr -d com.apple.quarantine <file>`.
 
 ## Contributing
 
