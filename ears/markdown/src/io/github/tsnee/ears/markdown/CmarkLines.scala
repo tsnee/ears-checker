@@ -10,12 +10,13 @@ private[markdown] enum CmarkPiece derives CanEqual:
 
 /** Lines for a paragraph read with cmark, whose inline lines are wrong in places (found by review
   * and C probes of 0.31.2): it doesn't advance after a backslash hard break or after a link whose
-  * title is on the next line, and a paragraph that follows a reference definition starts on the
-  * definition's line, along with everything in it. What cmark gets right is the paragraph's end
-  * line, that each break ends a line, and the lines of inline nodes relative to each other between
-  * two breaks. So the last stretch is placed at the end line, each earlier stretch ends one line
-  * before the next begins (less the lines its own nodes span, a code span across lines say), and
-  * each piece keeps its line relative to its stretch's first node.
+  * title is on the next line (fixed by commonmark/cmark#298, unmerged), and a paragraph that
+  * follows a reference definition starts on the definition's line, along with everything in it
+  * (commonmark/cmark#660). What cmark gets right is the paragraph's end line, that each break ends
+  * a line, and the lines of inline nodes relative to each other between two breaks. So the last
+  * stretch is placed at the end line, each earlier stretch ends one line before the next begins
+  * (less the lines its own nodes span, a code span across lines say), and each piece keeps its line
+  * relative to its stretch's first node.
   */
 private[markdown] object CmarkLines:
 

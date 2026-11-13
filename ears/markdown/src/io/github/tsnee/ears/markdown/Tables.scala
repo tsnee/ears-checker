@@ -104,11 +104,11 @@ private[markdown] object Tables:
 
   /** The underline of an underlined paragraph whose block starts on `block` and whose text starts
     * on `first`: the first line after `first`, up to `reported` (the last line its parser gives,
-    * which cmark 0.31.2 gives one line late when anything follows the heading), that matches the
-    * block's containers, is indented less than four columns past their content, and is only `-` or
-    * only `=` characters and spaces; or `reported`, if none is. No later line of a heading's text
-    * can look like that, since it would have been the underline; the first can, after link
-    * definitions (`[a]: /url`, then `===`).
+    * which cmark 0.31.2 gives one line late when anything follows the heading,
+    * commonmark/cmark#659), that matches the block's containers, is indented less than four columns
+    * past their content, and is only `-` or only `=` characters and spaces; or `reported`, if none
+    * is. No later line of a heading's text can look like that, since it would have been the
+    * underline; the first can, after link definitions (`[a]: /url`, then `===`).
     */
   def underline(block: Int, first: Int, reported: Int, source: Int => String): Int =
     val (containers, _) = Rows.opened(source(block))
