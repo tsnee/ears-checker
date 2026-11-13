@@ -2,7 +2,7 @@
 
 ### Requirement: Underline after a table
 
-When a line of only `-` or `=` characters and spaces directly follows a table's row, the Markdown reader SHALL read that line as the table's next line, never as the underline of a heading.
+When a line of only `-` or `=` characters, spaces, and tabs directly follows a table's row, the Markdown reader SHALL read that line as the table's next line, never as the underline of a heading.
 
 #### Scenario: A rule under a table
 
@@ -36,7 +36,7 @@ When a line of only `-` or `=` characters and spaces directly follows a table's 
 
 ### Requirement: Rows after an underline row
 
-When a table's last row is a line of only `-` or `=` characters and spaces that doesn't end the table, the Markdown reader SHALL read the lines directly after it as the table's next lines.
+When a table's last row is a line of only `-` or `=` characters, spaces, and tabs that doesn't end the table, the Markdown reader SHALL read the lines directly after it as the table's next lines.
 
 #### Scenario: Rows after an equals line
 
