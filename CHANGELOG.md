@@ -21,6 +21,7 @@ Every release of ears-checker, newest first. Each change adds its lines under Un
 
 - A Markdown table is no longer read as one long sentence, which gave a misleading finding and left the table's other requirements unchecked; a table right after a paragraph no longer merges into it.
 - An input given as OpenSpec JSON that isn't OpenSpec JSON, or Markdown the parser couldn't read, is named in the error, as an unreadable input is: `Cannot parse notes.json: not OpenSpec change or spec JSON: …`, where the message didn't say which input it was about. A broken change's error now says what's wrong with it as a change, not as a spec.
+- `--help` works anywhere among the options, where it worked only alone and was otherwise an unexpected option. With an input file it's invalid arguments, so a glob that picks up a file named `--help` fails rather than checking nothing.
 
 ## 0.2.0 - 2026-11-11
 

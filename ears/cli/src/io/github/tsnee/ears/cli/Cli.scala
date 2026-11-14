@@ -58,7 +58,7 @@ object Cli:
       writeLog: String => Unit,
       now: () => Instant
   ): ZLogger[String, Unit] =
-    val verbose = Settings.parseInvocation(arguments).exists(_.verbose)
+    val verbose = Settings.verbose(arguments)
     logger(Logging.minimumLevel(verbose), writeLog, now)
 
   /** Each entry at `minimum` or above as one line (see `Logging.line`), with its cause when it has
@@ -105,7 +105,7 @@ object Cli:
     val argumentText = Logging.argumentsDetail(arguments)
     Settings.parseInvocation(arguments) match
       case Left(Usage(text, true, _)) =>
-        ZIO.succeed(
+        annotated(Map("arguments" -> argumentText))(ZIO.logInfo("Help requested")).as(
           Outcome(exitCode = 0, stdout = s"$text\n", stderr = "", findings = 0, warnings = 0)
         )
       case Left(Usage(text, false, reasons)) =>

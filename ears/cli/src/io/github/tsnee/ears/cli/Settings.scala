@@ -7,6 +7,7 @@ import cats.syntax.all.*
 import com.monovore.decline.Command
 import com.monovore.decline.Help
 import com.monovore.decline.Opts
+import com.monovore.decline.Visibility
 import io.github.tsnee.ears.Profile
 
 enum InputFormat derives CanEqual:
@@ -36,25 +37,44 @@ object Settings:
 
   /** One settings per file argument, in order, each with the shared options; or one settings with
     * no file, for standard input. The usage text instead when help was requested or the arguments
-    * don't parse: decline reports both as `Help`, and only the invalid case carries errors.
+    * are invalid.
     */
   def parse(arguments: List[String]): Either[Usage, NonEmptyList[Settings]] =
     parseInvocation(arguments).map(_.inputs)
 
-  /** As `parse`, with the run-wide options too. */
+  /** As `parse`, with the run-wide options too. `--help` among the options asks for the usage, as
+    * long as no input file is named: with one, the arguments are invalid, so a glob that picks up a
+    * file named `--help` fails rather than checking nothing.
+    */
   def parseInvocation(arguments: List[String]): Either[Usage, Invocation] =
-    command
-      .parse(arguments, Map.empty)
-      .left
-      // The errors quote the arguments, which can come from file names a glob found: each is
-      // shown with its control characters as \uXXXX (Visible), while the usage keeps its lines.
-      .map(help =>
-        Usage(
-          Help.fromCommand(command).withErrors(help.errors.map(Visible.escape)).toString,
-          help.errors.isEmpty,
-          help.errors
-        )
-      )
+    command.parse(arguments, Map.empty) match
+      case Left(help)                      => Left(invalid(help.errors))
+      case Right(Request(false, invoking)) => Right(invoking)
+      case Right(Request(true, invoking))  =>
+        if invoking.inputs.exists(_.file.isDefined) then Left(invalid(List(helpWithFiles)))
+        else Left(Usage(Help.fromCommand(command).toString, requested = true, Nil))
+
+  /** Whether the arguments ask for every log entry (`--verbose`), help or not. */
+  def verbose(arguments: List[String]): Boolean =
+    command.parse(arguments, Map.empty).exists(_.invocation.verbose)
+
+  /** Why `--help` and an input file can't go together, and how to name a file `--help`. */
+  private val helpWithFiles =
+    "--help can't be given with input files: leave out --help, or name a file called --help after --."
+
+  /** The usage text, with the reasons the arguments were rejected. The reasons quote the arguments,
+    * which can come from file names a glob found: each is shown with its control characters as
+    * \uXXXX (Visible), while the usage keeps its lines.
+    */
+  private def invalid(reasons: List[String]): Usage =
+    Usage(
+      Help.fromCommand(command).withErrors(reasons.map(Visible.escape)).toString,
+      requested = false,
+      reasons
+    )
+
+  /** What decline parses: whether `--help` was given, and the invocation otherwise. */
+  private final case class Request(help: Boolean, invocation: Invocation)
 
   given CanEqual[NonEmptyList[Settings], NonEmptyList[Settings]] = CanEqual.derived
 
@@ -138,9 +158,17 @@ object Settings:
   private val verboseOpt =
     Opts.flag("verbose", "Log every step to standard error, not only warnings and errors.").orFalse
 
-  private val command = Command("ears-check", "Check requirements against the EARS templates.")(
-    (filesOpt, formatOpt, profileOpt, outputOpt, verboseOpt).mapN {
-      (files, format, profile, output, verbose) =>
-        Invocation(verbose, files.map(Settings(_, format, profile, output)))
-    }
-  )
+  /** `--help` as an ordinary flag: decline's own help flag matches only as the whole command line,
+    * so it's turned off below and this one is parsed like any other option. Listed among the
+    * options but not in the usage line, as decline's own flag was (partial visibility).
+    */
+  private val helpOpt =
+    Opts.flag("help", "Display this help text.", visibility = Visibility.Partial).orFalse
+
+  private val command =
+    Command("ears-check", "Check requirements against the EARS templates.", helpFlag = false)(
+      (helpOpt, filesOpt, formatOpt, profileOpt, outputOpt, verboseOpt).mapN {
+        (help, files, format, profile, output, verbose) =>
+          Request(help, Invocation(verbose, files.map(Settings(_, format, profile, output))))
+      }
+    )

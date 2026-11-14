@@ -191,6 +191,11 @@ else
   echo "$check: unreadable: skipped, since root can read any file"
 fi
 compare help 0 --help
+# --help anywhere among the options; with an input file, invalid (so a glob that picks up a file
+# named --help fails); after --, a file name.
+compare help-after-option 0 --output json --help
+compare help-with-file 2 --help "$inputs/plain.txt"
+compare help-after-dashes 2 -- --help
 compare bad-arguments 2 --format yaml
 compare empty-file-name 2 "$inputs/plain.txt" ""
 compare verbose 0 --verbose "$inputs/passing.txt"

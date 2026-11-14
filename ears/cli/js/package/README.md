@@ -24,10 +24,10 @@ $ echo $?
 - `--profile`: `classic` (lowercase `shall`) or `openspec` (uppercase `SHALL`, which OpenSpec's validator requires). OpenSpec input defaults to `openspec`, other input to `classic`.
 - `--output`: `text` (one line per finding) or `json` (one document, described in [JSON output](https://github.com/tsnee/ears-checker/blob/main/docs/json-output.md)).
 - `--verbose`: log every step to standard error, not only warnings and errors.
-- `--help`: print the usage and these options. For now it works only as the first argument; elsewhere it's an unexpected option (exit status 2).
+- `--help`: print the usage and these options, and read no input, wherever it comes among the options. With an input file it's invalid arguments (exit status 2), so a glob that picks up a file named `--help` fails rather than checking nothing; to check such a file, name it after `--`, which ends the options (`ears-check -- *` checks every file a glob finds).
 - Inline code: in every format, text between backticks is quoted, as in Markdown; its periods, commas, and words don't count.
 - Encoding: input is read as UTF-8 whatever the locale, and an input that isn't valid UTF-8 is an error giving the line and column of the first bad byte; a leading UTF-8 byte-order mark is ignored, and UTF-16 or UTF-32 input is named by its byte-order mark. Output is written as UTF-8.
-- Exit status: 0 when every requirement passes, or for `--help` as the first argument; 1 when any finding is reported; 2 when the arguments are invalid or an input can't be read or parsed.
+- Exit status: 0 when every requirement passes, or for `--help`; 1 when any finding is reported; 2 when the arguments are invalid or an input can't be read or parsed.
 
 It gives the same output, messages, and exit status as the JVM build of `ears-check`. What it checks, and its limits (in Markdown, only sentences containing `shall` are checked), are in the [ears-checker README](https://github.com/tsnee/ears-checker#limits).
 

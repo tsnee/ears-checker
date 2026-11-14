@@ -219,6 +219,6 @@ ears-checker is at 0.x, so its other interfaces can change in any minor release;
 
 - **An input can't be read or parsed** (a missing file, invalid UTF-8, JSON that isn't OpenSpec's, or Markdown given to the native binary with no cmark installed): exit status 2, a message on standard error, and nothing on standard output, even if other inputs were fine.
 - **Invalid arguments**: exit status 2, the reason and the usage text on standard error.
-- **`--help`** (as the first argument): the usage text, not JSON, on standard output, with exit status 0.
+- **`--help`** (anywhere among the options, with no input file): the usage text, not JSON, on standard output, with exit status 0.
 
 Otherwise the exit status is 0 when `findings` is empty and 1 when it isn't, whatever `warnings` holds. Empty input, or input with no requirements, gives `{"version":1,"checker":"0.3.0","checked":0,"findings":[],"warnings":[]}` and status 0.
