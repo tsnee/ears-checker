@@ -1,4 +1,5 @@
-# OpenSpec writes these skills (openspec update); they keep its formatting.
+# OpenSpec writes these skills and their links (openspec update); they keep its formatting.
 .claude/
+.agents/
 # cmark-gfm's source, copied unedited, with the README scripts/update-cmark-gfm writes.
 ears/markdown/cmark-gfm/
