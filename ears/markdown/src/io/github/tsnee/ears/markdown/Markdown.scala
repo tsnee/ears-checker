@@ -60,9 +60,10 @@ object Markdown:
       MarkdownText(blocks.paragraphs.flatMap(Extraction.sentences), blocks.warnings)
     }
 
-  /** A leading byte-order mark (U+FEFF) isn't text: commonmark.js and cmark drop it,
-    * commonmark-java doesn't. Written as a code point, since scalafmt would turn the escape into
-    * the character.
+  /** A leading byte-order mark (U+FEFF) isn't text. cmark-gfm leaves it out of the text but counts
+    * its three bytes in the first line's columns, so it's dropped before parsing, keeping the
+    * columns in step with the source `CmarkReader` cuts rows from. Written as a code point, since
+    * scalafmt would turn the escape into the character.
     */
   private def withoutByteOrderMark(content: String): String =
     if content.headOption.exists(_.toInt == 0xfeff) then content.drop(1) else content

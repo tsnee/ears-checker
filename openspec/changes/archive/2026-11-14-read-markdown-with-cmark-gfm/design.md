@@ -112,7 +112,7 @@ Nothing is released between this change and 0.3.0: PR #25 merges with this chang
 
 ## Open Questions
 
-- Whether CI's arm64 and macOS runners produce the recorded module checksum as the owner's Mac does; the build's checksum check answers it on the first CI run, and a mismatch would mean pinning more of the build environment.
+- Whether CI's arm64 and macOS runners produce the recorded module checksum as the owner's Mac does; the build's checksum check answers it on the first CI run, and a mismatch would mean pinning more of the build environment. (Answered 2026-11-14 by CI run 43605233860: x86-64 Linux, arm64 Linux, and arm64 macOS runners all built the recorded module.)
 
 ## Assumptions checked and unchecked
 
@@ -121,4 +121,4 @@ Checked on 2026-11-13: every observation above. Not checked, each with what the 
 - Debian or Ubuntu packaging of cmark-gfm: irrelevant once it's compiled in.
 - That Scala Native compiles cmark-gfm's 64 files from one directory with its default flags, as it did the probe's one file: the first implementation task builds it; if headers aren't found, the task passes `-I` through `nativeCompileOptions`.
 - That Chicory's build-time compiler runs on Mill's own JVM classpath without conflicts (ASM versions): if it conflicts, a small runner module runs it in its own process instead.
-- That esbuild bundles the three-line module with `import.meta.url` intact: checked by `scripts/check-npm-cli`, which runs the packed package.
+- That esbuild bundles the three-line module with `import.meta.url` intact: checked by `scripts/check-npm-cli`, which runs the packed package. (Wrong, found in task 3.3: esbuild only minifies `main.js`; the package holds the module beside it instead, decision 5.)

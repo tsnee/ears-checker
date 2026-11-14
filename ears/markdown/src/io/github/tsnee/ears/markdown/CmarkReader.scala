@@ -20,7 +20,9 @@ private[markdown] final case class ReadBlocks(
   * start line, its body rows' lines, and its end line are right. So the delimiter row is the line
   * before the first body row (the table's last line when it has none), the header row the line
   * before that, and the interrupted paragraph ends on the line before the header and starts on the
-  * table's first line. A cell is one line: its row's.
+  * table's first line. A cell is one line: its row's. (Reported as github/cmark-gfm#400, with a fix
+  * in github/cmark-gfm#401, both open on 2026-11-14; once a release has it, these corrections and
+  * the one in `extraCells` can go.)
   */
 private[markdown] object CmarkReader:
 
@@ -87,10 +89,10 @@ private[markdown] object CmarkReader:
   /** A body row's warning when it has more cells than the header and any extra one has text: the
     * cells counted from the row's source, since cmark-gfm drops the extra ones, and split as GitHub
     * splits them. The row is its line up to its end column (bytes of UTF-8) without the container
-    * markers before it. cmark-gfm gives every body row the table's start column, whatever the row's
-    * own prefix, so the markers are stripped here instead: a body row is never a list item's first
-    * line, and a row can't start with `>` (the line would start a block quote), so they're only
-    * indentation and block quote markers.
+    * markers before it. cmark-gfm gives every body row the table's start column (#400), whatever
+    * the row's own prefix, so the markers are stripped here instead: a body row is never a list
+    * item's first line, and a row can't start with `>` (the line would start a block quote), so
+    * they're only indentation and block quote markers.
     */
   private def extraCells(
       row: CmarkNode,

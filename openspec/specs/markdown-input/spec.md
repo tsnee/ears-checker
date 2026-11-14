@@ -95,63 +95,6 @@ The Markdown reader SHALL return each inline code span in a sentence as a code s
 - **WHEN** the reader reads the paragraph ```The formatter SHALL escape ``a ` b`` in output.```
 - **THEN** it returns a sentence that quotes ``a ` b`` between double backticks
 
-### Requirement: cmark found at run time
-
-When the Markdown reader on Scala Native first reads a document, the Markdown reader SHALL load an installed cmark library of release 0.30 or later, whatever its exact release.
-
-#### Scenario: Homebrew's cmark
-
-- **WHEN** the reader runs natively on macOS with Homebrew's cmark installed in `/opt/homebrew/lib`
-- **THEN** it loads that cmark and reads the document
-
-#### Scenario: Ubuntu's runtime package only
-
-- **WHEN** the reader runs natively on Ubuntu with only cmark's runtime package `libcmark0.30.2` installed, which has `libcmark.so.0.30.2` and no `libcmark.so`
-- **THEN** it loads `libcmark.so.0.30.2` and reads the document
-
-#### Scenario: A newer release
-
-- **WHEN** the reader runs natively where the installed cmark is a release newer than any the conformance suite has run on
-- **THEN** it loads that cmark and reads the document
-
-#### Scenario: An older release earlier in the search
-
-- **WHEN** the reader runs natively on Linux where `/usr/local/lib/libcmark.so` is cmark 0.29 and `/usr/lib/x86_64-linux-gnu/libcmark.so.0.30.2` is installed
-- **THEN** it loads `libcmark.so.0.30.2` and reads the document
-
-### Requirement: No library from the current directory
-
-The Markdown reader on Scala Native SHALL load cmark only by an absolute path, apart from the bare name `libcmark.so` on Linux while `LD_LIBRARY_PATH` names only absolute directories.
-
-#### Scenario: A library planted in a repository
-
-- **WHEN** the reader runs natively on macOS in a directory that holds a file named `libcmark.dylib`, with Homebrew's cmark installed
-- **THEN** it loads Homebrew's cmark from `/opt/homebrew/lib` and never opens the file in the current directory
-
-#### Scenario: An empty entry in LD_LIBRARY_PATH
-
-- **WHEN** the reader runs natively on Linux with `LD_LIBRARY_PATH` set to `:/opt/lib`, in a directory that holds a file named `libcmark.so`, with cmark installed in `/usr/lib/x86_64-linux-gnu`
-- **THEN** it loads cmark by its absolute path in `/usr/lib/x86_64-linux-gnu` and never opens the file in the current directory
-
-### Requirement: Relative library path on macOS
-
-If `DYLD_LIBRARY_PATH` has a relative directory entry, then the Markdown reader on Scala Native on macOS SHALL decline to load cmark, with a message naming `DYLD_LIBRARY_PATH`.
-
-#### Scenario: The current directory in DYLD_LIBRARY_PATH
-
-- **WHEN** the native binary reads a Markdown file on macOS with `DYLD_LIBRARY_PATH` set to `.`, in a directory that holds a file named `libcmark.dylib`
-- **THEN** it exits with status 2 and a message naming `DYLD_LIBRARY_PATH`, and never opens the file in the current directory
-
-#### Scenario: An empty entry in DYLD_LIBRARY_PATH
-
-- **WHEN** the native binary reads a Markdown file on macOS with `DYLD_LIBRARY_PATH` set to `:/opt/homebrew/lib`, in a directory that holds a file named `libcmark.dylib`
-- **THEN** it loads cmark from `/opt/homebrew/lib`, since macOS ignores the empty entry
-
-#### Scenario: Plain text with the current directory in DYLD_LIBRARY_PATH
-
-- **WHEN** the native binary reads a plain-text file on macOS with `DYLD_LIBRARY_PATH` set to `.`
-- **THEN** it checks the file as usual
-
 ### Requirement: Tables
 
 When a line of a paragraph is followed by a delimiter row with as many cells, the Markdown reader SHALL read that line, the delimiter row, and every later line of the paragraph up to the table's end as a table.
@@ -356,3 +299,35 @@ If a block of lines underlined by a line of `-` or `=` characters holds no table
 
 - **WHEN** the reader reads `| The scheduler shall list events. |` and `---`
 - **THEN** it returns no sentence, since the lines are a heading on GitHub too, with no delimiter row
+
+### Requirement: GitHub's parser
+
+The Markdown reader SHALL read a document's blocks and inline text as cmark-gfm 0.29.0.gfm.13 with its table extension reads them.
+
+#### Scenario: A link definition directly above a table
+
+- **WHEN** the reader reads `[s]: https://example.com/scheduler`, `| ID | Requirement |`, `|---|---|`, and `| A | [The scheduler][s] shall list events. |` with no blank line between them
+- **THEN** it returns `[The scheduler][s] shall list events.` on line 4, since cmark-gfm, like GitHub, reads the first line as paragraph text and not as a definition
+
+### Requirement: No Markdown library installed
+
+The Markdown reader SHALL read Markdown on a machine with no Markdown library installed.
+
+#### Scenario: The native binary on a bare Mac
+
+- **WHEN** the native binary reads a Markdown file on macOS with neither cmark nor cmark-gfm installed
+- **THEN** it returns the file's sentences
+
+#### Scenario: The native binary on a bare Linux
+
+- **WHEN** the native binary reads a Markdown file on Ubuntu 22.04 with no cmark package installed
+- **THEN** it returns the file's sentences
+
+### Requirement: Many tables in a row
+
+If a document holds thousands of tables, each starting on the line after the previous one's last line, then the Markdown reader SHALL return their sentences without failing.
+
+#### Scenario: Tables separated by indented code
+
+- **WHEN** the reader reads 1,600 repetitions of `The system SHALL a|b`, `-|-`, and `    code`, on each platform
+- **THEN** it returns 1,600 sentences `The system SHALL a`, one from each table's header row

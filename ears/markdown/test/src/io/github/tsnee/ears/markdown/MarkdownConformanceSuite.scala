@@ -2,9 +2,10 @@ package io.github.tsnee.ears.markdown
 
 import zio.test.*
 
-/** The same fixtures, with the same expected sentences and lines, on every platform: the JVM
-  * (commonmark-java), Node (commonmark.js), and Scala Native (cmark). The expected results are what
-  * the CLI's Markdown reader gave before the facade, checked against CommonMark.
+/** The same fixtures, with the same expected sentences and lines, on every platform: the JVM, Node,
+  * and Scala Native, each reading with cmark-gfm. The expected results are GitHub's: what the CLI's
+  * Markdown reader gave before the facade, checked against CommonMark, and every table fixture
+  * checked against GitHub's renderer.
   */
 object MarkdownConformanceSuite extends ZIOSpecDefault:
 

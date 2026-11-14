@@ -321,15 +321,6 @@ When the CI workflow runs for a release tag, the CI workflow SHALL build every f
 - **WHEN** the CI workflow runs for a pull request
 - **THEN** it builds the snapshot version, as before
 
-### Requirement: A library planted in the current directory
-
-If the native binary, run on Linux or macOS with its library path variable naming the current directory, runs code from a cmark library planted in the current directory, then the CI workflow SHALL fail the run.
-
-#### Scenario: A change that loads cmark by bare name again
-
-- **WHEN** a pushed commit makes the Linux binary try `libcmark.so` by bare name whatever `LD_LIBRARY_PATH` holds
-- **THEN** the run fails at the planted-library check on Linux, saying the planted library ran
-
 ### Requirement: Scala Native modules compiled one at a time
 
 The CI workflow SHALL compile the Scala Native modules one at a time, each after the previous one's compile has finished.
@@ -383,20 +374,6 @@ The CI workflow SHALL check the Coursier app's JVM launcher on Intel macOS and o
 
 - **WHEN** a CI run checks a commit
 - **THEN** the Coursier app check installs the JVM launcher on `macos-15-intel` and on `windows-latest` and compares it with the jar
-
-### Requirement: Pinned Node CLI install
-
-When the Node CLI check installs the packed CLI package, the check SHALL install each of its dependencies at the version and checksum the Markdown facade's lockfile records.
-
-#### Scenario: A newer dependency on npm
-
-- **WHEN** a newer `entities` 3.0.x is published to npm and the Node CLI check runs
-- **THEN** it installs `entities` 3.0.1, the version the lockfile records
-
-#### Scenario: A checksum that doesn't match
-
-- **WHEN** a package the check installs doesn't match the checksum its lockfile records
-- **THEN** the check fails before running the Node CLI, reporting the integrity error
 
 ### Requirement: No install scripts in the Node CLI install
 
