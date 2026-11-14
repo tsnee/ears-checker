@@ -31,4 +31,46 @@ object VisibleSuite extends ZIOSpecDefault:
         val digits = Integer.toHexString(c.toInt).reverse.padTo(4, '0').reverse
         assertTrue(Visible.escape(c.toString) == "\\u" + digits)
       }
+    ,
+    test("a lone high and a lone low surrogate become \\ud83d and \\ude00"):
+      assertTrue(Visible.escape("a\ud83db\ude00c") == "a\\ud83db\\ude00c")
+    ,
+    test("a surrogate pair stays as it is"):
+      assertTrue(Visible.escape("events 📅 😀.") == "events 📅 😀.")
+    ,
+    test("no lone surrogate is left"):
+      check(Gen.listOfBounded(0, 20)(withSurrogates).map(_.mkString)) { text =>
+        assertTrue(loneSurrogates(Visible.escape(text)).isEmpty)
+      }
+    ,
+    test("text of surrogate pairs and characters left alone is unchanged"):
+      check(Gen.listOfBounded(0, 20)(Gen.oneOf(pairs, plain)).map(_.mkString)) { text =>
+        assertTrue(Visible.escape(text) == text)
+      }
   )
+
+  /** Surrogate pairs, built from their code points: the lowest and highest outside the Basic
+    * Multilingual Plane and two emoji.
+    */
+  private val pairs: Gen[Any, String] =
+    Gen.elements(0x10000, 0x10ffff, 0x1f4c5, 0x1f600).map(Character.toChars(_).mkString)
+
+  /** One character `escape` leaves alone. */
+  private val plain: Gen[Any, String] = characters.filterNot(acted).map(_.toString)
+
+  /** The characters of `characters`, and surrogates, high and low, which a text then holds alone,
+    * in pairs, and in runs.
+    */
+  private val withSurrogates: Gen[Any, Char] =
+    Gen.oneOf(characters, Gen.elements('\ud83d', '\ud800', '\udbff', '\ude00', '\udc00', '\udfff'))
+
+  /** The positions of surrogates that aren't half of a pair: a high one not followed by a low one,
+    * or a low one not after a high one.
+    */
+  private def loneSurrogates(text: String): List[Int] =
+    text.indices.toList.filter { i =>
+      val c = text(i)
+      (Character
+        .isHighSurrogate(c) && !(i + 1 < text.length && Character.isLowSurrogate(text(i + 1)))) ||
+      (Character.isLowSurrogate(c) && !(i > 0 && Character.isHighSurrogate(text(i - 1))))
+    }

@@ -4,6 +4,8 @@ import cats.data.NonEmptyList
 import io.github.tsnee.ears.Profile
 import io.github.tsnee.ears.cli.TerminalText.acted
 import io.github.tsnee.ears.cli.TerminalText.controls
+import zio.json.*
+import zio.json.ast.Json
 import zio.test.*
 
 object CheckerSuite extends ZIOSpecDefault:
@@ -89,6 +91,27 @@ object CheckerSuite extends ZIOSpecDefault:
 
   private val extraCells =
     "This table row has 4 cells and its header 2, so GitHub doesn't show the last 2."
+
+  /** An OpenSpec spec whose one requirement is `text`, given as JSON escapes where it holds
+    * characters JSON source can't show (a lone surrogate among them).
+    */
+  private def escapedSpec(text: String): String =
+    "{\"id\": \"reminders\", \"requirements\": [{\"name\": \"Upcoming\", \"text\": \"" + text + "\"}]}"
+
+  /** A UTF-16 code unit that is half of a surrogate pair. */
+  private def surrogate(c: Char): Boolean = Character.isSurrogate(c)
+
+  /** The `requirement` of each finding in a JSON document, as a JSON parser reads it. */
+  private def requirementsIn(document: String): List[String] =
+    document.fromJson[Json.Obj].toOption.toList.flatMap(_.get("findings")).flatMap {
+      case Json.Arr(findings) =>
+        findings.toList.flatMap {
+          case finding: Json.Obj =>
+            finding.get("requirement").toList.collect { case Json.Str(t) => t }
+          case _ => Nil
+        }
+      case _ => Nil
+    }
 
   def spec = suite("EARS checker")(
     test("standard input: each line is checked and located as <stdin>"):
@@ -229,6 +252,39 @@ object CheckerSuite extends ZIOSpecDefault:
       test("a message from an unreadable input shows its control characters as \\uXXXX"):
         val outcome = Checker.outcome(plain, Left("Cannot read mis\u001b[1Asing.txt"))
         assertTrue(outcome.stderr == "Cannot read mis\\u001b[1Asing.txt\n")
+      ,
+      test(
+        "JSON output shows a C1 control, DEL, a line separator, and a lone surrogate as escapes"
+      ):
+        val outcome = Checker.outcome(
+          settings(None, Some(InputFormat.OpenSpecJson), None, Some(OutputFormat.Json)),
+          Right(escapedSpec("The scheduler lists [\\ud83d] [\\u009b] [\\u007f] [\\u2028] events."))
+        )
+        assertTrue(
+          outcome.stdout.contains(
+            "\"requirement\":\"The scheduler lists [\\ud83d] [\\u009b] [\\u007f] [\\u2028] events.\""
+          ),
+          !outcome.stdout.filterNot(_ == '\n').exists(c => acted(c) || surrogate(c)),
+          outcome.stdout.count(_ == '\n') == 1
+        )
+      ,
+      test("JSON output parses back to the requirement as it was read"):
+        val text = "The scheduler lists [\ud83d] [\u009b] [\u007f] [\u2028] events."
+        val outcome = Checker.outcome(
+          settings(None, Some(InputFormat.OpenSpecJson), None, Some(OutputFormat.Json)),
+          Right(escapedSpec("The scheduler lists [\\ud83d] [\\u009b] [\\u007f] [\\u2028] events."))
+        )
+        assertTrue(requirementsIn(outcome.stdout) == List(text))
+      ,
+      test("a lone surrogate in a fix shows as \\ud83d"):
+        val outcome = Checker.outcome(
+          settings(None, Some(InputFormat.OpenSpecJson), Some(Profile.OpenSpec), None),
+          Right(escapedSpec("The scheduler shall list [\\ud83d] events."))
+        )
+        assertTrue(
+          outcome.stdout.contains("Fix: \"The scheduler SHALL list [\\ud83d] events.\""),
+          !outcome.stdout.exists(surrogate)
+        )
       ,
       test("backslashes in a fix are left as they are"):
         val outcome = Checker.outcome(

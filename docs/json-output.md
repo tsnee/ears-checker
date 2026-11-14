@@ -1,8 +1,8 @@
 # JSON output
 
-`ears-check --output json` writes one JSON document to standard output for the whole run, every input together, for programs to read: CI annotations, editors, scripts. This page is the document's reference, for format version 1. For input that is valid Unicode it's the same on the JVM, on Node, and from the native binary.
+`ears-check --output json` writes one JSON document to standard output for the whole run, every input together, for programs to read: CI annotations, editors, scripts. This page is the document's reference, for format version 1. It's the same on the JVM, on Node, and from the native binary.
 
-The document is one line of UTF-8, followed by one line break. Non-ASCII characters aren't escaped.
+The document is one line of UTF-8, followed by one line break. Characters aren't escaped, except these, which a string holds as a `\u` escape in four lowercase hexadecimal digits: the control characters (U+0000 to U+001F, DEL, and U+0080 to U+009F; a line feed, tab, and the like as `\n`, `\t`, …), the line and paragraph separators (`\u2028`, `\u2029`), and a lone surrogate, which an OpenSpec requirement can hold through a JSON escape such as `\ud83d`. Each escape decodes to the same character, so a JSON parser reads the same text.
 
 `requirement` is the text as the checker read it, which isn't always the file's text: a plain-text line has the whitespace around it removed; a Markdown requirement has its markup removed, entities decoded, line breaks turned into spaces, and inline code written as a backtick span; an OpenSpec requirement's text is used as it is, so a line break in it is written as `\n`.
 

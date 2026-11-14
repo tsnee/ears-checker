@@ -103,7 +103,7 @@ object Checker:
   /** Text output keeps one line per finding: text taken from the input (a corrected sentence, a
     * file or requirement name) has each whitespace run, line breaks included, shown as one space,
     * and any other character a terminal would act on shown as `\uXXXX` (`Visible`). JSON output
-    * keeps the exact text.
+    * keeps the text, writing those characters as JSON escapes.
     */
   private def singleLine(text: String): String =
     Visible.escape(
@@ -129,7 +129,8 @@ object Checker:
           "findings" -> Json.Arr(inputs.flatMap(_.findings).map(findingJson)*),
           "warnings" -> Json.Arr(inputs.flatMap(_.warnings).map(warningJson)*)
         )
-        s"${document.toJson}\n"
+        // Each control, separator, and lone surrogate in a string as a JSON escape (`Visible`).
+        s"${Visible.escape(document.toJson)}\n"
 
   /** One input's text output: its findings and warnings in the order of their lines, a finding
     * first on a tie. The sort is stable, so findings keep their order among themselves, as do

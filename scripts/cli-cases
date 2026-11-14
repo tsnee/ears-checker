@@ -183,6 +183,21 @@ fi
 # space in the fix (Scala Native's regex \s has no vertical tab, so the code doesn't use it).
 printf 'When an order\013arrives the scheduler shall list events.\n' >"$inputs/vertical-tab.txt"
 compare vertical-tab 1 "$inputs/vertical-tab.txt"
+# An OpenSpec requirement in classic case holding a lone surrogate, a C1 control (CSI), and a line
+# separator, given as JSON escapes: under the OpenSpec profile its fix quotes them, and every build
+# shows each as \uXXXX in text output and as a JSON escape in JSON output (a lone surrogate would
+# otherwise be ? from the JVM and U+FFFD from Node).
+printf '%s\n' '{"id": "reminders", "requirements": [{"name": "Upcoming",' \
+  ' "text": "The scheduler shall list [\ud83d] [\u009b] [\u2028] events."}]}' \
+  >"$inputs/lone-surrogate.json"
+compare lone-surrogate-text 1 --profile openspec "$inputs/lone-surrogate.json"
+compare lone-surrogate-json 1 --profile openspec --output json "$inputs/lone-surrogate.json"
+for output in text json; do
+  if ! grep -qF '[\ud83d] [\u009b] [\u2028]' "$tmp/$subject/lone-surrogate-$output.out"; then
+    echo "$check: case lone-surrogate-$output: the output doesn't show the escapes" >&2
+    exit 1
+  fi
+done
 compare missing 2 "$inputs/missing.txt"
 compare directory 2 "$inputs/notes"
 if [ "$(id -u)" -ne 0 ]; then
