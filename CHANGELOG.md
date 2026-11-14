@@ -20,6 +20,7 @@ Every release of ears-checker, newest first. Each change adds its lines under Un
 ### Fixed
 
 - A Markdown table is no longer read as one long sentence, which gave a misleading finding and left the table's other requirements unchecked; a table right after a paragraph no longer merges into it.
+- An input given as OpenSpec JSON that isn't OpenSpec JSON is named in the error, as an unreadable input is: `Cannot parse notes.json: not OpenSpec change or spec JSON: …`, where the message didn't say which input it was about.
 
 ## 0.2.0 - 2026-11-11
 

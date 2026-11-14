@@ -80,6 +80,9 @@ object Settings:
     /** The name findings are located in. */
     def sourceName: String = settings.file.getOrElse("<stdin>")
 
+    /** The input's name in a message about it, such as a read or parse error. */
+    def messageName: String = settings.file.getOrElse("standard input")
+
   private def choice[A](name: String, choices: Map[String, A])(
       value: String
   ): ValidatedNel[String, A] =

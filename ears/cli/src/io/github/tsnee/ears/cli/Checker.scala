@@ -64,15 +64,23 @@ object Checker:
           warnings = checked.map(_.warnings.size).sum
         )
 
-  /** The requirements in one input's content and its reader's warnings, or why the content can't be
-    * parsed. Only Markdown has warnings.
+  /** The requirements in one input's content and its reader's warnings, or the message for standard
+    * error saying why the content can't be parsed. Only Markdown has warnings.
     */
   def read(settings: Settings, content: String): Either[String, Found] =
+    parse(settings, content).left.map(_.describe(settings.messageName))
+
+  /** The requirements in one input's content and its reader's warnings, or why the content can't be
+    * parsed.
+    */
+  def parse(settings: Settings, content: String): Either[ParseFailure, Found] =
     settings.inputFormat match
       case InputFormat.PlainText =>
         Right(Found(Candidate.fromPlainText(settings.sourceName, content), Nil))
-      case InputFormat.Markdown     => MarkdownInput.read(settings.sourceName, content)
-      case InputFormat.OpenSpecJson => Candidate.fromOpenSpec(content).map(Found(_, Nil))
+      case InputFormat.Markdown =>
+        MarkdownInput.read(settings.sourceName, content).left.map(ParseFailure.UnreadMarkdown(_))
+      case InputFormat.OpenSpecJson =>
+        Candidate.fromOpenSpec(content).left.map(ParseFailure.NotOpenSpec(_)).map(Found(_, Nil))
 
   /** One input's findings and warnings, each in the input's order. */
   private final case class Checked(findings: List[Finding], warnings: List[Warning])

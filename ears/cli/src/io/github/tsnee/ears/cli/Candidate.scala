@@ -48,6 +48,8 @@ object Candidate:
       case (line, i) if !line.isBlank => Candidate(Location.Line(file, i + 1), line.strip)
     }
 
-  /** Requirements from `openspec show --json` for a change (added and modified only) or a spec. */
+  /** Requirements from `openspec show --json` for a change (added and modified only) or a spec, or
+    * the JSON parser's account of why the content is neither.
+    */
   def fromOpenSpec(content: String): Either[String, List[Candidate]] =
     OpenSpecInput.candidates(content)

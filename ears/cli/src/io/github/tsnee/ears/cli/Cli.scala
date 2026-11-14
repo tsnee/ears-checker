@@ -145,12 +145,13 @@ object Cli:
             _ <- ZIO.logDebug("Reading input")
             content <- read(settings, reading)
             found <- ZIO
-              .fromEither(Checker.read(settings, content))
-              .tapError(reason =>
-                annotated(Map("error" -> "parse", "reason" -> reason, "exit" -> "2"))(
+              .fromEither(Checker.parse(settings, content))
+              .tapError(failure =>
+                annotated(Map("error" -> "parse", "reason" -> failure.reason, "exit" -> "2"))(
                   ZIO.logError("Cannot parse input")
                 )
               )
+              .mapError(_.describe(settings.messageName))
             _ <- annotated(
               Map(
                 "characters" -> content.length.toString,
@@ -167,7 +168,6 @@ object Cli:
 
   /** The input's text, or the message for standard error; the error itself is logged first. */
   private def read(settings: Settings, reading: Reading): IO[String, String] =
-    val source = settings.file.getOrElse("standard input")
     settings.file
       .fold(reading.standardInput)(reading.file)
       .tapError((failure, error) =>
@@ -179,7 +179,7 @@ object Cli:
           ZIO.logError("Cannot read input")
         )
       )
-      .mapError((failure, _) => failure.describe(source))
+      .mapError((failure, _) => failure.describe(settings.messageName))
 
   private def annotated[R, E, A](details: Map[String, String])(effect: ZIO[R, E, A]): ZIO[R, E, A] =
     ZIO.logAnnotate(details.map(LogAnnotation(_, _)).toSet)(effect)

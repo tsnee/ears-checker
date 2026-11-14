@@ -147,6 +147,15 @@ if ! grep -q ':4: warning: table-extra-cells: ' "$tmp/$subject/markdown-table-te
 fi
 compare invalid-utf-8 2 "$inputs/latin1.txt"
 compare utf-16 2 "$inputs/utf16.txt"
+# A .json file that isn't OpenSpec JSON: the message names it.
+printf '{not json' >"$inputs/not-openspec.json"
+compare not-openspec-json 2 "$inputs/not-openspec.json"
+if ! grep -q -F "Cannot parse $inputs/not-openspec.json: not OpenSpec change or spec JSON: " \
+  "$tmp/$subject/not-openspec-json.err"; then
+  echo "$check: case not-openspec-json: the message doesn't name the file" >&2
+  cat "$tmp/$subject/not-openspec-json.err" >&2
+  exit 1
+fi
 compare byte-order-mark 1 "$inputs/bom.txt"
 # Both builds agreeing isn't enough here: the fix must not carry the mark.
 if LC_ALL=C grep -q "$(printf '\357\273\277')" "$tmp/$subject/byte-order-mark.out"; then

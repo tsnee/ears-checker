@@ -169,10 +169,39 @@ object CheckerSuite extends ZIOSpecDefault:
           .outcome(settings(None, Some(InputFormat.OpenSpecJson), None, None), Right("{not json"))
       assertTrue(
         outcome.exitCode == 2,
-        outcome.stderr.startsWith("Not OpenSpec change or spec JSON:"),
+        outcome.stderr.startsWith("Cannot parse standard input: not OpenSpec change or spec JSON:"),
         outcome.stdout.isEmpty
       )
     ,
+    suite("an input that isn't OpenSpec JSON is named in the message")(
+      test("a file, by its name"):
+        assertTrue(
+          Checker.read(file("notes.json", None), "{not json") ==
+            Left(
+              "Cannot parse notes.json: not OpenSpec change or spec JSON: (expected '\"' got 'n')"
+            )
+        )
+      ,
+      test("standard input, as standard input"):
+        assertTrue(
+          Checker.read(settings(None, Some(InputFormat.OpenSpecJson), None, None), "{not json") ==
+            Left(
+              "Cannot parse standard input: not OpenSpec change or spec JSON: " +
+                "(expected '\"' got 'n')"
+            )
+        )
+      ,
+      test("the second of two files: only it"):
+        val outcome = combined(
+          file("change.json", None) -> changeMissingModal,
+          file("notes.json", None) -> "{not json"
+        )
+        assertTrue(
+          outcome.exitCode == 2,
+          outcome.stderr.startsWith("Cannot parse notes.json: "),
+          !outcome.stderr.contains("change.json")
+        )
+    ),
     suite("characters a terminal acts on")(
       test("an escape sequence in a requirement shows as \\u001b in its fix"):
         val outcome = Checker.outcome(
