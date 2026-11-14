@@ -53,14 +53,9 @@ jobs:
       # Dependencies, Mill's JDK, and the Mill launcher.
       - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
 
-      # cmark, which the native Markdown reader loads when it runs, in the native tests (Scala
-      # Native's clang is on the runner already; nothing links cmark). The native CLI's checks are
-      # in native.yml.
-      - name: Install cmark
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends libcmark-dev
-          dpkg-query -W 'libcmark*'
+      # The toolchain the Markdown parser's WebAssembly module is built with. (Scala Native
+      # compiles cmark-gfm's C with the runner's clang; the native CLI's checks are in native.yml.)
+      - uses: ./.github/actions/wasi-sdk
 
       # The OpenSpec CLI, and the TypeScript compiler and linters the npm package check uses,
       # with their whole dependency tree pinned by .github/tools/package-lock.json and no install
@@ -98,11 +93,15 @@ jobs:
       - name: Check the Node CLI
         run: scripts/check-npm-cli --out kept
 
-      # On a release tag, the jar and both tarballs, as checked, for the release.
+      # On a release tag, the jar and both tarballs, as checked, for the release, and the notices
+      # of cmark-gfm, which the jar, the CLI tarball, and the native binaries carry.
       - name: Name the jar for the release
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           mv kept/ears-check.jar "kept/ears-check-$EARS_RELEASE_VERSION.jar"
+          notices=$(./mill --ticker false show ears.markdown.parser.thirdPartyNotices |
+            jq -r 'sub("^ref:v[0-9]+:[0-9a-f]+:"; "")')
+          cp "$notices" kept/THIRD-PARTY-NOTICES.txt
           ls -l kept
 
       - if: startsWith(github.ref, 'refs/tags/v')
@@ -294,6 +293,8 @@ jobs:
           node-version: "22"
 
       - uses: coursier/cache-action@ee0650f98295f27a505e4bfd284c9bfaa913a465 # v9.0.1
+
+      - uses: ./.github/actions/wasi-sdk
 
       - name: Install the npm tools
         run: |

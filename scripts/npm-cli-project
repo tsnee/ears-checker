@@ -2,10 +2,9 @@
 # The sourcing script sets the variables below, so shellcheck can't see them assigned here.
 # shellcheck disable=SC2154
 # Installs the packed CLI package into an empty project the way CI may: `npm ci --ignore-scripts`
-# from a lockfile built here, so no dependency is resolved fresh and none runs an install script.
-# The lockfile is the tarball's own entry (its checksum computed from the file, its other fields
-# from its package.json) plus every package in ears/markdown/js/package-lock.json, the lockfile the
-# Markdown conformance suite installs commonmark from. Sourced by check-npm-cli and time-cli,
+# from a lockfile built here, so nothing is resolved fresh and no install script runs. The package
+# declares no dependencies, so the lockfile is the tarball's own entry alone (its checksum computed
+# from the file, its other fields from its package.json). Sourced by check-npm-cli and time-cli,
 # which set:
 #   check       its own name, for messages;
 #   root        the repository's root.
@@ -16,15 +15,12 @@
 # install_cli_project <project directory> <tarball> <npm cache>
 install_cli_project() {
   ncp_project=$1 ncp_tarball=$2 ncp_cache=$3
-  ncp_pins="$root/ears/markdown/js/package-lock.json"
   ncp_manifest=$(tar -xOzf "$ncp_tarball" package/package.json)
 
-  # The package must depend on exactly what the lockfile pins, or the install below couldn't
-  # use it.
-  ncp_wanted=$(printf '%s' "$ncp_manifest" | jq -S -c '.dependencies // {}')
-  ncp_pinned=$(jq -S -c '.packages[""].dependencies // {}' "$ncp_pins")
-  if [ "$ncp_wanted" != "$ncp_pinned" ]; then
-    echo "$check: the CLI package depends on $ncp_wanted, but $ncp_pins pins $ncp_pinned" >&2
+  # The package must declare no dependencies: the lockfile below has none to give it.
+  ncp_dependencies=$(printf '%s' "$ncp_manifest" | jq -c '.dependencies')
+  if [ "$ncp_dependencies" != "null" ]; then
+    echo "$check: the CLI package declares dependencies, $ncp_dependencies; it should have none" >&2
     exit 1
   fi
 
@@ -47,16 +43,15 @@ install_cli_project() {
     '{name: "user", private: true, dependencies: {"@tsnee/ears-checker-cli": $tarball}}' \
     >"$ncp_project/package.json"
   printf '%s' "$ncp_manifest" | jq --arg tarball "file:$ncp_tarball" \
-    --arg integrity "$ncp_integrity" --slurpfile pins "$ncp_pins" '
+    --arg integrity "$ncp_integrity" '
     {name: "user", lockfileVersion: 3, requires: true,
-     packages: ({"": {name: "user", dependencies: {"@tsnee/ears-checker-cli": $tarball}},
-                 "node_modules/@tsnee/ears-checker-cli": ({version, resolved: $tarball,
-                   integrity: $integrity} + {dependencies, bin, engines})}
-                + ($pins[0].packages | del(.[""])))}' >"$ncp_project/package-lock.json"
+     packages: {"": {name: "user", dependencies: {"@tsnee/ears-checker-cli": $tarball}},
+                "node_modules/@tsnee/ears-checker-cli": ({version, resolved: $tarball,
+                  integrity: $integrity} + {bin, engines})}}' >"$ncp_project/package-lock.json"
 
   if ! (cd "$ncp_project" &&
     npm ci --ignore-scripts --cache "$ncp_cache" --no-audit --no-fund --loglevel error >&2); then
-    echo "$check: npm ci failed installing the CLI package from its pinned lockfile" >&2
+    echo "$check: npm ci failed installing the CLI package from its lockfile" >&2
     exit 1
   fi
 }

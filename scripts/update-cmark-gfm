@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Replaces the vendored copy of cmark-gfm (ears/markdown/cmark-gfm/) with a release's source: its
+# src/ and extensions/ directories and its COPYING, unedited, from the tag's source archive on
+# GitHub, and rewrites the directory's README.md with the tag, its commit, and the archive's
+# SHA-256. Nothing else of the release (tests, tools, top-level build files) is copied. Running it
+# again for the same tag changes nothing. After an update, rebuild: the WebAssembly module's
+# recorded checksum and the method-size check in build.mill say whether anything else must change.
+# Needs gh (authenticated), tar, and shasum. Logs each step to standard error.
+#
+# --tag <tag> picks the release (default 0.29.0.gfm.13, the vendored one).
+set -euo pipefail
+
+usage() {
+  echo "Usage: update-cmark-gfm [--tag <tag>]" >&2
+  exit 2
+}
+log() { echo "update-cmark-gfm: $1" >&2; }
+fail() {
+  log "error: $1"
+  exit 1
+}
+
+tag=0.29.0.gfm.13
+while [ $# -gt 0 ]; do
+  case $1 in
+    --tag)
+      [ $# -ge 2 ] || usage
+      tag=$2
+      shift 2
+      ;;
+    *) usage ;;
+  esac
+done
+
+repo=github/cmark-gfm
+root=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
+target=$root/ears/markdown/cmark-gfm
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+if ! commit=$(gh api "repos/$repo/commits/$tag" -q .sha 2>"$work/gh.err"); then
+  fail "can't find tag $tag in $repo: $(cat "$work/gh.err")"
+fi
+log "tag $tag is commit $commit"
+
+if ! gh api "repos/$repo/tarball/$commit" >"$work/source.tar.gz" 2>"$work/gh.err"; then
+  fail "can't download the source archive of $commit: $(cat "$work/gh.err")"
+fi
+checksum=$(shasum -a 256 "$work/source.tar.gz" | cut -d' ' -f1)
+log "downloaded the source archive of $commit, SHA-256 $checksum"
+
+mkdir "$work/source"
+if ! tar -xzf "$work/source.tar.gz" -C "$work/source" 2>"$work/tar.err"; then
+  fail "can't extract the source archive: $(cat "$work/tar.err")"
+fi
+top=("$work"/source/*)
+[ ${#top[@]} -eq 1 ] && [ -d "${top[0]}" ] || fail "the archive doesn't hold one top directory"
+for part in src extensions COPYING; do
+  [ -e "${top[0]}/$part" ] || fail "the archive has no $part"
+done
+
+rm -rf "$target"
+mkdir -p "$target"
+cp -R "${top[0]}/src" "${top[0]}/extensions" "${top[0]}/COPYING" "$target/"
+cat >"$target/README.md" <<EOF
+# cmark-gfm $tag
+
+GitHub's Markdown parser, [cmark-gfm](https://github.com/$repo), release \`$tag\` (commit \`$commit\`): its \`src/\` and \`extensions/\` directories and its \`COPYING\`, copied unedited from the source archive GitHub gives for that commit (SHA-256 \`$checksum\` when copied). The checker compiles it into the native binary and into the WebAssembly module the JVM and Node run.
+
+These files are cmark-gfm's, under its license and notices in \`COPYING\`, not this repository's CC0. Never edit them here: \`scripts/update-cmark-gfm --tag <tag>\` replaces the directory from a release, and the checker corrects the parser's known errors in its own code.
+EOF
+log "replaced $target with $tag: $(find "$target" -type f | wc -l | tr -d ' ') files"

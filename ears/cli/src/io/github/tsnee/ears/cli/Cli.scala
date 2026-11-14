@@ -130,8 +130,8 @@ object Cli:
         annotated(details)(ZIO.logDebug("Arguments")) *> loaded.either.map(Checker.outcome)
 
   /** One input read and split into requirements and its reader's warnings, each warning logged at
-    * WARN, with its details on every entry it logs: for Markdown, those include the parser, or
-    * every library tried when there's none.
+    * WARN, with its details on every entry it logs: for Markdown, those include the parser, or the
+    * reason when it can't run.
     */
   private def load(
       settings: Settings,

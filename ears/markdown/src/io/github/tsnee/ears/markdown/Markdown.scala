@@ -5,22 +5,10 @@ package io.github.tsnee.ears.markdown
   */
 final case class Piece(text: String, code: Boolean, line: Option[Int]) derives CanEqual
 
-/** A paragraph, list items included, and the 1-based line its block starts on: from a parser, the
+/** A paragraph, list items and table cells included, and the 1-based line its block starts on: the
   * line of the first link reference definition that opens the block, if one does.
   */
 final case class Paragraph(line: Int, pieces: List[Piece]) derives CanEqual
-
-/** A paragraph as a platform's parser gives it, with the 1-based line it ends on, which every
-  * parser knows from the paragraph's block: tables are read from the paragraph's raw lines. A
-  * setext heading (a heading that spans more than one line) is given as a paragraph `underlined`,
-  * whose last line is its underline, or (from cmark, when anything follows) the line after; it's
-  * read only for a table it holds, since GitHub reads the underline as that table's next line.
-  */
-private[markdown] final case class ParsedParagraph(
-    paragraph: Paragraph,
-    lastLine: Int,
-    underlined: Boolean
-) derives CanEqual
 
 /** A requirement sentence and the 1-based line it starts on. */
 final case class Sentence(line: Int, text: String) derives CanEqual
@@ -38,24 +26,26 @@ enum MarkdownWarning derives CanEqual:
 final case class MarkdownText(sentences: List[Sentence], warnings: List[MarkdownWarning])
     derives CanEqual
 
-/** Why Markdown can't be read here (only on Scala Native, without a usable cmark): the message for
-  * the user, and each library tried, for the log.
-  */
-final case class MarkdownUnavailable(message: String, attempts: List[String]) derives CanEqual
-
-/** Requirement sentences in Markdown, the same on every platform: the platform's parser
-  * (`MarkdownParser`, one per platform) gives the paragraphs, `Tables`, shared, reads the GitHub
-  * tables in them cell by cell, and `Extraction`, shared, finds the sentences.
+/** Requirement sentences in Markdown, the same on every platform: cmark-gfm, GitHub's parser, with
+  * its table extension, parses the document (`CmarkGfm`, the one call that differs by platform),
+  * and shared code decodes its tree (`CmarkTree`), reads the paragraphs and table cells in it
+  * (`CmarkReader`), and finds the sentences (`Extraction`).
   */
 object Markdown:
 
-  /** The parser that reads Markdown on this platform, for the log; or why there's none. */
-  def parser(): Either[MarkdownUnavailable, String] = MarkdownParser.name()
+  /** The parser that reads Markdown, with its release, for the log; or why it can't run. */
+  def parser(): Either[String, String] = parserName
+
+  /** The parser's name, found once: on the JVM and Node, asking cmark-gfm its release starts a
+    * WebAssembly instance, and the answer never changes.
+    */
+  private lazy val parserName: Either[String, String] =
+    CmarkGfm.version().map(release => s"cmark-gfm $release")
 
   /** Each sentence of each paragraph and table cell, list items included, that contains the modal
     * keyword outside inline code, with the line it starts on. Headings, code blocks, and HTML
-    * blocks have no paragraphs, so nothing in them is read. Fails only on Scala Native, saying what
-    * to install, when no usable cmark is found.
+    * blocks have no paragraphs, so nothing in them is read. Fails only when the parser itself does
+    * (out of memory, say), saying why.
     */
   def sentences(content: String): Either[String, List[Sentence]] =
     read(content).map(_.sentences)
@@ -65,10 +55,10 @@ object Markdown:
     */
   def read(content: String): Either[String, MarkdownText] =
     val text = withoutByteOrderMark(content)
-    MarkdownParser
-      .loaded()
-      .flatMap(parse => Tables.read(parse(text), text, document => Right(parse(document))))
-      .map(blocks => MarkdownText(blocks.paragraphs.flatMap(Extraction.sentences), blocks.warnings))
+    CmarkGfm.records(text).flatMap(CmarkTree.decode).map { document =>
+      val blocks = CmarkReader.read(document, text)
+      MarkdownText(blocks.paragraphs.flatMap(Extraction.sentences), blocks.warnings)
+    }
 
   /** A leading byte-order mark (U+FEFF) isn't text: commonmark.js and cmark drop it,
     * commonmark-java doesn't. Written as a code point, since scalafmt would turn the escape into

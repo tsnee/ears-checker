@@ -9,7 +9,7 @@
 # table it prints for docs/performance.md is rendered from those records by
 # docs/measurements/time-cli.jq. One wall-clock run per cell, so small differences are noise. A
 # development tool, not part of any package.
-# Needs java, node, npm, jq, git, openspec, and cmark (for the native binary's Markdown).
+# Needs java, node, npm, jq, git, and openspec.
 #
 # --copies <n,n,...> (default 8,16,32,76) sets the input sizes; --builds <jvm,node,native>
 # (default all three) which builds to time; --records <file> appends the records to another file,
@@ -69,7 +69,7 @@ if wanted node; then
   package=$(built ears.cli.js.npmPackage)
   npm pack "$package" --pack-destination "$tmp" --cache "$tmp/cache" --silent >/dev/null
   set -- "$tmp"/tsnee-ears-checker-cli-*.tgz
-  # From a pinned lockfile and with no install scripts, as check-npm-cli installs it.
+  # From a lockfile and with no install scripts, as check-npm-cli installs it.
   check='time-cli' root=$(pwd)
   . "$root/scripts/npm-cli-project"
   install_cli_project "$tmp/project" "$1" "$tmp/cache"

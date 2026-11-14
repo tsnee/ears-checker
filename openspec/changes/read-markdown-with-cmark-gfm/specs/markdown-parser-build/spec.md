@@ -47,7 +47,7 @@ If a JVM method generated from the WebAssembly module exceeds 8,000 bytes of byt
 
 #### Scenario: Inlining turned back on
 
-- **WHEN** a developer builds the module without `-fno-inline-functions`, so that `cmark_parse_inlines` generates a method of 13,727 bytes
+- **WHEN** a developer builds the module without `-fno-inline-functions`, so that `cmark_parse_inlines` generates a method of 12,914 bytes
 - **THEN** the build fails, naming `cmark_parse_inlines` and its size
 
 ### Requirement: Notices in the CLI jar

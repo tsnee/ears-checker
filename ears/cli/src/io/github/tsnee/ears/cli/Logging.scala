@@ -3,7 +3,6 @@ package io.github.tsnee.ears.cli
 import java.time.Instant
 
 import io.github.tsnee.ears.Profile
-import io.github.tsnee.ears.markdown.MarkdownUnavailable
 import zio.LogLevel
 import zio.json.*
 
@@ -39,13 +38,10 @@ private[cli] object Logging:
       "output" -> outputName(settings.output)
     )
 
-  /** For a Markdown input, the parser that reads it, or, without one, every library tried. */
-  def parserDetails(parser: Option[Either[MarkdownUnavailable, String]]): Map[String, String] =
+  /** For a Markdown input, the parser that reads it, or why it can't run. */
+  def parserDetails(parser: Option[Either[String, String]]): Map[String, String] =
     parser.fold(Map.empty)(
-      _.fold(
-        unavailable => Map("parser" -> "none", "attempts" -> unavailable.attempts.mkString("; ")),
-        name => Map("parser" -> name)
-      )
+      _.fold(reason => Map("parser" -> "none", "reason" -> reason), name => Map("parser" -> name))
     )
 
   /** The details of one warning: its line, kind, and message. */

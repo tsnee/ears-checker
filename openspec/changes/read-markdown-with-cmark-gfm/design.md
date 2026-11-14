@@ -41,11 +41,11 @@ Observations (all 2026-11-13, on the owner's Mac, Apple M4 Max, unless noted):
 
 ### 1. A C entry point that writes the tree out, read by shared Scala
 
-The C entry point (`ears_cmark.c`, about 60 lines) parses with the table extension and walks the tree with cmark's iterator, writing one record per node event: enter or exit, the node type, its four position numbers, and its literal, length-prefixed so nothing needs escaping. Every platform calls the same function and gets the same bytes; a shared, pure decoder (`CmarkTree`) turns them into a tree, and a shared reader turns the tree into paragraphs, cells, and warnings.
+The C entry point (`ears_cmark.c`, about 130 lines with its comments) parses with the table extension and walks the tree in a loop, writing an enter record for each node (its type, its four position numbers, and its literal, length-prefixed so nothing needs escaping) and an exit record when it leaves it. cmark's own iterator gives leaf nodes no exit event, by a list of types internal to cmark; the walk gives every node both, so the records nest as the tree does and the decoder needs no list of cmark's types. cmark-gfm registers its extensions in global lists without locking, so the entry point registers them once under `pthread_once` (in wasi-libc too) and is safe to call from any thread: with first calls on 16 threads at once, unguarded registration aborted 98 of 100 runs, natively (found in task 2.2, 2026-11-14). Every platform calls the same function and gets the same bytes; a shared, pure decoder (`CmarkTree`) turns them into a tree, and a shared reader turns the tree into paragraphs, cells, and warnings.
 
 - _Alternative: call cmark's node API across the boundary_ (`cmark_node_first_child` and so on): one call per node per field, written three times, each slow across WebAssembly.
 - _Alternative: parse cmark's own XML renderer output_: no C of ours, but an XML parser in shared Scala for a format that escapes text; the length-prefixed records are simpler to read totally.
-- The iterator keeps the C walk flat at any nesting depth; the decoder builds the tree with an explicit stack, so neither recurses per level.
+- The loop keeps the C walk flat at any nesting depth; the decoder builds the tree with an explicit stack, so neither recurses per level.
 
 ### 2. Native: the C source compiled into the binary
 
@@ -55,7 +55,7 @@ A Mill task copies the vendored source, the three generated headers, and the ent
 
 ### 3. JVM and Node: one WebAssembly module, built from source with a pinned wasi-sdk
 
-A Mill task downloads the wasi-sdk 34 archive for the build host, checks its SHA-256 against the value recorded in `build.mill`, extracts it, and runs its clang with `-O2 -fno-inline-functions` and `PATH=/usr/bin:/bin`, so no `wasm-opt` on the host's path runs. It links with function names (kept for the method check and its messages), then strips them with the archive's `llvm-objcopy` into the module that ships, whose SHA-256 the build compares with the one recorded in `build.mill`.
+A Mill task downloads the wasi-sdk 34 archive for the build host, checks its SHA-256 against the value recorded in `build.mill`, extracts it, and runs its clang with `-O2 -fno-inline-functions -DNDEBUG` and `PATH` set to the toolchain's own `bin`, so no `wasm-opt` on the host's path runs. `-DNDEBUG` compiles cmark-gfm's assertions out, as its CMake release build does; they would otherwise put the build's file paths into the module (the spike's held 13), so its checksum would depend on where the repository is checked out. The native build defines `NDEBUG` for cmark-gfm's files too (decision 2), so both platforms run the same code and the binary carries no paths, as 0.2.0's carries none. It links with function names (kept for the method check and its messages), then strips them with the archive's `llvm-objcopy` into the module that ships, whose SHA-256 the build compares with the one recorded in `build.mill`.
 
 - _Alternative: commit the built module_: no toolchain in the build, but a 228 KB binary in the repository that its source can't be checked against unless something rebuilds it anyway.
 - _Alternative: Homebrew's `llvm`, `lld`, `wasi-libc`, `wasi-runtimes`_: versions move with each upgrade, so modules would differ between machines.
@@ -70,7 +70,7 @@ A Mill task runs Chicory's build-time compiler (`com.dylibso.chicory:build-time-
 
 ### 5. Node: the module beside `main.js`, through a three-line JavaScript module
 
-`ears/markdown/js/cmark-gfm-wasm.mjs` exports the module's bytes, read with `readFileSync(new URL("./cmark-gfm.wasm", import.meta.url))`; JavaScript because it's three lines that need `import.meta.url` beside the file, with a comment saying so. Scala.js imports it by a bare name; Mill's import map points the tests at a task directory holding both files (as `commonmark` is pointed at today), and esbuild bundles it into the CLI's `main.js`, beside which the package build copies `cmark-gfm.wasm`. Node's own `WebAssembly` runs it.
+`ears/markdown/js/cmark-gfm-wasm.mjs` exports the module's bytes, read with `readFileSync(new URL("./cmark-gfm.wasm", import.meta.url))`; JavaScript because it's three lines that need `import.meta.url` beside the file, with a comment saying so. Scala.js imports it by a bare name; Mill's import map points the tests at a task directory holding both files (as `commonmark` was pointed at), and the CLI's link at `./cmark-gfm-wasm.mjs`, which the package holds beside `main.js` and `cmark-gfm.wasm`. (The plan had esbuild bundle it into `main.js`, but esbuild only minifies `main.js` and doesn't bundle its imports, which is how `commonmark` was left to `node_modules`; found in task 3.3, 2026-11-14.) Node's own `WebAssembly` runs it.
 
 - _Alternative: embed the module in `main.js` as base64_: about 305 KB more, past the 2,100,000-byte limit.
 
@@ -80,7 +80,7 @@ The shared reader keeps `CmarkLines` for inline lines (backward from a paragraph
 
 ### 7. Extra cells: counted from the row's source
 
-cmark-gfm drops a row's extra cells, so the warning counts them from the source: the row's line, cut to its columns (bytes, so the line is sliced as UTF-8), split at each pipe not preceded by a backslash, as GitHub splits (the "pipes in table cells" fixtures). This is the only part of `Rows` that stays.
+cmark-gfm drops a row's extra cells, so the warning counts them from the source: the row's line up to its end column (bytes, so the line is sliced as UTF-8), without the indentation and block quote markers before it, split at each pipe not preceded by a backslash. (Not from its start column: cmark-gfm gives every body row the table's start column, whatever the row's own prefix, found in review, 2026-11-14.), as GitHub splits (the "pipes in table cells" fixtures). This is the only part of `Rows` that stays.
 
 ### 8. The parser's name
 

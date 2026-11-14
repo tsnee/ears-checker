@@ -10,7 +10,7 @@ import io.github.tsnee.ears.markdown.MarkdownWarning
 private[cli] object MarkdownInput:
 
   /** The candidates and the reader's warnings, each located in `file`; or why the Markdown couldn't
-    * be read (only on Scala Native, without cmark).
+    * be read (only when the parser itself fails, out of memory say).
     */
   def read(file: String, content: String): Either[String, Found] =
     Markdown

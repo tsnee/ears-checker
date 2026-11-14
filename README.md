@@ -18,7 +18,7 @@ The current release is **0.2.0**. Until 1.0, any minor release can change the AP
 
 Pick one way to run it; each gives the same output and exit status.
 
-**A native binary** (Linux on x64 or Arm with glibc 2.35 or later, such as Ubuntu 22.04 or Debian 12; macOS 15 or later on Apple silicon), from the [latest release](https://github.com/tsnee/ears-checker/releases/latest). It starts instantly and needs no JVM or Node:
+**A native binary** (Linux on x64 or Arm with glibc 2.35 or later, such as Ubuntu 22.04 or Debian 12; macOS 15 or later on Apple silicon), from the [latest release](https://github.com/tsnee/ears-checker/releases/latest). It starts instantly and needs no JVM, Node, or anything else installed:
 
 ```sh
 curl -fL -O https://github.com/tsnee/ears-checker/releases/download/v0.2.0/ears-check-0.2.0-linux-x64 \
@@ -29,7 +29,7 @@ mv ears-check-0.2.0-linux-x64 ears-check
 ./ears-check reqs.txt
 ```
 
-Use `linux-arm64` or `macos-arm64` in the file names for those platforms, and `shasum -a 256 -c` where there's no `sha256sum`. The checksum shows the download is intact; [docs/release-files.md](docs/release-files.md) also shows how to check who built it. To read Markdown the binary needs [cmark](https://github.com/commonmark/cmark) 0.30 or later: `brew install cmark` on macOS, `apt install cmark` on Debian and Ubuntu, or your system's cmark package. The macOS binary is ad-hoc signed but not notarized: download it with `curl` as above, since macOS won't open such a program after a browser downloads it.
+Use `linux-arm64` or `macos-arm64` in the file names for those platforms, and `shasum -a 256 -c` where there's no `sha256sum`. The checksum shows the download is intact; [docs/release-files.md](docs/release-files.md) also shows how to check who built it. The macOS binary is ad-hoc signed but not notarized: download it with `curl` as above, since macOS won't open such a program after a browser downloads it.
 
 **The jar**, on JDK 17 or later, from the same release:
 
@@ -38,7 +38,7 @@ curl -fLO https://github.com/tsnee/ears-checker/releases/download/v0.2.0/ears-ch
 java -XX:+IgnoreUnrecognizedVMOptions --sun-misc-unsafe-memory-access=allow -jar ears-check-0.2.0.jar reqs.txt
 ```
 
-The two flags stop JDK 23 and later from warning about the Scala runtime's use of `sun.misc.Unsafe`; older JDKs skip them.
+The two flags stop JDK 24 and later from warning about some Scala libraries' use of `sun.misc.Unsafe`; older JDKs skip them.
 
 **[Coursier](https://get-coursier.io)**, as an app from this repository's channel. It installs the latest release's native binary where there is one (Linux on x64 or Arm, macOS on Apple silicon), and runs on the JVM (JDK 17 or later) everywhere else:
 
@@ -47,7 +47,7 @@ cs install --channel https://raw.githubusercontent.com/tsnee/ears-checker/main/c
 ears-check reqs.txt
 ```
 
-`cs update ears-check` moves it to a newer release. The native binary needs cmark to read Markdown, as above. Coursier keeps it next to the `ears-check` it installs, as `.ears-check.aux` (by default in `~/.local/share/coursier/bin` on Linux and `~/Library/Application Support/Coursier/bin` on macOS); [docs/release-files.md](docs/release-files.md) shows how to check who built it.
+`cs update ears-check` moves it to a newer release. Coursier keeps it next to the `ears-check` it installs, as `.ears-check.aux` (by default in `~/.local/share/coursier/bin` on Linux and `~/Library/Application Support/Coursier/bin` on macOS); [docs/release-files.md](docs/release-files.md) shows how to check who built it.
 
 **Node** 22 or later, as the npm package [`@tsnee/ears-checker-cli`](https://www.npmjs.com/package/@tsnee/ears-checker-cli):
 
@@ -103,7 +103,7 @@ For each requirement that doesn't fit, the checker reports what's wrong, and a c
 
 - **It checks form, not content.** It doesn't judge vague words ("quickly", "user-friendly"), whether a requirement can be tested, or whether it's the right requirement. It reads English only.
 - **In Markdown, only sentences containing the word `shall`**, in any case and outside inline code, are checked, in paragraphs, list items, block quotes, and the cells of GitHub-style tables (each cell on its own, on its row's line). A sentence with `should` and no `shall` isn't reported in Markdown (in plain text it's a `weak-modal` finding). Headings, code blocks, and HTML aren't read.
-- **Markdown tables are read as GitHub reads them**, cell by cell, with one difference: a link definition such as `[s]: …` directly above a table resolves `[…][s]` in its cells, where GitHub shows the definition as text and the link unresolved. A table row with more cells than its header gets a warning beside the findings (`table-extra-cells`), since GitHub doesn't show the extra cells; warnings don't change the exit status.
+- **Markdown is read as GitHub reads it**, with GitHub's own parser, [cmark-gfm](https://github.com/github/cmark-gfm), built in: tables cell by cell. A table row with more cells than its header gets a warning beside the findings (`table-extra-cells`), since GitHub doesn't show the extra cells; warnings don't change the exit status.
 - **In plain text, every nonblank line is one requirement.**
 - **In OpenSpec JSON, requirement text only:** each added and modified requirement of a change, or every requirement of a spec. Scenarios aren't checked. A `spec.md` file given directly is read as Markdown, which also checks scenario lines that quote a requirement: check OpenSpec through its JSON, as [below](#openspec).
 
@@ -134,7 +134,7 @@ $ echo $?
 - Standard output carries only the findings or the usage text. Standard error carries error messages and log entries, one line each: a timestamp, the level, the message, and details as `key=value` pairs. Without `--verbose`, only failures are logged, each with its input, the error's type and message, and the exit status.
 - Inline code: in every format, text between backticks is quoted, as in Markdown (a run of backticks up to the next run of the same length; `` \` `` is a plain backtick and `\\` a plain backslash). Its periods, commas, and words don't count, so `` `Cannot read notes.txt. Check the path.` `` is one quoted word, and a requirement whose only `shall` is quoted still lacks one.
 - Encoding: input is read as UTF-8 whatever the locale, and an input that isn't valid UTF-8 is an error giving the line and column of the first bad byte; a leading UTF-8 byte-order mark is ignored, and UTF-16 or UTF-32 input is named by its byte-order mark. Output is written as UTF-8. On Linux, the JVM decodes file names on the command line with the locale's charset, so under the C locale (common in Docker images) it can't open a file whose name isn't ASCII; run it under a UTF-8 locale, such as `LC_ALL=C.UTF-8`. The Node build and the native binary open such a file under any locale.
-- The native binary and cmark: it finds cmark when it runs, whatever release you have (0.30 or later), in the absolute directories `LD_LIBRARY_PATH` (`DYLD_LIBRARY_PATH` on macOS) names, Homebrew's directory (`$HOMEBREW_PREFIX/lib` or the usual ones), MacPorts', or the system's. It never loads cmark from the current directory. On macOS, while `DYLD_LIBRARY_PATH` has a relative entry such as `.`, it reads no Markdown and says to remove the entry, since macOS would look there first. (On Linux, such an entry in `LD_LIBRARY_PATH` exposes every program's startup libraries, so leave relative and empty entries out.) Without cmark, plain text and OpenSpec JSON still work, and a Markdown file gets a message saying what to install.
+- The Markdown parser: every build reads Markdown with cmark-gfm 0.29.0.gfm.13 and its table extension, built from the same source: compiled into the native binary, and as a WebAssembly module in the jar and the npm package. Nothing needs installing, and the native binary loads no library beyond the system's. cmark-gfm's license notices are in the jar (`META-INF/cmark-gfm/COPYING`), the npm package (`cmark-gfm/COPYING`), and each release (`THIRD-PARTY-NOTICES.txt`).
 
 ### OpenSpec
 

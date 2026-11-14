@@ -420,6 +420,22 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
           "| B | More notes. |\n| C | one | two | three |\n",
         List(MarkdownWarning.ExtraCells(line = 9, cells = 4, headerCells = 2))
       ),
+      // A row whose block quote prefix is narrower or wider than the table's first line's: cmark-
+      // gfm gives every body row the table's start column, so the row's cells are counted from
+      // its own line. GitHub's renderer, 2026-11-14: each table's one row is
+      // `<td>A</td><td>The scheduler shall list events.</td>`, the first row's third cell hidden.
+      readFixture(
+        "a row in a block quote with a narrower prefix gets its warning",
+        "> | ID | Requirement |\n> |---|---|\n>A | The scheduler shall list events. | extra\n",
+        List(MarkdownWarning.ExtraCells(line = 3, cells = 3, headerCells = 2)),
+        Sentence(3, "The scheduler shall list events.")
+      ),
+      readFixture(
+        "a row in a block quote with a wider prefix gets no warning",
+        ">| ID | Requirement |\n>|---|---|\n  > | A | The scheduler shall list events. |\n",
+        Nil,
+        Sentence(3, "The scheduler shall list events.")
+      ),
       // GitHub splits the cell at the pipe in the link's destination, shows the rest of the cell
       // ("The proxy shall [log](https://example.com/a") as text, and hides "b) requests.".
       readFixture(
@@ -579,17 +595,16 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
         Nil,
         Sentence(2, "2) The calendar shall sync.")
       ),
-      // A known difference, accepted by the owner: GitHub shows the definition as paragraph text,
-      // "[s]: https://example.com/s The calendar shall sync.", since the table interrupts the
-      // paragraph before it becomes a definition (as in "a definition directly above a table");
-      // the parsers take it as a definition. What this fixture holds is that the paragraph's text
-      // starts after the definition, and the table after that.
+      // The table interrupts the paragraph before it becomes a definition (as in "a definition
+      // directly above a table"), so the definition is paragraph text. GitHub's renderer,
+      // 2026-11-14: `<p>[s]: <a …>https://example.com/s</a><br>The calendar shall sync.</p>`, then
+      // the table.
       readFixture(
         "a definition, then text, over a table",
         "[s]: https://example.com/s\nThe calendar shall sync.\n| ID | Requirement |\n|---|---|\n" +
           "| A | The scheduler shall list events. |\n",
         Nil,
-        Sentence(2, "The calendar shall sync."),
+        Sentence(1, "[s]: https://example.com/s The calendar shall sync."),
         Sentence(5, "The scheduler shall list events.")
       )
     ),
@@ -878,16 +893,16 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
         Nil,
         Sentence(3, "The scheduler shall list events.")
       ),
-      // A known difference, accepted by the owner (2026-11-12): directly above a table, with no
-      // blank line, GitHub reads `[s]: …` as paragraph text (the table interrupts it before it
-      // becomes a definition) and shows `[The scheduler][s]` unresolved; all three parsers take it
-      // as a definition, so the reader resolves the link. Checked on GitHub's renderer 2026-11-12.
+      // Directly above a table, with no blank line, `[s]: …` is paragraph text (the table
+      // interrupts it before it becomes a definition), so `[The scheduler][s]` stays unresolved.
+      // GitHub's renderer, 2026-11-14: `<p>[s]: <a …>https://example.com/scheduler</a></p>`, then
+      // the cell `<td>[The scheduler][s] shall list events.</td>`.
       readFixture(
-        "a definition directly above a table resolves the cell's link, unlike GitHub",
+        "a definition directly above a table stays paragraph text, as on GitHub",
         "[s]: https://example.com/scheduler\n| ID | Requirement |\n|---|---|\n" +
           "| A | [The scheduler][s] shall list events. |\n",
         Nil,
-        Sentence(4, "The scheduler shall list events.")
+        Sentence(4, "[The scheduler][s] shall list events.")
       ),
       // GitHub keeps the indented line before the table as paragraph text, not a list item.
       readFixture(
@@ -937,6 +952,76 @@ object MarkdownConformanceSuite extends ZIOSpecDefault:
         )
       )*
     ),
+    // cmark-gfm gives a table's header row the line of the paragraph the table interrupts, and
+    // that paragraph no positions; the reader places both from the table's other lines. Each
+    // checked against GitHub's renderer (`gh api markdown -F mode=gfm`) on 2026-11-14: the
+    // paragraph, then a table whose header is the first sentence's cell (GitHub shows each soft
+    // break as `<br>`, which the reader reads as a space).
+    suite("lines around a table that interrupts a paragraph")(
+      readFixture(
+        "at the top level",
+        "Reminders are sent daily.\nThe scheduler shall send reminders.\n" +
+          "| The calendar shall sync. | Note |\n|---|---|\n| A | The report shall print. |\n",
+        Nil,
+        Sentence(2, "The scheduler shall send reminders."),
+        Sentence(3, "The calendar shall sync."),
+        Sentence(5, "The report shall print.")
+      ),
+      readFixture(
+        "in a block quote",
+        "> Reminders are sent daily.\n> The scheduler shall send reminders.\n" +
+          "> | The calendar shall sync. | Note |\n> |---|---|\n> | A | The report shall print. |\n",
+        Nil,
+        Sentence(2, "The scheduler shall send reminders."),
+        Sentence(3, "The calendar shall sync."),
+        Sentence(5, "The report shall print.")
+      ),
+      readFixture(
+        "in a list item",
+        "- Reminders are sent daily.\n  The scheduler shall send reminders.\n" +
+          "  | The calendar shall sync. | Note |\n  |---|---|\n  | A | The report shall print. |\n",
+        Nil,
+        Sentence(2, "The scheduler shall send reminders."),
+        Sentence(3, "The calendar shall sync."),
+        Sentence(5, "The report shall print.")
+      ),
+      // GitHub: the table has a header and no body.
+      readFixture(
+        "a table with no body rows",
+        "The scheduler shall send reminders.\n| The calendar shall sync. | Note |\n|---|---|\n\n" +
+          "The report shall print.\n",
+        Nil,
+        Sentence(1, "The scheduler shall send reminders."),
+        Sentence(2, "The calendar shall sync."),
+        Sentence(5, "The report shall print.")
+      ),
+      // GitHub: `<code>daily reminders</code>.<br>` and the next line in the same paragraph.
+      readFixture(
+        "a paragraph with a code span across lines and a hard break",
+        "The scheduler shall send `daily\nreminders`.  \nThe calendar shall sync.\n" +
+          "| The report shall print. | Note |\n|---|---|\n| A | The audit log shall record it. |\n",
+        Nil,
+        Sentence(1, "The scheduler shall send `daily reminders`."),
+        Sentence(3, "The calendar shall sync."),
+        Sentence(4, "The report shall print."),
+        Sentence(6, "The audit log shall record it.")
+      )
+    ),
+    // `markdown-input`'s "Many tables in a row": each table starts on the line after the last
+    // one's, ended by indented code. GitHub's renderer, 2026-11-14: 1,600 tables, each with the
+    // header `The system SHALL a | b` and no body, and 1,600 code blocks.
+    test("1,600 tables in a row, separated by indented code: one sentence from each"):
+      val content = "The system SHALL a|b\n-|-\n    code\n" * 1600
+      assertTrue(
+        Markdown.read(content) ==
+          Right(
+            MarkdownText(
+              List.tabulate(1600)(table => Sentence(3 * table + 1, "The system SHALL a")),
+              Nil
+            )
+          )
+      )
+    ,
     // Parsers limit nesting differently, so the results needn't agree; none may crash.
     suite("deep nesting")(
       test("5,000 levels of emphasis: the sentence is still read"):
