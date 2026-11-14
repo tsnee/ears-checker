@@ -1,0 +1,24 @@
+# wasi-sdk, the C toolchain the Markdown parser's WebAssembly module is built with: the build
+# downloads the runner's archive into ~/.cache/ears-checker/wasi-sdk once, and this caches it by
+# the archive's name and the SHA-256 build.mill records for it, so a new release or checksum starts
+# a new cache. The build checks the archive against that checksum before extracting it, whether
+# it came from the cache or the network. Used after checkout and coursier/cache-action, in every
+# job that builds the module (the jar, the npm packages, the tests).
+name: wasi-sdk cache
+description: Restores and saves the wasi-sdk archive the build downloads.
+
+runs:
+  using: composite
+  steps:
+    - name: Name the wasi-sdk archive
+      id: archive
+      shell: bash
+      run: |
+        key=$(./mill --ticker false show ears.markdown.parser.wasiSdkKey | jq -r .)
+        echo "The wasi-sdk archive and its checksum: $key"
+        echo "key=$key" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ears-checker/wasi-sdk
+        key: ${{ steps.archive.outputs.key }}

@@ -30,7 +30,8 @@ The document is one line of UTF-8, followed by one line break. Non-ASCII charact
       "span": { "start": 21, "end": 21 },
       "fix": "When an order arrives, the checkout service shall send a receipt."
     }
-  ]
+  ],
+  "warnings": []
 }
 ```
 
@@ -48,6 +49,7 @@ When an order arrives the checkout service shall send a receipt.
 | `checker` | string | The ears-checker release that wrote the document, such as `0.2.0`; a build between releases gives the next version as a snapshot, such as `0.3.0-SNAPSHOT` after 0.2.0. Findings can differ between releases within a format version. |
 | `checked` | number | How many requirements were checked, in every input together. |
 | `findings` | array | One object per finding, in input order: the inputs in command-line order, and each input's requirements in the order they appear. A requirement with several problems has one finding for each, ordered by where their spans start. Empty when every requirement passes. |
+| `warnings` | array | One object per [warning](#a-warning), in input order like `findings`: a problem in the input that isn't a requirement's, such as a Markdown table row whose extra cells GitHub doesn't show. Empty when there are none, and always present from 0.3.0. Warnings don't change the exit status. |
 
 ## A finding
 
@@ -176,6 +178,28 @@ text = units[2 * start : 2 * end].decode("utf-16-le")
 
 Whether a finding has a fix is in its `fix` field; the last column only says what to expect.
 
+## A warning
+
+A warning is a problem in the input that isn't a requirement's. It doesn't change the exit status.
+
+| Field | Type | What it is |
+| --- | --- | --- |
+| `location` | object | Where it is: a [`line`](#line-plain-text-markdown-and-standard-input) location. |
+| `kind` | string | What it is, from the table below. |
+| `message` | string | What's wrong, for people. Its wording can change in any release. |
+
+| Kind | The problem |
+| --- | --- |
+| `table-extra-cells` | A Markdown table's body row has more cells than its header row. GitHub doesn't show the extra cells, and the checker doesn't read them. |
+
+```json
+{
+  "location": { "type": "line", "file": "notes.md", "line": 9 },
+  "kind": "table-extra-cells",
+  "message": "This table row has 4 cells and its header 2, so GitHub doesn't show the last 2."
+}
+```
+
 ## Stability
 
 While the version is 1:
@@ -184,7 +208,7 @@ While the version is 1:
 - A new location `type` also comes with a new version.
 - These can change without a new version, so a consumer must allow for them:
   - new fields, in the document, a finding, or a location (ignore fields you don't know);
-  - new kinds (treat an unknown `kind` as a finding like any other);
+  - new kinds, of finding and of warning (treat an unknown `kind` as a finding or warning like any other); `warnings` itself arrived this way, in 0.3.0;
   - the wording of `message`, and which findings and fixes the checker gives for a requirement, as the classifier improves;
   - the order of fields within an object (read fields by name).
   - how a requirement's text is taken from its input (and so `requirement`, `span`, and `checked`), and how much of `requirement` a kind's span covers. A span still always indexes the same finding's `requirement`; the CHANGELOG says when either changes, and `checker` says which release wrote a document.
@@ -197,4 +221,4 @@ ears-checker is at 0.x, so its other interfaces can change in any minor release;
 - **Invalid arguments**: exit status 2, the reason and the usage text on standard error.
 - **`--help`** (as the first argument): the usage text, not JSON, on standard output, with exit status 0.
 
-Otherwise the exit status is 0 when `findings` is empty and 1 when it isn't. Empty input, or input with no requirements, gives `{"version":1,"checker":"0.2.0","checked":0,"findings":[]}` and status 0.
+Otherwise the exit status is 0 when `findings` is empty and 1 when it isn't, whatever `warnings` holds. Empty input, or input with no requirements, gives `{"version":1,"checker":"0.3.0","checked":0,"findings":[],"warnings":[]}` and status 0.

@@ -3,7 +3,6 @@ package io.github.tsnee.ears.cli
 import java.time.Instant
 
 import io.github.tsnee.ears.Profile
-import io.github.tsnee.ears.markdown.MarkdownUnavailable
 import zio.LogLevel
 import zio.test.*
 
@@ -129,20 +128,14 @@ object LoggingSuite extends ZIOSpecDefault:
       ,
       test("Markdown: the parser that reads it"):
         assertTrue(
-          Logging.parserDetails(Some(Right("cmark 0.31.2 at /opt/homebrew/lib/libcmark.dylib"))) ==
-            Map("parser" -> "cmark 0.31.2 at /opt/homebrew/lib/libcmark.dylib")
+          Logging.parserDetails(Some(Right("cmark-gfm 0.29.0.gfm.13"))) ==
+            Map("parser" -> "cmark-gfm 0.29.0.gfm.13")
         )
       ,
-      test("Markdown with no parser: every library tried"):
-        val unavailable = MarkdownUnavailable(
-          "Markdown needs the cmark library",
-          List("libcmark.so: cannot open", "/usr/lib/libcmark.so.0.29.0: release 0.29.0")
-        )
+      test("Markdown whose parser can't run: why"):
         assertTrue(
-          Logging.parserDetails(Some(Left(unavailable))) == Map(
-            "parser" -> "none",
-            "attempts" -> "libcmark.so: cannot open; /usr/lib/libcmark.so.0.29.0: release 0.29.0"
-          )
+          Logging.parserDetails(Some(Left("cmark-gfm failed: module not found"))) ==
+            Map("parser" -> "none", "reason" -> "cmark-gfm failed: module not found")
         )
     )
   )

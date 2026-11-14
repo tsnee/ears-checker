@@ -7,7 +7,7 @@
 # Needs node, npm, java, jq, git, openspec, and openssl on the PATH.
 #
 # --out <dir> keeps the tarball it installed and the jar it compared it with (as ears-check.jar)
-# in <dir>, for a release to attach: copied before any dependency's code runs, and checked
+# in <dir>, for a release to attach: copied before any installed code runs, and checked
 # unchanged at the end.
 set -e
 
@@ -78,10 +78,11 @@ fi
 echo "check-npm-cli: checking $(basename "$tarball"), sha256 $(sha256 "$tarball")"
 echo "check-npm-cli: against $jar, sha256 $(sha256 "$jar")"
 
-# With --out, the files a release attaches are kept now, before any dependency's code runs. Every
+# With --out, the files a release attaches are kept now, before any installed code runs. Every
 # file in <dir> then, these two and any an earlier check kept there (CI's check-npm-package puts
 # the library's tarball in the same kept/), is checked against its checksum at the end. The main
-# control is the pinned lockfile below; this is a second line.
+# control is the install below, from a lockfile with no dependencies and no install scripts;
+# this is a second line.
 if [ -n "$out" ]; then
   mkdir -p "$out"
   cp "$tarball" "$out/$(basename "$tarball")"
@@ -121,26 +122,39 @@ if [ "$size" -gt "$limit" ]; then
   exit 1
 fi
 
-# An empty project with only the packed package installed, from a pinned lockfile and with no
-# install scripts (scripts/npm-cli-project).
+# The Markdown parser beside main.js: cmark-gfm's WebAssembly module, the one build.mill records,
+# the module that reads it, and cmark-gfm's license notices, as vendored.
+recorded=$(built ears.markdown.parser.wasmSha256)
+for file in cmark-gfm.wasm cmark-gfm-wasm.mjs cmark-gfm/COPYING; do
+  if [ ! -f "$unpacked/package/$file" ]; then
+    echo "check-npm-cli: the package has no $file" >&2
+    exit 1
+  fi
+done
+module=$(sha256 "$unpacked/package/cmark-gfm.wasm")
+if [ "$module" != "$recorded" ]; then
+  echo "check-npm-cli: cmark-gfm.wasm has sha256 $module, but build.mill records $recorded" >&2
+  exit 1
+fi
+if ! cmp -s "$unpacked/package/cmark-gfm/COPYING" "$root/ears/markdown/cmark-gfm/COPYING"; then
+  echo "check-npm-cli: cmark-gfm/COPYING differs from ears/markdown/cmark-gfm/COPYING" >&2
+  exit 1
+fi
+
+# An empty project with only the packed package installed, from a lockfile and with no install
+# scripts (scripts/npm-cli-project).
 check='check-npm-cli'
 project="$tmp/user"
 . "$root/scripts/npm-cli-project"
 install_cli_project "$project" "$tarball" "$cache"
 
-# Every package installed, by name, must be the CLI, the Markdown parser, or one of the parser's
-# dependencies in the lockfile the conformance suite installs from. `npm ls --all --parseable`
+# The CLI must be the only package installed: it has no dependencies. `npm ls --all --parseable`
 # prints the project's own directory first, then one line per package.
-names() { sed 's#.*node_modules/##' | sort -u; }
-installed=$(cd "$project" && npm ls --all --parseable --cache "$cache" | sed 1d | names)
-expected=$({
-  echo "@tsnee/ears-checker-cli"
-  jq -r '.packages | keys[] | select(. != "")' "$root/ears/markdown/js/package-lock.json"
-} | names)
-if [ "$installed" != "$expected" ]; then
-  echo "check-npm-cli: the installed packages differ from those expected (< installed):" >&2
-  printf '%s\n' "$expected" >"$tmp/expected"
-  printf '%s\n' "$installed" | diff - "$tmp/expected" >&2 || true
+installed=$(cd "$project" && npm ls --all --parseable --cache "$cache" | sed 1d |
+  sed 's#.*node_modules/##' | sort -u)
+if [ "$installed" != "@tsnee/ears-checker-cli" ]; then
+  echo "check-npm-cli: packages other than the CLI were installed:" >&2
+  printf '%s\n' "$installed" >&2
   exit 1
 fi
 

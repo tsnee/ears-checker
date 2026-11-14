@@ -36,11 +36,23 @@ object OwnSpecsSuite extends ZIOSpecDefault:
     case _: HardLineBreak => " "
     case other            => siblings(Option(other.getFirstChild)).map(literal).mkString
 
-  /** Each "### Requirement: name" heading and the paragraph right after it. */
+  /** Each "### Requirement: name" heading and the paragraph right after it, but under "## REMOVED
+    * Requirements" in a change's delta, where a requirement has a reason and a migration instead of
+    * a statement (OpenSpec's JSON gives the reason as its text, and `scripts/check-openspec` checks
+    * only added and modified ones). Any other section is read, so a new kind fails here.
+    */
   private def statements(file: Path, markdown: String): List[Statement] =
     val nodes = siblings(Option(Parser.builder().build().parse(markdown).getFirstChild))
-    nodes.zip(nodes.drop(1)).collect {
-      case (heading: Heading, paragraph: Paragraph)
+    // Whether each node is in a REMOVED section: set by each level-2 heading, until the next.
+    val removed = nodes
+      .scanLeft(false) {
+        case (_, heading: Heading) if heading.getLevel == 2 =>
+          literal(heading).trim == "REMOVED Requirements"
+        case (inside, _) => inside
+      }
+      .drop(1)
+    nodes.zip(nodes.drop(1)).zip(removed).collect {
+      case ((heading: Heading, paragraph: Paragraph), false)
           if heading.getLevel == 3 && literal(heading).startsWith("Requirement:") =>
         Statement(file, literal(heading).stripPrefix("Requirement:").trim, literal(paragraph))
     }
@@ -89,5 +101,15 @@ object OwnSpecsSuite extends ZIOSpecDefault:
       assertTrue(
         statements(Paths.get("spec.md"), markdown).map(_.text) ==
           List("The scheduler SHALL list upcoming events.")
+      )
+    ,
+    test("a removed requirement has no statement; the sections around it are read"):
+      val markdown =
+        "## ADDED Requirements\n\n### Requirement: Upcoming\nThe scheduler SHALL list events.\n\n" +
+          "## REMOVED Requirements\n\n### Requirement: Reminders\n**Reason**: Replaced.\n\n" +
+          "**Migration**: None.\n\n## MODIFIED Requirements\n\n### Requirement: Sync\n" +
+          "The calendar SHALL sync hourly.\n"
+      assertTrue(
+        statements(Paths.get("spec.md"), markdown).map(_.name) == List("Upcoming", "Sync")
       )
   )

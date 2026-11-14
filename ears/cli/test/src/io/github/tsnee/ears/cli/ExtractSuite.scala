@@ -52,7 +52,7 @@ object ExtractSuite extends ZIOSpecDefault:
           "# Reminders\n\nIntro.\n\n- The scheduler SHALL list events.\n- The calendar " +
             "SHALL sync.\n"
         assertTrue(
-          Candidate.fromMarkdown("reqs.md", content) == Right(
+          MarkdownInput.read("reqs.md", content).map(_.candidates) == Right(
             List(
               Candidate(Location.Line("reqs.md", 5), "The scheduler SHALL list events."),
               Candidate(Location.Line("reqs.md", 6), "The calendar SHALL sync.")

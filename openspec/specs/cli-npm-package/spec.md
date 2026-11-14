@@ -24,15 +24,6 @@ The CLI npm package SHALL provide one command, named `ears-check`.
 - **WHEN** a project that has installed the packed CLI package runs `npx ears-check --help`
 - **THEN** the usage text for `ears-check` is printed and the exit status is 0
 
-### Requirement: Markdown parser dependency
-
-The CLI npm package SHALL depend on exactly the version of `commonmark` that the Markdown conformance suite runs on Node.
-
-#### Scenario: Dependency in the package metadata
-
-- **WHEN** a developer builds the CLI npm package while the conformance suite's lockfile pins `commonmark` 0.31.2
-- **THEN** its `package.json` lists `commonmark` at exactly `0.31.2` under `dependencies`, and nothing else
-
 ### Requirement: CLI package version
 
 The CLI npm package SHALL carry the same version as the library npm package.
@@ -95,3 +86,21 @@ The CLI npm package SHALL ship its code in a `main.js` of at most 2,100,000 byte
 
 - **WHEN** a developer builds the CLI npm package
 - **THEN** its `main.js` is at most 2,100,000 bytes
+
+### Requirement: No dependencies in the CLI package
+
+The CLI npm package SHALL declare no dependencies.
+
+#### Scenario: Dependencies in the package metadata
+
+- **WHEN** a developer builds the CLI npm package and reads its `package.json`
+- **THEN** it has no `dependencies` entry
+
+### Requirement: Parser module in the CLI package
+
+The CLI npm package SHALL hold the Markdown parser's WebAssembly module as a file beside `main.js`.
+
+#### Scenario: The packed module
+
+- **WHEN** a developer packs the CLI npm package and lists its files
+- **THEN** it holds `cmark-gfm.wasm` next to `main.js`, with the SHA-256 checksum the repository records for the module

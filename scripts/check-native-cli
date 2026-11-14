@@ -1,10 +1,9 @@
 #!/usr/bin/env sh
 # The native CLI's check: build the native binary and the JVM jar, check that the binary links no
-# cmark (it loads cmark when it runs), then run both on the cases in scripts/cli-cases and require
-# the same standard output, the same messages on standard error (log lines aside), and the same
-# exit status. A development check, run by contributors and CI.
-# Needs java, jq, git, openspec, and cmark (to read Markdown) on the PATH; otool on macOS, ldd on
-# Linux.
+# cmark library (cmark-gfm is compiled into it), then run both on the cases in scripts/cli-cases
+# and require the same standard output, the same messages on standard error (log lines aside), and
+# the same exit status. A development check, run by contributors and CI.
+# Needs java, jq, git, and openspec on the PATH; otool on macOS, ldd on Linux.
 #
 # --binary <file> and --jar <file> check a binary and jar built elsewhere instead of building
 # them, such as a binary built on another runner of its platform; --out <dir> keeps the binary
@@ -70,14 +69,14 @@ fi
 echo "check-native-cli: checking $binary, sha256 $(sha256 "$binary")"
 echo "check-native-cli: against $jar, sha256 $(sha256 "$jar")"
 
-# Only the platform's system libraries are linked; cmark is found when the binary runs.
+# Only the platform's system libraries are linked: cmark-gfm is compiled into the binary.
 if [ "$(uname -s)" = Darwin ]; then
   linked=$(otool -L "$binary" | sed 1d)
 else
   linked=$(ldd "$binary")
 fi
 if printf '%s\n' "$linked" | grep -q -i cmark; then
-  echo "check-native-cli: the binary links cmark, which it should load when it runs:" >&2
+  echo "check-native-cli: the binary links a cmark library; cmark-gfm should be compiled in:" >&2
   printf '%s\n' "$linked" >&2
   exit 1
 fi

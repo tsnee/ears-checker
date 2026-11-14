@@ -7,8 +7,8 @@ Thank you for helping. This page is for working on ears-checker itself; the [REA
 - **Linux or macOS, and Git.** `./mill` fetches the Mill version and the JDK that `build.mill`'s header pins, so no other Scala tooling is needed.
 - **A JDK 17 or later** on the `PATH`, for the check scripts, which run the jar with `java`.
 - **Node 22 or later**, for the Scala.js tests and the npm packages.
-- **A C compiler** (clang), for the Scala Native builds.
-- **[cmark](https://github.com/commonmark/cmark) 0.30 or later**, which the native Markdown tests and the native CLI load when they run (`brew install cmark`, or `apt-get install libcmark-dev`); nothing links it.
+- **A C compiler** (clang), for the Scala Native builds, which compile cmark-gfm's C into the binary.
+- **Network access on the first build** (and after `./mill clean`): the build downloads [wasi-sdk](https://github.com/WebAssembly/wasi-sdk), the C toolchain the Markdown parser's WebAssembly module is built with, into `~/.cache/ears-checker/wasi-sdk` (180 to 620 MB, once per release), and checks it against the SHA-256 `build.mill` records before extracting it. No Markdown library needs installing.
 - **jq**, for the check scripts.
 - **The npm tools the check scripts use**: the [OpenSpec CLI](https://github.com/Fission-AI/OpenSpec), `tsc`, `publint`, and `attw`. CI installs them from `.github/tools/package-lock.json`, and you can too, with no install scripts run:
 
@@ -36,13 +36,19 @@ Thank you for helping. This page is for working on ears-checker itself; the [REA
 
 Both npm packages are minified with [esbuild](https://esbuild.github.io), which Mill installs from `ears/npm/tools/package-lock.json` (with the network, the first time and after a clean); the library keeps a source map that leads back to the Scala sources, and the command line ships none.
 
+## The Markdown parser
+
+Every build reads Markdown with GitHub's parser, [cmark-gfm](https://github.com/github/cmark-gfm), from the copy of its source in `ears/markdown/cmark-gfm/`, vendored unedited (its `README.md` names the release and commit). A small C entry point, `ears/markdown/c/ears_cmark.c`, writes out the parts of the tree the reader uses, which shared Scala code decodes and reads. Scala Native compiles the C into the binary; for the JVM and Node, `ears.markdown.parser` builds one WebAssembly module with a pinned wasi-sdk, checks its SHA-256 against the one `build.mill` records (so every machine builds the same module), and, for the JVM, compiles it to classes with Chicory's build-time compiler, failing if a method HotSpot won't compile appears outside the allowed list.
+
+To update cmark-gfm, run `scripts/update-cmark-gfm --tag <tag>`, which replaces the directory from the release's source archive, review the diff, set `cmarkGfmVersion` in `build.mill` to the release, and rebuild: the module's checksum check then fails, naming the new checksum to record, and the method-size check says whether any new function is too big for HotSpot. Fix the parser's position errors in the reader (`CmarkReader`, `CmarkLines`), never in the copy. Dependabot doesn't watch cmark-gfm, so check its releases and security advisories by hand.
+
 ## Check scripts
 
 These are for working on ears-checker, not part of any package.
 
 - `scripts/check-npm-package` builds the library's npm package, checks its size and its source map, lints it with publint and Are the Types Wrong, installs it into an empty project, and type-checks and runs a TypeScript program that uses it.
-- `scripts/check-npm-cli` builds the command line's npm package and jar, installs the package into an empty project, and runs both on this repository's Markdown and specs and on error cases, failing on any difference in output, messages, or exit status. It installs with `npm ci --ignore-scripts` from a lockfile pinning commonmark and its dependencies at the versions and checksums the Markdown conformance suite uses (`scripts/npm-cli-project`, which `scripts/time-cli` shares), so nothing is resolved fresh and no install script runs.
-- `scripts/check-native-cli` does the same for the native binary, on the same cases (`scripts/cli-cases`), after checking it links no cmark. `--binary` and `--jar` check a binary and jar built elsewhere.
+- `scripts/check-npm-cli` builds the command line's npm package and jar, installs the package into an empty project, and runs both on this repository's Markdown and specs and on error cases, failing on any difference in output, messages, or exit status. It first checks that the package holds the Markdown parser's module with the checksum `build.mill` records and cmark-gfm's notices, then installs it with `npm ci --ignore-scripts` from a lockfile of the package alone, since it has no dependencies (`scripts/npm-cli-project`, which `scripts/time-cli` shares), so nothing is resolved fresh and no install script runs.
+- `scripts/check-native-cli` does the same for the native binary, on the same cases (`scripts/cli-cases`), after checking it links no cmark library. `--binary` and `--jar` check a binary and jar built elsewhere.
 - With `--out`, each of those three keeps the files it checked, as a release does.
 - `scripts/check-coursier-app` installs `ears-check` with Coursier's `cs` from the channel file `coursier/apps.json`, pointed at this build, and runs it against the jar on the same cases; it first checks that each platform's download address names that platform's release binary. Without options it installs the JVM launcher; `--binary <file>` makes it install that native binary, and fails if Coursier installs anything else. `--repo <dir>` installs from an Ivy repository that already holds this build (with `--jar`, so Mill doesn't run), and `--cases smoke` runs four cases that work anywhere, Windows included (under Git Bash).
 - `scripts/check-scalajs-link` publishes the Scala.js library locally, generates a program that references every public operation, and links it in release mode against only that artifact, the way a user's application gets it.

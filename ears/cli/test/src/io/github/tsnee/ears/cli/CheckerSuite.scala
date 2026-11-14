@@ -24,7 +24,7 @@ object CheckerSuite extends ZIOSpecDefault:
   private def combined(first: (Settings, String), rest: (Settings, String)*): Outcome =
     Checker.outcome(
       NonEmptyList(first, rest.toList).traverse { (settings, content) =>
-        Checker.candidates(settings, content).map(settings -> _)
+        Checker.read(settings, content).map(settings -> _)
       }
     )
 
@@ -58,6 +58,37 @@ object CheckerSuite extends ZIOSpecDefault:
     """{"id": "reminders", "requirements": [
       |  {"name": "Upcoming", "text": "The scheduler shall list upcoming\nevents in order."}
       |]}""".stripMargin
+
+  /** A Markdown file with findings on lines 3 and 12, and between them, on line 9, a two-column
+    * table's body row with four cells.
+    */
+  private val notes =
+    """# Reminders
+      |
+      |When an order arrives the scheduler shall list events.
+      |
+      || Name | Requirement |
+      || --- | --- |
+      || A | The scheduler shall list upcoming events. |
+      || B | The scheduler shall hide past events. |
+      || C | one | two | three |
+      |
+      |## Billing
+      |When a payment fails the billing service shall notify the owner.
+      |""".stripMargin
+
+  /** The same table alone: its only problem is the row with extra cells, on line 5. */
+  private val tableOnly =
+    """# Reminders
+      |
+      || Name | Requirement |
+      || --- | --- |
+      || C | one | two | three |
+      || A | The scheduler shall list upcoming events. |
+      |""".stripMargin
+
+  private val extraCells =
+    "This table row has 4 cells and its header 2, so GitHub doesn't show the last 2."
 
   def spec = suite("EARS checker")(
     test("standard input: each line is checked and located as <stdin>"):
@@ -236,8 +267,98 @@ object CheckerSuite extends ZIOSpecDefault:
           outcome.stdout.isEmpty
         )
       ,
-      test("candidates reports malformed JSON as an error"):
-        assertTrue(Checker.candidates(file("change.json", None), "{not json").isLeft)
+      test("read reports malformed JSON as an error"):
+        assertTrue(Checker.read(file("change.json", None), "{not json").isLeft)
+    ),
+    suite("warnings")(
+      test("text output: a table row with extra cells is a warning line"):
+        val outcome = Checker.outcome(file("notes.md", None), Right(notes))
+        assertTrue(
+          lines(outcome.stdout).contains(s"notes.md:9: warning: table-extra-cells: $extraCells")
+        )
+      ,
+      test("text output: a warning between two findings comes between them"):
+        val outcome = Checker.outcome(file("notes.md", None), Right(notes))
+        val written = lines(outcome.stdout)
+        assertTrue(
+          written.size == 3,
+          written.lift(0).exists(_.startsWith("notes.md:3: missing-comma:")),
+          written.lift(1).contains(s"notes.md:9: warning: table-extra-cells: $extraCells"),
+          written.lift(2).exists(_.startsWith("notes.md:12: missing-comma:"))
+        )
+      ,
+      test("text output: a finding comes before a warning on the same line"):
+        val content =
+          "| Name | Requirement |\n| --- | --- |\n" +
+            "| A | When an order arrives the scheduler shall list events. | extra |\n"
+        val written = lines(Checker.outcome(file("notes.md", None), Right(content)).stdout)
+        assertTrue(
+          written.size == 2,
+          written.lift(0).exists(_.startsWith("notes.md:3: missing-comma:")),
+          written.lift(1).exists(_.startsWith("notes.md:3: warning: table-extra-cells:"))
+        )
+      ,
+      test("text output: each input's warnings stay with that input"):
+        val outcome = Checker.outcome(
+          NonEmptyList
+            .of(
+              file("a.md", None) -> tableOnly,
+              file("b.txt", None) -> "The scheduler lists upcoming events."
+            )
+            .traverse((settings, content) => Checker.read(settings, content).map(settings -> _))
+        )
+        assertTrue(
+          outcome.warnings == 1,
+          lines(outcome.stdout).map(_.takeWhile(_ != ':')) == List("a.md", "b.txt"),
+          lines(outcome.stdout).lift(0).exists(_.startsWith("a.md:5: warning:"))
+        )
+      ,
+      test("text output: a warning's location is escaped like a finding's"):
+        val outcome = Checker.outcome(file("no\u001btes.md", None), Right(tableOnly))
+        assertTrue(
+          outcome.stdout == s"no\\u001btes.md:5: warning: table-extra-cells: $extraCells\n"
+        )
+      ,
+      test("only a warning: it's written, and the exit status is 0"):
+        val outcome = Checker.outcome(file("notes.md", None), Right(tableOnly))
+        assertTrue(
+          outcome.exitCode == 0,
+          outcome.stdout == s"notes.md:5: warning: table-extra-cells: $extraCells\n",
+          outcome.stderr.isEmpty
+        )
+      ,
+      test("JSON output: the warning in the warnings array"):
+        val outcome = Checker.outcome(file("notes.md", Some(OutputFormat.Json)), Right(notes))
+        assertTrue(
+          outcome.stdout.contains(
+            """"warnings":[{"location":{"type":"line","file":"notes.md","line":9},""" +
+              s""""kind":"table-extra-cells","message":"$extraCells"}]}"""
+          )
+        )
+      ,
+      test("JSON output: only a warning, the whole document, and exit status 0"):
+        val outcome = Checker.outcome(file("notes.md", Some(OutputFormat.Json)), Right(tableOnly))
+        assertTrue(
+          outcome.exitCode == 0,
+          outcome.stdout ==
+            head + """"checked":1,"findings":[],"warnings":[{"location":{"type":"line",""" +
+            """"file":"notes.md","line":5},""" +
+            s""""kind":"table-extra-cells","message":"$extraCells"}]}""" + "\n"
+        )
+      ,
+      test("JSON output: no warnings, an empty array after the findings"):
+        val outcome = Checker.outcome(
+          settings(None, None, None, Some(OutputFormat.Json)),
+          Right("The scheduler lists upcoming events.")
+        )
+        assertTrue(outcome.stdout.contains("\"fix\":null}],\"warnings\":[]}"))
+      ,
+      test("JSON output: no warnings for OpenSpec input either"):
+        val outcome = Checker.outcome(
+          settings(None, Some(InputFormat.OpenSpecJson), None, Some(OutputFormat.Json)),
+          Right(cleanSpec)
+        )
+        assertTrue(outcome.stdout.endsWith("\"findings\":[],\"warnings\":[]}\n"))
     ),
     suite("the JSON document, whole (docs/json-output.md)")(
       test("no findings: the version, the checker, the count, and an empty list"):
@@ -245,7 +366,7 @@ object CheckerSuite extends ZIOSpecDefault:
           settings(None, None, None, Some(OutputFormat.Json)),
           Right("The scheduler shall list upcoming events.")
         )
-        assertTrue(outcome.stdout == head + "\"checked\":1,\"findings\":[]}\n")
+        assertTrue(outcome.stdout == head + "\"checked\":1,\"findings\":[],\"warnings\":[]}\n")
       ,
       test("a finding on a line"):
         val outcome = Checker.outcome(
@@ -259,7 +380,7 @@ object CheckerSuite extends ZIOSpecDefault:
             head + """"checked":2,"findings":[{"location":{"type":"line","file":"reqs.txt","line":2},""" +
             """"requirement":"The scheduler should list upcoming events.","kind":"weak-modal",""" +
             """"message":"Use shall instead of \"should\".","span":{"start":14,"end":20},""" +
-            """"fix":"The scheduler shall list upcoming events."}]}""" + "\n"
+            """"fix":"The scheduler shall list upcoming events."}],"warnings":[]}""" + "\n"
         )
       ,
       test("a finding in a change requirement, without a fix"):
@@ -272,7 +393,8 @@ object CheckerSuite extends ZIOSpecDefault:
             head + """"checked":1,"findings":[{"location":{"type":"change",""" +
             """"change":"add-reminders","capability":"reminders","requirement":"Reminder sent"},""" +
             """"requirement":"The scheduler sends a notice.","kind":"missing-modal",""" +
-            """"message":"State the response with SHALL.","span":{"start":0,"end":28},"fix":null}]}""" +
+            """"message":"State the response with SHALL.","span":{"start":0,"end":28},"fix":null}],""" +
+            """"warnings":[]}""" +
             "\n"
         )
       ,
@@ -290,7 +412,7 @@ object CheckerSuite extends ZIOSpecDefault:
             head + """"checked":1,"findings":[{"location":{"type":"spec","spec":"reminders",""" +
             """"requirement":"Upcoming"},"requirement":"The scheduler lists upcoming events.",""" +
             """"kind":"missing-modal","message":"State the response with SHALL.",""" +
-            """"span":{"start":0,"end":35},"fix":null}]}""" + "\n"
+            """"span":{"start":0,"end":35},"fix":null}],"warnings":[]}""" + "\n"
         )
       ,
       test("the checker is this build's version: a release, or the next one as a snapshot"):
@@ -314,7 +436,7 @@ object CheckerSuite extends ZIOSpecDefault:
         )
         assertTrue(
           outcome.exitCode == 0,
-          outcome.stdout == head + "\"checked\":2,\"findings\":[]}\n"
+          outcome.stdout == head + "\"checked\":2,\"findings\":[],\"warnings\":[]}\n"
         )
       ,
       test("a span counts UTF-16 code units: an emoji counts as two"):

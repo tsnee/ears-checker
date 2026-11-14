@@ -4,8 +4,7 @@
 # the cases in scripts/cli-cases and require the same standard output, the same messages on
 # standard error (log lines aside), and the same exit status. A development check, run by
 # contributors and CI.
-# Needs cs, java, jq, and git on the PATH; openspec too unless --cases smoke, and cmark for
-# --binary (to read Markdown).
+# Needs cs, java, jq, and git on the PATH, and openspec too unless --cases smoke.
 #
 # First it checks the descriptor's download addresses: each platform's must name that platform's
 # native binary in the GitHub Release of the version installed. Then it installs a copy of the

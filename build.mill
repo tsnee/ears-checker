@@ -1,7 +1,9 @@
 //| mill-version: 1.3.1
 //| mill-jvm-version: 27
 //| mill-jvm-index-version: 0.0.5
-//| mvnDeps: ["com.lihaoyi::mill-contrib-scoverage:$MILL_VERSION"]
+//| mvnDeps:
+//| - com.lihaoyi::mill-contrib-scoverage:$MILL_VERSION
+//| - com.dylibso.chicory:build-time-compiler:1.7.5
 package build
 
 import mill.*
@@ -43,8 +45,120 @@ val zioVersion = "2.1.27"
 val declineVersion = "2.6.2"
 val zioJsonVersion = "1.1.1"
 
-/** commonmark-java, for the Markdown facade on the JVM and the release-notes tool. */
+/** commonmark-java, for the release-notes tool. */
 val commonmarkVersion = "0.31.0"
+
+/** Chicory, which runs the Markdown parser's WebAssembly module on the JVM; the build-time compiler
+  * in the header is the same release.
+  */
+val chicoryVersion = "1.7.5"
+
+/** cmark-gfm's release, vendored in `ears/markdown/cmark-gfm` by `scripts/update-cmark-gfm`: the
+  * four numbers its version header is generated from, as its CMake build generates it.
+  */
+val cmarkGfmVersion = (0, 29, 0, 13)
+
+/** wasi-sdk, the pinned C toolchain the Markdown parser's WebAssembly module is built with: each
+  * host's archive of the release, and its SHA-256 as the release publishes it (`gh release view
+  * wasi-sdk-34 --repo WebAssembly/wasi-sdk --json assets`).
+  */
+val wasiSdkTag = "wasi-sdk-34"
+val wasiSdkArchives = Map(
+  "wasi-sdk-34.0-arm64-linux.tar.gz" ->
+    "f7e243dff54d60bcc576e94d6166b69f410f2500ae4a9ceef34315be10e77971",
+  "wasi-sdk-34.0-arm64-macos.tar.gz" ->
+    "9c59398106b417f8f14913380fdf0097a8cc0ff4af9eb3ce0065a859e88d49e9",
+  "wasi-sdk-34.0-arm64-windows.tar.gz" ->
+    "45e1c71f3e965621e7b98ebe1d37b0e4b1f77f3e8072113ffb4534e67b1a4b7c",
+  "wasi-sdk-34.0-x86_64-linux.tar.gz" ->
+    "b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aafb0984b2c4",
+  "wasi-sdk-34.0-x86_64-macos.tar.gz" ->
+    "87d27fa8adc68dee59bfbf2e22a6d34ef717c34d6bf1d8af2a56fc929d9ce0eb",
+  "wasi-sdk-34.0-x86_64-windows.tar.gz" ->
+    "cccb5c323a9b34f0349a9b09e8804a0a7632c68c3310f4b5f437ed57d7e71d8f"
+)
+
+/** The SHA-256 of the Markdown parser's WebAssembly module, which every build host must produce
+  * from this repository's sources. A change to the C entry point, the vendored source, the
+  * toolchain, or the flags changes it: the build fails, naming both checksums, until it's updated.
+  */
+val cmarkGfmWasmSha256 = "3b97183d9df3313b3f83e42f3e26540c5e4bf056f170fa729b5f19788d15209f"
+
+/** The functions whose JVM methods, as Chicory's build-time compiler generates them, may exceed
+  * HotSpot's 8,000-byte compile limit (`DontCompileHugeMethods`), so stay in the JVM's bytecode
+  * interpreter: none is on the path that parses ordinary Markdown. `_scan_autolink_email` serves
+  * only the autolink extension, which isn't used; `_scan_html_block_start` runs only for lines
+  * starting with `<`; `printf_core` only for cmark-gfm's error messages and footnotes, which aren't
+  * used (the entry point writes its numbers without it, since it was most of the JVM's time).
+  */
+val cmarkGfmHugeFunctions = Set("_scan_autolink_email", "printf_core", "_scan_html_block_start")
+
+/** HotSpot's default `HugeMethodLimit`, in bytes of bytecode. */
+val hugeMethodLimit = 8000
+
+/** The wasi-sdk archive for a build host, given its Java `os.name` and `os.arch`. */
+def wasiSdkArchive(osName: String, arch: String): Either[String, String] = {
+  val system = osName.toLowerCase match {
+    case name if name.startsWith("mac")     => Right("macos")
+    case name if name.startsWith("linux")   => Right("linux")
+    case name if name.startsWith("windows") => Right("windows")
+    case _ => Left(s"wasi-sdk publishes no archive for the operating system $osName")
+  }
+  val processor = arch match {
+    case "aarch64" | "arm64" => Right("arm64")
+    case "x86_64" | "amd64"  => Right("x86_64")
+    case _ => Left(s"wasi-sdk publishes no archive for the processor $arch")
+  }
+  for (s <- system; p <- processor)
+    yield s"wasi-sdk-${wasiSdkTag.stripPrefix("wasi-sdk-")}.0-$p-$s.tar.gz"
+}
+
+/** A file's SHA-256, in lowercase hex. */
+def sha256(path: os.Path): String =
+  java.security.MessageDigest
+    .getInstance("SHA-256")
+    .digest(os.read.bytes(path))
+    .map(b => f"${b & 0xff}%02x")
+    .mkString
+
+/** Nothing when `actual` is the recorded checksum; otherwise the failure, naming both. */
+def checksumMatches(what: String, actual: String, recorded: String): Either[String, Unit] =
+  Either.cond(
+    actual == recorded,
+    (),
+    s"$what has SHA-256 $actual, but build.mill records $recorded"
+  )
+
+/** The size of each method's bytecode in a class file, by name, read from its `Code` attribute
+  * with ASM's constant-pool reader (ASM itself gives no method's size).
+  */
+def methodCodeSizes(classFile: Array[Byte]): Seq[(String, Int)] = {
+  val reader = new org.objectweb.asm.ClassReader(classFile)
+  val buffer = new Array[Char](reader.getMaxStringLength)
+  def u2(at: Int) = reader.readUnsignedShort(at)
+  def u4(at: Int) = reader.readInt(at)
+  // Skips a field's or method's attributes, from their count: the offset after them.
+  def afterAttributes(at: Int): Int =
+    (0 until u2(at)).foldLeft(at + 2)((offset, _) => offset + 6 + u4(offset + 2))
+  val afterInterfaces = reader.header + 8 + 2 * u2(reader.header + 6)
+  val afterFields =
+    (0 until u2(afterInterfaces)).foldLeft(afterInterfaces + 2)((offset, _) =>
+      afterAttributes(offset + 6)
+    )
+  (0 until u2(afterFields))
+    .foldLeft((afterFields + 2, Seq.empty[(String, Int)])) { case ((offset, sizes), _) =>
+      val name = reader.readUTF8(offset + 2, buffer)
+      val attributes = offset + 6
+      val code = (0 until u2(attributes))
+        .foldLeft((attributes + 2, Option.empty[Int])) { case ((at, found), _) =>
+          val size = if (reader.readUTF8(at, buffer) == "Code") Some(u4(at + 10)) else None
+          (at + 6 + u4(at + 2), found.orElse(size))
+        }
+        ._2
+      (afterAttributes(attributes), sizes ++ code.map(name -> _))
+    }
+    ._2
+}
 
 def wartOptions(warts: Seq[String]): Seq[String] =
   warts.map(w => s"-P:wartremover:traverser:org.wartremover.warts.$w")
@@ -412,55 +526,340 @@ object ears extends Base with Published with Covered {
     }
   }
 
-  /** Requirement sentences from Markdown: shared extraction over a small parser facade, with one
-    * parser per platform (commonmark-java here; commonmark.js on Node in `js`; cmark in
-    * `native`). Not published: `cli` compiles the shared and JVM sources into itself.
+  /** Requirement sentences from Markdown, read with cmark-gfm on every platform (`parser`): shared
+    * code reads its tree, and each platform calls it its own way (Chicory here; Node's
+    * `WebAssembly` in `js`; compiled in, in `native`). Not published: `cli` compiles the shared and
+    * JVM sources into itself.
     */
   object markdown extends Base with Covered {
     override def warts = pureWarts
     def sharedSources = Task.Sources("src")
     def jvmSources = Task.Sources("src-jvm")
     def sources = Task(sharedSources() ++ jvmSources())
-    def mvnDeps = Seq(mvn"org.commonmark:commonmark:$commonmarkVersion")
+    def mvnDeps = Seq(mvn"com.dylibso.chicory:runtime:$chicoryVersion")
+
+    // The parser's JVM classes: resources, so they're on every runtime classpath and in the jar,
+    // and compile resources, so the JVM code compiles against them.
+    def resources = Task(super.resources() :+ parser.jvmClasses())
+    def compileResources = Task(super.compileResources() :+ parser.jvmClasses())
 
     def statementCoverageMin = Some(100.0)
     def branchCoverageMin = Some(100.0)
 
-    /** The conformance suite, which every platform's test module compiles. */
-    object test extends CoveredTests with ZioSpecs
-
-    /** The shared sources and the commonmark.js parser, for Node. Its tests run the conformance
-      * suite.
+    /** cmark-gfm, built into the checker: its vendored source and the C entry point
+      * (`ears/markdown/c`), compiled into a WebAssembly module with a pinned wasi-sdk for the JVM
+      * (through Chicory, compiled to JVM classes here) and Node, and given to Scala Native as C
+      * source.
       */
-    object js extends Base with ScalaJSModule with NpmInstalled {
+    object parser extends Module {
+      def cmarkGfm = Task.Source(markdown.moduleDir / "cmark-gfm")
+      def entryPoint = Task.Source(markdown.moduleDir / "c")
+
+      /** The three headers cmark-gfm's CMake build generates: `config.h` from its template, with
+        * everything it tests for present; `cmark-gfm_version.h`; and `cmark-gfm_export.h`,
+        * exporting nothing, since nothing links it as a shared library.
+        */
+      def headers = Task {
+        val src = cmarkGfm().path / "src"
+        val config = os
+          .read(src / "config.h.in")
+          .replace("#cmakedefine HAVE_STDBOOL_H", "#define HAVE_STDBOOL_H")
+          .replace("#cmakedefine HAVE___BUILTIN_EXPECT", "#define HAVE___BUILTIN_EXPECT")
+          .replace("#cmakedefine HAVE___ATTRIBUTE__", "#define HAVE___ATTRIBUTE__")
+        val (major, minor, patch, gfm) = cmarkGfmVersion
+        val version = os
+          .read(src / "cmark-gfm_version.h.in")
+          .replace("@PROJECT_VERSION_MAJOR@", major.toString)
+          .replace("@PROJECT_VERSION_MINOR@", minor.toString)
+          .replace("@PROJECT_VERSION_PATCH@", patch.toString)
+          .replace("@PROJECT_VERSION_GFM@", gfm.toString)
+        os.write(Task.dest / "config.h", config)
+        os.write(Task.dest / "cmark-gfm_version.h", version)
+        os.write(
+          Task.dest / "cmark-gfm_export.h",
+          "#ifndef CMARK_GFM_EXPORT_H\n#define CMARK_GFM_EXPORT_H\n#define CMARK_GFM_EXPORT\n#endif\n"
+        )
+        PathRef(Task.dest)
+      }
+
+      /** The wasi-sdk archive this host builds with and its recorded SHA-256, as one name, without
+        * downloading anything: CI's cache key for `~/.cache/ears-checker/wasi-sdk`.
+        */
+      def wasiSdkKey = Task {
+        val key = for {
+          name <- wasiSdkArchive(sys.props("os.name"), sys.props("os.arch"))
+          recorded <- wasiSdkArchives.get(name).toRight(s"build.mill records no checksum for $name")
+        } yield s"$name-$recorded"
+        key.fold(Task.fail(_), identity)
+      }
+
+      /** The wasi-sdk archive for this host, downloaded once into `~/.cache/ears-checker` (which
+        * CI caches) and checked against its recorded SHA-256 before anything is extracted from
+        * it, then extracted here: the toolchain's directory.
+        */
+      def wasiSdk = Task {
+        val sdk = for {
+          name <- wasiSdkArchive(sys.props("os.name"), sys.props("os.arch"))
+          recorded <- wasiSdkArchives.get(name).toRight(s"build.mill records no checksum for $name")
+          archive = os.home / ".cache" / "ears-checker" / "wasi-sdk" / name
+          _ = if (!os.exists(archive)) {
+            val url = s"https://github.com/WebAssembly/wasi-sdk/releases/download/$wasiSdkTag/$name"
+            Task.log.info(s"Downloading $url")
+            val client = java.net.http.HttpClient
+              .newBuilder()
+              .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+              .build()
+            val partial = archive / os.up / s"$name.part"
+            os.makeDir.all(archive / os.up)
+            val response = client.send(
+              java.net.http.HttpRequest.newBuilder(java.net.URI.create(url)).build(),
+              java.net.http.HttpResponse.BodyHandlers.ofFile(partial.toNIO)
+            )
+            if (response.statusCode == 200) os.move(partial, archive, replaceExisting = true)
+            else Task.fail(s"Downloading $url gave HTTP status ${response.statusCode}")
+          }
+          actual = sha256(archive)
+          _ <- checksumMatches(name, actual, recorded).left.map { message =>
+            os.remove(archive)
+            s"$message; removed the archive, so the next build downloads it again"
+          }
+        } yield archive
+        sdk match {
+          case Left(message) => Task.fail(message)
+          case Right(archive) =>
+            os.proc("tar", "-xzf", archive, "-C", Task.dest).call(stderr = os.Pipe)
+            os.list(Task.dest).filter(os.isDir) match {
+              case Seq(top) => PathRef(top)
+              case _        => Task.fail(s"$archive doesn't hold one top directory")
+            }
+        }
+      }
+
+      /** The WebAssembly module, checked against `cmarkGfmWasmSha256`, and the same module with
+        * its function names (`named`), for the method-size check's messages. `-DNDEBUG` drops
+        * cmark-gfm's assertions, as its CMake release build does, and with them the build's file
+        * paths; clang's `PATH` holds only the toolchain, so no `wasm-opt` on the host's path runs
+        * after linking. `-fno-inline-functions` keeps the hot functions small enough for HotSpot to
+        * compile on the JVM.
+        */
+      def wasm = Task {
+        val sdk = wasiSdk().path
+        val bin = sdk / "bin"
+        val source = cmarkGfm().path
+        val entry = entryPoint().path
+        val common = Seq(
+          "--target=wasm32-wasip1",
+          s"--sysroot=${sdk / "share" / "wasi-sysroot"}",
+          "-O2",
+          "-fno-inline-functions",
+          "-DNDEBUG",
+          s"-ffile-prefix-map=$source=cmark-gfm",
+          s"-ffile-prefix-map=$entry=c",
+          "-I",
+          headers().path.toString,
+          "-I",
+          (source / "src").toString,
+          "-I",
+          (source / "extensions").toString
+        )
+        val env = Map("PATH" -> bin.toString)
+        val entryObject = Task.dest / "ears_cmark.o"
+        os.proc(
+          bin / "clang",
+          common,
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-c",
+          entry / "ears_cmark.c",
+          "-o",
+          entryObject
+        ).call(env = env, stderr = os.Pipe)
+        val sources = (os.list(source / "src") ++ os.list(source / "extensions"))
+          .filter(file => file.ext == "c" && file.last != "main.c")
+          .sortBy(_.last)
+        val named = Task.dest / "cmark-gfm-named.wasm"
+        os.proc(
+          bin / "clang",
+          common,
+          "-w",
+          "-mexec-model=reactor",
+          sources,
+          entryObject,
+          "-o",
+          named,
+          "-Wl,--export=ears_alloc,--export=ears_free,--export=ears_tree,--export=ears_version"
+        ).call(env = env, stderr = os.Pipe)
+        val module = Task.dest / "cmark-gfm.wasm"
+        os.proc(bin / "llvm-objcopy", "--strip-all", named, module).call(env = env, stderr = os.Pipe)
+        checksumMatches("The built cmark-gfm.wasm", sha256(module), cmarkGfmWasmSha256) match {
+          case Left(message) => Task.fail(message)
+          case Right(())     => PathRef(Task.dest)
+        }
+      }
+
+      /** The module compiled to JVM classes by Chicory's build-time compiler, with its `.meta`
+        * module, as a class directory; it fails if a generated method of a function not in
+        * `cmarkGfmHugeFunctions` exceeds HotSpot's compile limit, naming each.
+        */
+      def jvmClasses = Task {
+        val module = wasm().path
+        val classes = Task.dest / "classes"
+        val generator = new com.dylibso.chicory.build.time.compiler.Generator(
+          com.dylibso.chicory.build.time.compiler.Config
+            .builder()
+            .withWasmFile((module / "cmark-gfm.wasm").toNIO)
+            .withName("io.github.tsnee.ears.markdown.CmarkGfmModule")
+            .withTargetClassFolder(classes.toNIO)
+            .withTargetSourceFolder((Task.dest / "unused-sources").toNIO)
+            .withTargetWasmFolder(classes.toNIO)
+            .withInterpreterFallback(com.dylibso.chicory.compiler.InterpreterFallback.SILENT)
+            .build()
+        )
+        generator.generateMetaWasm(generator.generateResources())
+        val names = com.dylibso.chicory.wasm.Parser
+          .parse((module / "cmark-gfm-named.wasm").toNIO)
+          .nameSection()
+        val function = "func_(\\d+)".r
+        val huge = os
+          .walk(classes)
+          .filter(_.ext == "class")
+          .flatMap(file => methodCodeSizes(os.read.bytes(file)))
+          .collect {
+            case (function(index), size) if size > hugeMethodLimit =>
+              (names.nameOfFunction(index.toInt), size)
+          }
+        huge.filterNot((name, _) => cmarkGfmHugeFunctions(name)) match {
+          case Seq() => PathRef(classes)
+          case over =>
+            Task.fail(
+              s"Chicory compiled ${over.map((name, size) => s"$name ($size bytes)").mkString(", ")} " +
+                s"to JVM methods over $hugeMethodLimit bytes of bytecode, which HotSpot won't " +
+                "compile; build.mill allows only " + cmarkGfmHugeFunctions.toSeq.sorted.mkString(", ")
+            )
+        }
+      }
+
+      /** cmark-gfm's license notices, `COPYING`, where the CLI jar carries them:
+        * `META-INF/cmark-gfm/COPYING`, as a resource directory.
+        */
+      def jvmNotices = Task {
+        os.copy(
+          cmarkGfm().path / "COPYING",
+          Task.dest / "META-INF" / "cmark-gfm" / "COPYING",
+          createFolders = true
+        )
+        PathRef(Task.dest)
+      }
+
+      /** The GitHub Release's `THIRD-PARTY-NOTICES.txt`: a heading naming cmark-gfm's release and
+        * where it's compiled in, then its `COPYING`, unchanged.
+        */
+      def thirdPartyNotices = Task {
+        val (major, minor, patch, gfm) = cmarkGfmVersion
+        val heading =
+          s"""Third-party notices for ears-check
+             |
+             |ears-check reads Markdown with cmark-gfm $major.$minor.$patch.gfm.$gfm
+             |(https://github.com/github/cmark-gfm), compiled into the jar, the npm package
+             |@tsnee/ears-checker-cli, and the native binaries. Its license notices, its COPYING
+             |file, follow unchanged.
+             |
+             |""".stripMargin
+        val out = Task.dest / "THIRD-PARTY-NOTICES.txt"
+        os.write(out, heading + os.read(cmarkGfm().path / "COPYING"))
+        PathRef(out)
+      }
+
+      /** The module's recorded SHA-256, for the scripts that check a package holding it. */
+      def wasmSha256 = Task(cmarkGfmWasmSha256)
+
+      def nodeLoader = Task.Source(markdown.moduleDir / "js" / "cmark-gfm-wasm.mjs")
+
+      /** The module for Node: `cmark-gfm-wasm.mjs`, which reads it from beside itself, and the
+        * module, in one directory.
+        */
+      def nodeModule = Task {
+        os.copy.into(nodeLoader().path, Task.dest)
+        os.copy.into(wasm().path / "cmark-gfm.wasm", Task.dest)
+        PathRef(Task.dest)
+      }
+
+      /** The C source for Scala Native:cmark-gfm's (but its command line's `main.c`), the
+        * generated headers, and the entry point, in one `scala-native` directory, which Scala
+        * Native compiles into the binary when it's a compile resource. Each of cmark-gfm's `.c`
+        * files starts with `NDEBUG` defined, as the WebAssembly build compiles it (its assertions,
+        * which would carry the build's paths into the binary, compiled out), and a `#line` that
+        * keeps its own lines and name; the vendored files are unchanged.
+        */
+      def nativeSources = Task {
+        val out = Task.dest / "scala-native"
+        os.makeDir.all(out)
+        val source = cmarkGfm().path
+        (os.list(source / "src") ++ os.list(source / "extensions"))
+          .filter(file => Set("c", "h", "inc")(file.ext) && file.last != "main.c")
+          .foreach { file =>
+            if (file.ext == "c")
+              os.write(out / file.last, s"#define NDEBUG 1\n#line 1 \"${file.last}\"\n${os.read(file)}")
+            else os.copy.into(file, out)
+          }
+        os.list(headers().path).foreach(os.copy.into(_, out))
+        os.copy.into(entryPoint().path / "ears_cmark.c", out)
+        PathRef(Task.dest)
+      }
+
+      /** The C compiler options cmark-gfm needs on Scala Native: its extensions include its headers
+        * with angle brackets, so its directory goes on the include path.
+        */
+      def nativeIncludes = Task(Seq("-I", (nativeSources().path / "scala-native").toString))
+    }
+
+    /** The conformance suite, which every platform's test module compiles. */
+    object test extends CoveredTests with ZioSpecs {
+
+      /** The suites shared with `js.test` and `native.test`; `src-jvm` has those that need the
+        * JVM.
+        */
+      def sharedSources = Task.Sources("src")
+      def jvmSources = Task.Sources("src-jvm")
+      def sources = Task(sharedSources() ++ jvmSources())
+    }
+
+    /** The shared sources and the call of cmark-gfm's WebAssembly module, for Node. Its tests run
+      * the conformance suite.
+      */
+    object js extends Base with ScalaJSModule {
       def scalaJSVersion = ears.js.scalaJSVersion()
       override def warts = pureWarts
       def sources = Task(markdown.sharedSources() ++ super.sources())
       def moduleKind = Task(ModuleKind.ESModule)
 
       object test extends ScalaJSTests with ZioSpecs {
-        def sources = markdown.test.sources
+        def sources = markdown.test.sharedSources
 
         // Node resolves a bare import only from `node_modules` above the importing file, and the
-        // tests are linked under `out/`: the map points the import at the installed package.
+        // tests are linked under `out/`: the map points the import at cmark-gfm's module.
         def scalaJSImportMap = Task {
-          val entry = npmDependencies().path / "commonmark" / "lib" / "index.js"
-          Seq(ESModuleImportMapping.Prefix("commonmark", entry.toNIO.toUri.toString))
+          val cmarkGfm = parser.nodeModule().path / "cmark-gfm-wasm.mjs"
+          Seq(ESModuleImportMapping.Prefix("cmark-gfm-wasm", cmarkGfm.toNIO.toUri.toString))
         }
       }
     }
 
-    /** The shared sources and the cmark parser, for Scala Native. Nothing links cmark: the parser
-      * finds an installed cmark when it runs (`CmarkLibrary`), so the build needs none, and the
-      * tests, which run the conformance suite natively, need one installed.
+    /** The shared sources and the call of cmark-gfm, compiled into the binary from its C source,
+      * for Scala Native. Its tests run the conformance suite natively.
       */
     object native extends Base with ScalaNativeModule {
       def scalaNativeVersion = "0.5.12"
       override def warts = pureWarts
       def sources = Task(markdown.sharedSources() ++ super.sources())
+      // cmark-gfm's C source and the entry point, which Scala Native compiles into the binary.
+      def compileResources = Task(super.compileResources() :+ parser.nativeSources())
+      def nativeCompileOptions = Task(super.nativeCompileOptions() ++ parser.nativeIncludes())
 
       object test extends ScalaNativeTests with ZioSpecs {
-        def sources = markdown.test.sources
+        def sources = markdown.test.sharedSources
+        def nativeCompileOptions = Task(super.nativeCompileOptions() ++ parser.nativeIncludes())
       }
     }
   }
@@ -492,8 +891,15 @@ object ears extends Base with Published with Covered {
       mvn"dev.zio::zio:$zioVersion",
       mvn"com.monovore::decline:$declineVersion",
       mvn"dev.zio::zio-json:$zioJsonVersion",
-      mvn"org.commonmark:commonmark:$commonmarkVersion"
+      mvn"com.dylibso.chicory:runtime:$chicoryVersion"
     )
+
+    // The Markdown parser's JVM classes, as `markdown` has them (its sources are compiled in), and
+    // cmark-gfm's notices.
+    def resources = Task(
+      super.resources() :+ markdown.parser.jvmClasses() :+ markdown.parser.jvmNotices()
+    )
+    def compileResources = Task(super.compileResources() :+ markdown.parser.jvmClasses())
 
     def statementCoverageMin = Some(96.0)
     def branchCoverageMin = Some(95.0)
@@ -525,16 +931,23 @@ object ears extends Base with Published with Covered {
       def jvmSources = Task.Sources("src-jvm")
       def sources = Task(sharedSources() ++ jvmSources())
 
-      // Tests run in a sandbox directory; this lets them find the repo's OpenSpec files.
+      // `OwnSpecsSuite` reads the specs with commonmark-java, apart from the CLI's own reader.
+      def mvnDeps = Task(super.mvnDeps() :+ mvn"org.commonmark:commonmark:$commonmarkVersion")
+
+      // Tests run in a sandbox directory; this lets them find the repo's OpenSpec files, and
+      // cmark-gfm's notices to compare with the jar's.
       def forkEnv = Task {
         super.forkEnv() ++
-          Map("OPENSPEC_DIR" -> (mill.api.BuildCtx.workspaceRoot / "openspec").toString)
+          Map(
+            "OPENSPEC_DIR" -> (mill.api.BuildCtx.workspaceRoot / "openspec").toString,
+            "CMARK_GFM_DIR" -> markdown.parser.cmarkGfm().path.toString
+          )
       }
     }
 
     /** The same program as a native binary: the shared sources, the JVM's entry point and
       * reading (`src-jvm`: every Java API it uses works on Scala Native), and the Markdown
-      * facade's cmark parser. Linked with Scala Native's full release optimizations; its tests,
+      * facade, with cmark-gfm compiled in. Linked with Scala Native's full release optimizations; its tests,
       * which only need to run, in debug mode, which links much faster.
       */
     object native extends Base with ScalaNativeModule {
@@ -542,6 +955,7 @@ object ears extends Base with Published with Covered {
       def moduleDeps = Seq(ears.native)
       // markdown.native's sources include the facade's shared ones.
       def sources = Task(cli.sharedSources() ++ cli.jvmSources() ++ markdown.native.sources())
+      def compileResources = Task(super.compileResources() :+ markdown.parser.nativeSources())
       def generatedSources = Task(super.generatedSources() :+ cli.checkerBuild())
       def mainClass = Some("io.github.tsnee.ears.cli.Main")
       def releaseMode = Task(ReleaseMode.ReleaseFull)
@@ -550,7 +964,9 @@ object ears extends Base with Published with Covered {
       // otherwise clang declares the build machine's own release.
       private def macosMinimum =
         if (scala.util.Properties.isMac) Seq("-mmacosx-version-min=15.0") else Nil
-      def nativeCompileOptions = Task(super.nativeCompileOptions() ++ macosMinimum)
+      def nativeCompileOptions = Task(
+        super.nativeCompileOptions() ++ macosMinimum ++ markdown.parser.nativeIncludes()
+      )
       def nativeLinkingOptions = Task(super.nativeLinkingOptions() ++ macosMinimum)
 
       def mvnDeps = Seq(
@@ -562,6 +978,8 @@ object ears extends Base with Published with Covered {
       object test extends ScalaNativeTests with ZioSpecs {
         def sources = cli.test.sharedSources
         def releaseMode = Task(ReleaseMode.Debug)
+        def nativeCompileOptions =
+          Task(super.nativeCompileOptions() ++ markdown.parser.nativeIncludes())
       }
     }
 
@@ -575,6 +993,12 @@ object ears extends Base with Published with Covered {
       def sources = Task(cli.sharedSources() ++ super.sources() ++ markdown.js.sources())
       def generatedSources = Task(super.generatedSources() :+ cli.checkerBuild())
       def mainClass = Some("io.github.tsnee.ears.cli.NodeMain")
+
+      // cmark-gfm's module is imported from beside main.js, where the package puts it (esbuild
+      // minifies main.js but doesn't bundle its imports).
+      def scalaJSImportMap = Task(
+        Seq(ESModuleImportMapping.Prefix("cmark-gfm-wasm", "./cmark-gfm-wasm.mjs"))
+      )
       def moduleKind = Task(ModuleKind.ESModule)
 
       // ZIO needs java.time on Scala.js but doesn't declare it; zio-test brings it into tests.
@@ -604,9 +1028,9 @@ object ears extends Base with Published with Covered {
       }
 
       /** The npm package `@tsnee/ears-checker-cli`, ready for `npm pack`: the minified ES module,
-        * the `ears-check` command, the README, license, and a generated `package.json`. It depends
-        * on exactly the Markdown parser the facade's conformance suite runs on Node, read from
-        * that suite's lockfile.
+        * cmark-gfm's WebAssembly module and the three-line module that reads it, cmark-gfm's
+        * notices, the `ears-check` command, the README, license, and a generated `package.json`,
+        * with no dependencies.
         */
       def npmPackage = Task {
         val out = Task.dest
@@ -620,12 +1044,13 @@ object ears extends Base with Published with Covered {
         )
         os.copy(packageFiles().path / "README.md", out / "README.md")
         os.copy(npm.license().path, out / "LICENSE")
-        val parser = "commonmark"
-        val lockfile = markdown.js.npmManifest().map(_.path).filter(_.last == "package-lock.json")
-        val pinned = lockfile.headOption
-          .flatMap(file => ujson.read(os.read(file))("packages").obj.get(s"node_modules/$parser"))
-          .map(_("version").str)
-          .getOrElse(Task.fail(s"$parser isn't in ears/markdown/js/package-lock.json"))
+        // The Markdown parser beside main.js, and its license notices.
+        os.list(markdown.parser.nodeModule().path).foreach(os.copy.into(_, out))
+        os.copy(
+          markdown.parser.cmarkGfm().path / "COPYING",
+          out / "cmark-gfm" / "COPYING",
+          createFolders = true
+        )
         val repository = "https://github.com/tsnee/ears-checker"
         val manifest = ujson.Obj(
           "name" -> "@tsnee/ears-checker-cli",
@@ -641,8 +1066,13 @@ object ears extends Base with Published with Covered {
           "license" -> "CC0-1.0",
           "type" -> "module",
           "bin" -> ujson.Obj("ears-check" -> "./bin/ears-check.js"),
-          "files" -> ujson.Arr("main.js", "bin/ears-check.js"),
-          "dependencies" -> ujson.Obj(parser -> pinned),
+          "files" -> ujson.Arr(
+            "main.js",
+            "cmark-gfm-wasm.mjs",
+            "cmark-gfm.wasm",
+            "cmark-gfm/COPYING",
+            "bin/ears-check.js"
+          ),
           "engines" -> ujson.Obj("node" -> ">=22")
         )
         os.write(out / "package.json", ujson.write(manifest, indent = 2) + "\n")

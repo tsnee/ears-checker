@@ -134,6 +134,17 @@ compare openspec-spec-text 1 "$inputs/fixture-spec.json"
 compare openspec-spec-json 1 --output json "$inputs/fixture-spec.json"
 compare plain-text 1 "$inputs/plain.txt"
 compare plain-json 1 --output json "$inputs/plain.txt"
+# A Markdown table: a requirement in a cell with a missing comma (a finding), and a body row with
+# more cells than its header (a warning). Both agreeing isn't enough: the warning must be there.
+printf '%s\n' '| Name | Requirement |' '| --- | --- |' \
+  '| A | When an order arrives the scheduler shall list events. |' \
+  '| C | one | two | three |' >"$inputs/table.md"
+compare markdown-table-text 1 "$inputs/table.md"
+compare markdown-table-json 1 --output json "$inputs/table.md"
+if ! grep -q ':4: warning: table-extra-cells: ' "$tmp/$subject/markdown-table-text.out"; then
+  echo "$check: case markdown-table-text: no warning for the row with extra cells" >&2
+  exit 1
+fi
 compare invalid-utf-8 2 "$inputs/latin1.txt"
 compare utf-16 2 "$inputs/utf16.txt"
 compare byte-order-mark 1 "$inputs/bom.txt"

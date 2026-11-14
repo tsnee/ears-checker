@@ -435,29 +435,6 @@ The EARS checker SHALL write the same messages to standard error on Scala Native
 - **WHEN** the checker runs as `ears-check missing.txt` natively and on the JVM
 - **THEN** both write `Cannot read missing.txt` to standard error and both exit with status 2
 
-### Requirement: Missing cmark
-
-If the native checker must read a Markdown input and finds no cmark library of release 0.30 or later, then the EARS checker SHALL write a message naming the cmark packages to install to standard error and exit with status 2.
-
-#### Scenario: No cmark installed
-
-- **WHEN** the native checker runs as `ears-check notes.md` on a system with no cmark library
-- **THEN** it writes a message that names `brew install cmark` and `apt install cmark` to standard error and exits with status 2
-
-#### Scenario: Plain text without cmark
-
-- **WHEN** the native checker runs as `ears-check notes.txt` on a system with no cmark library
-- **THEN** it checks `notes.txt` as it would with cmark installed
-
-### Requirement: Libraries tried for Markdown
-
-If the native checker finds no usable cmark library for a Markdown input, then the EARS checker SHALL list each library it tried, and why it couldn't use it, in that input's error log entry.
-
-#### Scenario: No cmark installed, in the log
-
-- **WHEN** the native checker runs as `ears-check notes.md` on Linux with no cmark library
-- **THEN** its error log entry for `notes.md` has an `attempts` detail naming `libcmark.so` and the loader's error for it
-
 ### Requirement: JSON format version
 
 Where JSON output is selected, the EARS checker SHALL write the format version 1 as the document's `version` field.
@@ -572,3 +549,53 @@ The EARS checker SHALL write each ISO control character, U+2028, and U+2029 in a
 
 - **WHEN** a user checks a missing file whose name contains a line feed
 - **THEN** the `Cannot read` message is one line, showing `\u000a` in the name
+
+### Requirement: Warnings in text output
+
+Where text output is selected, the EARS checker SHALL write one line per warning to standard output, with the warning's location, the word `warning`, its kind, and its message.
+
+#### Scenario: A table row with extra cells
+
+- **WHEN** the checker reads `notes.md`, whose two-column table has the body row `| C | one | two | three |` on line 9, with text output
+- **THEN** standard output has the line `notes.md:9: warning: table-extra-cells: This table row has 4 cells and its header 2, so GitHub doesn't show the last 2.`
+
+### Requirement: Warnings in line order
+
+Where text output is selected, the EARS checker SHALL write an input's findings and warnings in the order of their lines.
+
+#### Scenario: A warning between two findings
+
+- **WHEN** an input has findings on lines 3 and 12 and a warning on line 9
+- **THEN** the warning's line comes between the two findings' lines
+
+### Requirement: Warnings in JSON output
+
+Where JSON output is selected, the EARS checker SHALL write each warning as an object with its location, kind, and message in the document's `warnings` array.
+
+#### Scenario: A JSON warning
+
+- **WHEN** the checker reads the same `notes.md` with JSON output
+- **THEN** the document's `warnings` array holds `{"location":{"type":"line","file":"notes.md","line":9},"kind":"table-extra-cells","message":"This table row has 4 cells and its header 2, so GitHub doesn't show the last 2."}`
+
+#### Scenario: No warnings
+
+- **WHEN** the checker reads input with no warnings, with JSON output
+- **THEN** the document's `warnings` field is an empty array
+
+### Requirement: Exit status without warnings
+
+The EARS checker SHALL set the exit status from the findings, unaffected by warnings.
+
+#### Scenario: Only a warning
+
+- **WHEN** the checker reads a Markdown file whose only problem is a table row with extra cells
+- **THEN** it writes the warning and exits with status 0
+
+### Requirement: Warnings logged
+
+When the EARS checker reports a warning, the EARS checker SHALL log a warning entry with the input's name, the warning's line and kind, and its message.
+
+#### Scenario: Logged warning
+
+- **WHEN** the checker reports the warning for line 9 of `notes.md`
+- **THEN** its log has a WARN entry naming `notes.md`, line 9, and `table-extra-cells`

@@ -7,6 +7,19 @@ Every release of ears-checker, newest first. Each change adds its lines under Un
 ### Added
 
 - Both npm packages are on npm, from 0.2.0: `npx @tsnee/ears-checker-cli` runs the command line, and `npm install @tsnee/ears-checker` installs the library. From this release on, the release workflow stages them on npm with trusted publishing, and they're published once the owner has checked that they're the GitHub Release's own tarballs.
+- Markdown tables are read as GitHub reads them, each cell on its own: every requirement in a table is checked, on its row's line, the same on the JVM, Node, and Scala Native.
+- Warnings, beside the findings, for problems in the input that aren't a requirement's: a `file:line: warning: …` line in text output, and a `warnings` array in JSON output (still format version 1). The first is `table-extra-cells`, a table row with more cells than its header, which GitHub doesn't show. Warnings don't change the exit status.
+- cmark-gfm's license notices: in the jar (`META-INF/cmark-gfm/COPYING`), in the CLI's npm package (`cmark-gfm/COPYING`), and as `THIRD-PARTY-NOTICES.txt` in each GitHub Release.
+
+### Changed
+
+- Markdown is read with GitHub's own parser, cmark-gfm 0.29.0.gfm.13 with its table extension, the same on every build: compiled into the native binary, and as a WebAssembly module in the jar and the npm package. The native binary no longer needs cmark installed and loads no library beyond the system's, and the log's parser detail names cmark-gfm (a Markdown input no longer logs the libraries tried). Thousands of tables in a row are read without running out of stack.
+- The CLI's npm package has no dependencies.
+- A link definition directly above a table, with no blank line, is read as GitHub reads it: as paragraph text, so a cell's link to it stays unresolved.
+
+### Fixed
+
+- A Markdown table is no longer read as one long sentence, which gave a misleading finding and left the table's other requirements unchecked; a table right after a paragraph no longer merges into it.
 
 ## 0.2.0 - 2026-11-11
 

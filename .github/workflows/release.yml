@@ -158,7 +158,8 @@ jobs:
           version=${TAG#v}
           expected=$(printf '%s\n' "ears-check-$version.jar" "tsnee-ears-checker-$version.tgz" \
             "tsnee-ears-checker-cli-$version.tgz" "ears-check-$version-linux-x64" \
-            "ears-check-$version-linux-arm64" "ears-check-$version-macos-arm64" | sort)
+            "ears-check-$version-linux-arm64" "ears-check-$version-macos-arm64" \
+            THIRD-PARTY-NOTICES.txt | sort)
           found=$(find . -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)
           if [ "$found" != "$expected" ]; then
             echo "::error::The release's files differ from those expected (< found):"
