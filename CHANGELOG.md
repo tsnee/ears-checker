@@ -24,6 +24,7 @@ Every release of ears-checker, newest first. Each change adds its lines under Un
 - `--help` works anywhere among the options, where it worked only alone and was otherwise an unexpected option. With an input file it's invalid arguments, so a glob that picks up a file named `--help` fails rather than checking nothing.
 - JSON output writes the C1 control characters (such as U+009B), DEL, and the line and paragraph separators (U+2028, U+2029) as `\u` escapes, where they were written raw, so no line-based tool splits the document and no terminal acts on them. Still format version 1: each escape is the same character.
 - A lone surrogate in an OpenSpec requirement (from a JSON escape such as `\ud83d`) is shown as `\ud83d` in text output and in JSON output, the same from every build, where the jar and the native binary wrote `?` and the Node CLI U+FFFD.
+- Unicode's explicit bidirectional formatting characters (U+202A to U+202E and U+2066 to U+2069, such as the right-to-left override) from a requirement or a file name are shown as `\u202e` and the like in text output, in messages, in JSON output, and in log lines, where they were written raw and could make a finding or a log line display in a different order than it's written ("Trojan Source"). Log lines also write a lone surrogate as a `\u` escape, where the jar and the native binary wrote `?` and the Node CLI U+FFFD. The marks U+200E, U+200F, and U+061C, common in right-to-left text, are left as they are.
 
 ## 0.2.0 - 2026-11-11
 

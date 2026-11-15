@@ -81,6 +81,34 @@ object LoggingSuite extends ZIOSpecDefault:
           val written = Logging.line(noon, LogLevel.Error, message, Map("key" -> value))
           assertTrue(!written.exists(TerminalText.acted))
         }
+      ,
+      test("explicit bidirectional formatting characters are written as \\uXXXX"):
+        val rlo = 0x202e.toChar.toString
+        val rli = 0x2067.toChar.toString
+        assertTrue(
+          Logging
+            .line(noon, LogLevel.Error, "a" + rlo + "b", Map("file" -> ("mis" + rli + "sing"))) ==
+            "2026-11-04T12:00:00Z ERROR a\\u202eb file=mis\\u2067sing"
+        )
+      ,
+      test("a lone surrogate is written as \\ud83d, and a surrogate pair stays"):
+        val pair = Character.toChars(0x1f600).mkString
+        assertTrue(
+          Logging.line(noon, LogLevel.Info, "a" + 0xd83d.toChar.toString + "b" + pair, Map.empty) ==
+            "2026-11-04T12:00:00Z INFO a\\ud83db" + pair
+        )
+      ,
+      test("whatever the details hold, an entry has no bidirectional character or lone surrogate"):
+        val characters = Gen.oneOf(
+          TerminalText.characters,
+          Gen.elements(bidirectional*),
+          Gen.elements('\ud83d', '\ude00')
+        )
+        val texts = Gen.listOfBounded(0, 20)(characters).map(_.mkString)
+        check(texts, texts) { (message, value) =>
+          val written = Logging.line(noon, LogLevel.Error, message, Map("key" -> value))
+          assertTrue(!written.exists(bidirectional.contains), !hasLoneSurrogate(written))
+        }
     ),
     suite("arguments")(
       test("a JSON array keeps each argument whole"):
@@ -139,3 +167,17 @@ object LoggingSuite extends ZIOSpecDefault:
         )
     )
   )
+
+  /** Unicode's explicit bidirectional formatting characters, built from their code points so this
+    * source holds none.
+    */
+  private val bidirectional: List[Char] =
+    ((0x202a to 0x202e) ++ (0x2066 to 0x2069)).toList.map(_.toChar)
+
+  /** Whether a surrogate in `text` isn't half of a pair. */
+  private def hasLoneSurrogate(text: String): Boolean =
+    text.indices.exists { i =>
+      val c = text(i)
+      (Character.isHighSurrogate(c) && !text.lift(i + 1).exists(Character.isLowSurrogate)) ||
+      (Character.isLowSurrogate(c) && !text.lift(i - 1).exists(Character.isHighSurrogate))
+    }

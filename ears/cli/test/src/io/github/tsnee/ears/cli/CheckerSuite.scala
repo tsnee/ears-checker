@@ -286,6 +286,41 @@ object CheckerSuite extends ZIOSpecDefault:
           !outcome.stdout.exists(surrogate)
         )
       ,
+      test("a right-to-left override in a fix shows as \\u202e"):
+        val rlo = 0x202e.toChar
+        val outcome = Checker.outcome(
+          plain,
+          Right("When an order arrives the scheduler shall list " + rlo.toString + "events.")
+        )
+        assertTrue(
+          outcome.stdout.contains(
+            "Fix: \"When an order arrives, the scheduler shall list " +
+              "\\u202eevents.\""
+          ),
+          !outcome.stdout.contains(rlo)
+        )
+      ,
+      test("a missing file's name with a right-to-left override shows it as \\u202e"):
+        val rlo = 0x202e.toChar
+        val outcome = Checker.outcome(plain, Left("Cannot read mis" + rlo.toString + "sing.txt"))
+        assertTrue(
+          outcome.stderr == "Cannot read mis\\u202esing.txt\n",
+          !outcome.stderr.contains(rlo)
+        )
+      ,
+      test("JSON output shows a right-to-left isolate in a requirement as \\u2067"):
+        val rli = 0x2067.toChar
+        val outcome = Checker.outcome(
+          settings(None, None, None, Some(OutputFormat.Json)),
+          Right("When an order arrives the scheduler shall list [" + rli.toString + "] events.")
+        )
+        assertTrue(
+          outcome.stdout.contains(
+            "\"requirement\":\"When an order arrives the scheduler shall list [\\u2067] events.\""
+          ),
+          !outcome.stdout.contains(rli)
+        )
+      ,
       test("backslashes in a fix are left as they are"):
         val outcome = Checker.outcome(
           plain,

@@ -47,7 +47,32 @@ object VisibleSuite extends ZIOSpecDefault:
       check(Gen.listOfBounded(0, 20)(Gen.oneOf(pairs, plain)).map(_.mkString)) { text =>
         assertTrue(Visible.escape(text) == text)
       }
+    ,
+    test("each explicit bidirectional formatting character becomes \\u and its four digits"):
+      assertTrue(
+        bidirectional.forall(c => Visible.escape(c.toString) == "\\u" + Integer.toHexString(c))
+      )
+    ,
+    test("a right-to-left override becomes \\u202e"):
+      val text = "list " + 0x202e.toChar.toString + "events."
+      assertTrue(Visible.escape(text) == "list \\u202eevents.")
+    ,
+    test("the implicit marks LRM, RLM, and ALM stay as they are"):
+      val text = List(0x200e, 0x200f, 0x061c).map(_.toChar).mkString("a", "b", "c")
+      assertTrue(Visible.escape(text) == text)
+    ,
+    test("no explicit bidirectional formatting character is left"):
+      val withBidirectional = Gen.oneOf(characters, Gen.elements(bidirectional*))
+      check(Gen.listOfBounded(0, 20)(withBidirectional).map(_.mkString)) { text =>
+        assertTrue(!Visible.escape(text).exists(bidirectional.contains))
+      }
   )
+
+  /** Unicode's explicit bidirectional formatting characters, built from their code points so this
+    * source holds none: LRE, RLE, PDF, LRO, RLO, LRI, RLI, FSI, and PDI.
+    */
+  private val bidirectional: List[Char] =
+    ((0x202a to 0x202e) ++ (0x2066 to 0x2069)).toList.map(_.toChar)
 
   /** Surrogate pairs, built from their code points: the lowest and highest outside the Basic
     * Multilingual Plane and two emoji.

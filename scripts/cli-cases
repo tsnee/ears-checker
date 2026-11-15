@@ -198,7 +198,46 @@ for output in text json; do
     exit 1
   fi
 done
+# A requirement with a missing comma holding a right-to-left override (RLO), a left-to-right
+# isolate (LRI), and a right-to-left mark (RLM), written as their UTF-8 bytes so this file holds
+# none: every build shows RLO and LRI as \uXXXX in text and JSON output, and keeps the mark.
+printf 'When an order arrives the scheduler shall list [\342\200\256] [\342\201\246] [\342\200\217] events.\n' \
+  >"$inputs/bidirectional.txt"
+compare bidirectional-text 1 "$inputs/bidirectional.txt"
+compare bidirectional-json 1 --output json "$inputs/bidirectional.txt"
+for output in text json; do
+  if ! grep -qF "[\\u202e] [\\u2066] [$(printf '\342\200\217')]" \
+    "$tmp/$subject/bidirectional-$output.out"; then
+    echo "$check: case bidirectional-$output: the output doesn't show the escapes and the mark" >&2
+    exit 1
+  fi
+  if LC_ALL=C grep -q -e "$(printf '\342\200\256')" -e "$(printf '\342\201\246')" \
+    "$tmp/$subject/bidirectional-$output.out"; then
+    echo "$check: case bidirectional-$output: the output still has RLO or LRI" >&2
+    exit 1
+  fi
+done
 compare missing 2 "$inputs/missing.txt"
+# A missing file whose name holds a right-to-left override, as its UTF-8 bytes: every build's
+# message shows it as \u202e. So does its error log entry, whose details differ by platform.
+# Only where an argument reaches every build as UTF-8: not under Git Bash on Windows, where the
+# JVM decodes arguments with the code page, and not in a locale whose charset isn't UTF-8.
+if [ "$(locale charmap 2>/dev/null)" = UTF-8 ] && ! uname -s | grep -q -E '^(MINGW|MSYS|CYGWIN)'
+then
+  compare missing-bidirectional 2 "$inputs/mis$(printf '\342\200\256')sing.txt"
+  for who in "$subject" jvm; do
+    for stream in err log; do
+      if ! grep -qF "mis\\u202esing.txt" "$tmp/$who/missing-bidirectional.$stream" ||
+        LC_ALL=C grep -q "$(printf '\342\200\256')" "$tmp/$who/missing-bidirectional.$stream"
+      then
+        echo "$check: case missing-bidirectional: $who's $stream doesn't show RLO as \\u202e" >&2
+        exit 1
+      fi
+    done
+  done
+else
+  echo "$check: missing-bidirectional: skipped, since arguments here may not reach the CLI as UTF-8"
+fi
 compare directory 2 "$inputs/notes"
 if [ "$(id -u)" -ne 0 ]; then
   compare unreadable 2 "$inputs/secret.txt"

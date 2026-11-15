@@ -2,12 +2,16 @@ package io.github.tsnee.ears.cli
 
 /** What the output and the messages on standard error show of characters a terminal or a line-based
   * tool would act on: escape sequences, bells, the C1 controls (CSI and NEL among them), and
-  * Unicode's line and paragraph separators; and of lone surrogates, which each platform's UTF-8
-  * encoder would replace with a different character. Each becomes `\uXXXX`, as in the log lines, so
-  * a requirement or a file name can't move the cursor, retitle the window, or split a finding
-  * across lines, and every build writes the same bytes. Backslashes stay as they are, so a fix can
-  * be copied back into the file. JSON output goes through it whole: `\uXXXX` is a JSON escape for
-  * the same character, and everything outside the document's strings is printable ASCII.
+  * Unicode's line and paragraph separators; of the explicit bidirectional formatting characters
+  * (embeddings, overrides, and isolates), which an editor or a web page would let reorder the text
+  * after them; and of lone surrogates, which each platform's UTF-8 encoder would replace with a
+  * different character. Each becomes `\uXXXX`, as in the log lines, which escape the same
+  * characters (`escaped`), so a requirement or a file name can't move the cursor, retitle the
+  * window, split a finding across lines, or show it in another order, and every build writes the
+  * same bytes. The implicit marks (LRM, RLM, ALM), common in right-to-left text, are left alone,
+  * and so are backslashes, so a fix can be copied back into the file. JSON output goes through it
+  * whole: `\uXXXX` is a JSON escape for the same character, and everything outside the document's
+  * strings is printable ASCII.
   */
 object Visible:
 
@@ -25,10 +29,19 @@ object Visible:
       out.result()
     else text
 
-  private def escaped(text: String, i: Int): Boolean = actedOn(text(i)) || lone(text, i)
+  /** Whether the code unit at `i` is one of those characters: the one predicate for what's escaped,
+    * which log lines (`Logging`) use too.
+    */
+  private[cli] def escaped(text: String, i: Int): Boolean =
+    actedOn(text(i)) || bidirectional(text(i)) || lone(text, i)
 
   private def actedOn(c: Char): Boolean =
     Character.isISOControl(c) || c.toInt == 0x2028 || c.toInt == 0x2029
+
+  /** LRE, RLE, PDF, LRO, and RLO (U+202A to U+202E), and LRI, RLI, FSI, and PDI (U+2066 to U+2069).
+    */
+  private def bidirectional(c: Char): Boolean =
+    (c.toInt >= 0x202a && c.toInt <= 0x202e) || (c.toInt >= 0x2066 && c.toInt <= 0x2069)
 
   /** Whether the code unit at `i` is a surrogate that isn't half of a pair: a high one not followed
     * by a low one, or a low one not after a high one.
