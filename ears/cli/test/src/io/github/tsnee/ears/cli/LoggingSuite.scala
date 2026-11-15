@@ -91,11 +91,24 @@ object LoggingSuite extends ZIOSpecDefault:
             "2026-11-04T12:00:00Z ERROR a\\u202eb file=mis\\u2067sing"
         )
       ,
-      test("a lone surrogate is written as \\ud83d, and a surrogate pair stays"):
+      test("a lone surrogate is written as \\ud83d, and a surrogate pair as two escapes"):
         val pair = Character.toChars(0x1f600).mkString
         assertTrue(
           Logging.line(noon, LogLevel.Info, "a" + 0xd83d.toChar.toString + "b" + pair, Map.empty) ==
-            "2026-11-04T12:00:00Z INFO a\\ud83db" + pair
+            "2026-11-04T12:00:00Z INFO a\\ud83db\\ud83d\\ude00"
+        )
+      ,
+      test("a zero-width space and ## in a message and a detail are escaped"):
+        val zwsp = 0x200b.toChar.toString
+        assertTrue(
+          Logging.line(
+            noon,
+            LogLevel.Error,
+            "a" + zwsp + "b ##[add-mask]x",
+            Map("file" -> ("c" + zwsp + "##[add-mask]y"))
+          ) ==
+            "2026-11-04T12:00:00Z ERROR a\\u200bb \\u0023#[add-mask]x " +
+            "file=c\\u200b\\u0023#[add-mask]y"
         )
       ,
       test("whatever the details hold, an entry has no bidirectional character or lone surrogate"):
@@ -108,6 +121,15 @@ object LoggingSuite extends ZIOSpecDefault:
         check(texts, texts) { (message, value) =>
           val written = Logging.line(noon, LogLevel.Error, message, Map("key" -> value))
           assertTrue(!written.exists(bidirectional.contains), !hasLoneSurrogate(written))
+        }
+      ,
+      test("whatever the details hold, an entry holds only English characters and no ##"):
+        val units =
+          Gen.oneOf(TerminalText.characters, Gen.const('#'), Gen.int(0, 0xffff).map(_.toChar))
+        val texts = Gen.listOfBounded(0, 20)(units).map(_.mkString)
+        check(texts, texts) { (message, value) =>
+          val written = Logging.line(noon, LogLevel.Error, message, Map("key" -> value))
+          assertTrue(written.forall(TerminalText.english), !written.contains("##"))
         }
     ),
     suite("arguments")(

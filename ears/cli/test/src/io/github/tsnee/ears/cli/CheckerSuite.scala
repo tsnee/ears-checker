@@ -321,6 +321,102 @@ object CheckerSuite extends ZIOSpecDefault:
           !outcome.stdout.contains(rli)
         )
       ,
+      test("accented letters and typographic punctuation in a fix are left as they are"):
+        val quoted = 0x201c.toChar.toString + "events" + 0x201d.toChar.toString
+        val dash = 0x2014.toChar.toString
+        val outcome = Checker.outcome(
+          plain,
+          Right("When an order arrives the scheduler shall list " + quoted + " " + dash + " café.")
+        )
+        assertTrue(
+          outcome.stdout.contains("shall list " + quoted + " " + dash + " café.\""),
+          !outcome.stdout.contains("\\u")
+        )
+      ,
+      test("an emoji, a zero-width space, a Cyrillic a, and ## in a fix are escaped"):
+        val emoji = Character.toChars(0x1f600).mkString
+        val text = "When an order arrives the scheduler shall list " + emoji + " ev" +
+          0x200b.toChar.toString + "ents for d" + 0x0430.toChar.toString + "ys ##[error] now."
+        val outcome = Checker.outcome(plain, Right(text))
+        assertTrue(
+          outcome.stdout.contains(
+            "shall list \\ud83d\\ude00 ev\\u200bents for d\\u0430ys \\u0023#[error] now.\""
+          ),
+          !outcome.stdout.contains("##")
+        )
+      ,
+      test("a missing file's name with a zero-width space shows it as \\u200b"):
+        val outcome =
+          Checker.outcome(plain, Left("Cannot read mis" + 0x200b.toChar.toString + "sing.txt"))
+        assertTrue(outcome.stderr == "Cannot read mis\\u200bsing.txt\n")
+      ,
+      test("JSON output shows an emoji and ## in a requirement as escapes"):
+        val emoji = Character.toChars(0x1f600).mkString
+        val outcome = Checker.outcome(
+          settings(None, None, None, Some(OutputFormat.Json)),
+          Right(
+            "When an order arrives the scheduler shall list [" + emoji +
+              "] ##[set-output name=ok]true events."
+          )
+        )
+        assertTrue(
+          outcome.stdout.contains(
+            "list [\\ud83d\\ude00] \\u0023#[set-output name=ok]true events.\""
+          ),
+          !outcome.stdout.contains("##")
+        )
+      ,
+      test("a spec id that is a workflow command starts its line with \\u003a"):
+        val outcome = Checker.outcome(
+          settings(None, Some(InputFormat.OpenSpecJson), None, None),
+          Right(
+            """{"id": "::error::forged", "requirements": [
+              |  {"name": "Upcoming", "text": "The scheduler lists upcoming events."}
+              |]}""".stripMargin
+          )
+        )
+        assertTrue(outcome.stdout.startsWith("\\u003a:error::forged/"))
+      ,
+      test("a file name that starts with a no-break space starts its line with \\u00a0"):
+        val outcome = Checker.outcome(
+          file(0xa0.toChar.toString + "notes.txt", None),
+          Right("The scheduler lists upcoming events.")
+        )
+        assertTrue(outcome.stdout.startsWith("\\u00a0notes.txt:1:"))
+      ,
+      test("a file name that starts with a space starts its line with \\u0020"):
+        val outcome =
+          Checker.outcome(file(" notes.txt", None), Right("The scheduler lists upcoming events."))
+        assertTrue(outcome.stdout.startsWith("\\u0020notes.txt:1:"))
+      ,
+      test("a tab in a file name is escaped, not turned into a space"):
+        val outcome =
+          Checker.outcome(file("notes\t.txt", None), Right("The scheduler lists upcoming events."))
+        assertTrue(outcome.stdout.startsWith("notes\\u0009.txt:1:"))
+      ,
+      test("a decomposed accent in a file name is left as it is"):
+        val name = "cafe" + 0x301.toChar.toString + ".txt"
+        val outcome =
+          Checker.outcome(file(name, None), Right("The scheduler lists upcoming events."))
+        assertTrue(outcome.stdout.startsWith(name + ":1:"))
+      ,
+      test("no line of text output starts with white space or a colon"):
+        val starts = Gen.elements(' ', ':', 0xa0.toChar, '\t', 'a', '#')
+        check(Gen.listOfBounded(0, 3)(starts).map(_.mkString)) { prefix =>
+          val outcome = Checker.outcome(
+            file(prefix + "notes.txt", None),
+            Right("The scheduler lists upcoming events.")
+          )
+          assertTrue(
+            lines(outcome.stdout).forall(line =>
+              !line.headOption.exists(c =>
+                Character.isWhitespace(c) || Character.isSpaceChar(c) ||
+                  c == ':'
+              )
+            )
+          )
+        }
+      ,
       test("backslashes in a fix are left as they are"):
         val outcome = Checker.outcome(
           plain,

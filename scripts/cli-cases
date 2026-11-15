@@ -200,23 +200,50 @@ for output in text json; do
 done
 # A requirement with a missing comma holding a right-to-left override (RLO), a left-to-right
 # isolate (LRI), and a right-to-left mark (RLM), written as their UTF-8 bytes so this file holds
-# none: every build shows RLO and LRI as \uXXXX in text and JSON output, and keeps the mark.
+# none: every build shows all three as \uXXXX in text and JSON output (the mark too, since it's
+# outside the English character set).
 printf 'When an order arrives the scheduler shall list [\342\200\256] [\342\201\246] [\342\200\217] events.\n' \
   >"$inputs/bidirectional.txt"
 compare bidirectional-text 1 "$inputs/bidirectional.txt"
 compare bidirectional-json 1 --output json "$inputs/bidirectional.txt"
 for output in text json; do
-  if ! grep -qF "[\\u202e] [\\u2066] [$(printf '\342\200\217')]" \
-    "$tmp/$subject/bidirectional-$output.out"; then
-    echo "$check: case bidirectional-$output: the output doesn't show the escapes and the mark" >&2
+  if ! grep -qF "[\\u202e] [\\u2066] [\\u200f]" "$tmp/$subject/bidirectional-$output.out"; then
+    echo "$check: case bidirectional-$output: the output doesn't show the escapes" >&2
     exit 1
   fi
   if LC_ALL=C grep -q -e "$(printf '\342\200\256')" -e "$(printf '\342\201\246')" \
-    "$tmp/$subject/bidirectional-$output.out"; then
-    echo "$check: case bidirectional-$output: the output still has RLO or LRI" >&2
+    -e "$(printf '\342\200\217')" "$tmp/$subject/bidirectional-$output.out"; then
+    echo "$check: case bidirectional-$output: the output still has RLO, LRI, or RLM" >&2
     exit 1
   fi
 done
+# A requirement with a missing comma holding the English character set's curly quotes, an em
+# dash, and an accented letter, which every build keeps; and an emoji, a zero-width space, a
+# Cyrillic a, and a GitHub Actions command marker, which every build escapes, with text and JSON
+# output alike. Written as UTF-8 bytes, so this file holds none of them.
+printf 'When an order arrives the scheduler shall list \342\200\234events\342\200\235 \342\200\224 at the caf\303\251 \360\237\230\200 ev\342\200\213ents for d\320\260ys ##[error] now.\n' \
+  >"$inputs/english.txt"
+compare english-text 1 "$inputs/english.txt"
+compare english-json 1 --output json "$inputs/english.txt"
+for output in text json; do
+  if ! grep -qF "$(printf '\342\200\234events\342\200\235 \342\200\224 at the caf\303\251')" \
+    "$tmp/$subject/english-$output.out" ||
+    ! grep -qF "\\ud83d\\ude00 ev\\u200bents for d\\u0430ys \\u0023#[error] now." \
+      "$tmp/$subject/english-$output.out" ||
+    grep -qF '##' "$tmp/$subject/english-$output.out"; then
+    echo "$check: case english-$output: the output doesn't keep and escape what it should" >&2
+    exit 1
+  fi
+done
+# An OpenSpec spec whose id is a GitHub Actions workflow command: its finding's line, which
+# starts with the id, starts with the colon escaped.
+printf '%s\n' '{"id": "::error::forged", "requirements": [{"name": "Upcoming",' \
+  ' "text": "The scheduler lists upcoming events."}]}' >"$inputs/command-id.json"
+compare command-id 1 "$inputs/command-id.json"
+if ! grep -q '^\\u003a:error::forged/' "$tmp/$subject/command-id.out"; then
+  echo "$check: case command-id: the line doesn't start with the colon escaped" >&2
+  exit 1
+fi
 compare missing 2 "$inputs/missing.txt"
 # A missing file whose name holds a right-to-left override, as its UTF-8 bytes: every build's
 # message shows it as \u202e. So does its error log entry, whose details differ by platform.
@@ -238,6 +265,18 @@ then
 else
   echo "$check: missing-bidirectional: skipped, since arguments here may not reach the CLI as UTF-8"
 fi
+# A missing file whose name holds a GitHub Actions command marker: no build's message or log
+# line holds two number signs side by side.
+compare missing-command 2 "$inputs/##[add-mask]notes.txt"
+for who in "$subject" jvm; do
+  for stream in err log; do
+    if grep -qF '##' "$tmp/$who/missing-command.$stream" ||
+      ! grep -qF '[add-mask]notes.txt' "$tmp/$who/missing-command.$stream"; then
+      echo "$check: case missing-command: $who's $stream holds ## or lacks the name" >&2
+      exit 1
+    fi
+  done
+done
 compare directory 2 "$inputs/notes"
 if [ "$(id -u)" -ne 0 ]; then
   compare unreadable 2 "$inputs/secret.txt"
