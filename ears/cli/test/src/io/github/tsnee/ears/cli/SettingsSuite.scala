@@ -24,6 +24,36 @@ object SettingsSuite extends ZIOSpecDefault:
     "--help can't be given with input files: leave out --help, or name a file called --help after --."
 
   def spec = suite("Settings")(
+    suite("--max-input-bytes")(
+      test("10 MiB when it isn't given"):
+        assertTrue(
+          Settings.parseInvocation(List("notes.txt")).map(_.maxInputBytes) == Right(10485760)
+        )
+      ,
+      test("1 and 104,857,600 bytes are accepted"):
+        assertTrue(
+          Settings
+            .parseInvocation(List("--max-input-bytes", "1", "notes.txt"))
+            .map(_.maxInputBytes) == Right(1),
+          Settings
+            .parseInvocation(List("--max-input-bytes", "104857600", "notes.txt"))
+            .map(_.maxInputBytes) == Right(104857600)
+        )
+      ,
+      test("one limit for every input"):
+        assertTrue(
+          Settings
+            .parseInvocation(List("a.txt", "--max-input-bytes", "1000", "b.txt"))
+            .map(_.maxInputBytes) == Right(1000)
+        )
+      ,
+      test("0, 104,857,601, 10M, and -5 are rejected, with a reason naming the option"):
+        val rejected =
+          List("0", "104857601", "10M", "-5").map(value =>
+            rejection(s"--max-input-bytes=$value", "notes.txt")
+          )
+        assertTrue(rejected.forall(_.exists(_.exists(_.contains("--max-input-bytes")))))
+    ),
     suite("--help among the options")(
       test("alone"):
         assertTrue(asksForHelp("--help"))
@@ -46,7 +76,13 @@ object SettingsSuite extends ZIOSpecDefault:
       test("after --, it's a file name"):
         assertTrue(
           Settings.parseInvocation(List("--", "--help")) ==
-            Right(Invocation(verbose = false, NonEmptyList.one(file("--help"))))
+            Right(
+              Invocation(
+                verbose = false,
+                NonEmptyList.one(file("--help")),
+                maxInputBytes = 10485760
+              )
+            )
         )
       ,
       test("--verbose counts with --help, for the log"):
@@ -66,7 +102,7 @@ object SettingsSuite extends ZIOSpecDefault:
           Settings.parseInvocation(List("--help")).left.map(_.text.linesIterator.next()) ==
             Left(
               "Usage: ears-check [--format <string>] [--profile <string>] [--output <string>] " +
-                "[--verbose] [<file>...]"
+                "[--verbose] [--max-input-bytes <bytes>] [<file>...]"
             )
         )
       ,
@@ -133,7 +169,8 @@ object SettingsSuite extends ZIOSpecDefault:
                     profileOption = None,
                     outputOption = Some(OutputFormat.Json)
                   )
-                )
+                ),
+                maxInputBytes = 10485760
               )
             )
         )
@@ -141,7 +178,13 @@ object SettingsSuite extends ZIOSpecDefault:
       test("--verbose before the files"):
         assertTrue(
           Settings.parseInvocation(List("--verbose", "notes.md")) ==
-            Right(Invocation(verbose = true, NonEmptyList.one(file("notes.md"))))
+            Right(
+              Invocation(
+                verbose = true,
+                NonEmptyList.one(file("notes.md")),
+                maxInputBytes = 10485760
+              )
+            )
         )
       ,
       test("--verbose after the files"):

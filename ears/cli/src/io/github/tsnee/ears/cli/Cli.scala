@@ -114,18 +114,19 @@ object Cli:
         )(
           ZIO.logError("Invalid arguments")
         ).as(Outcome(exitCode = 2, stdout = "", stderr = s"$text\n", findings = 0, warnings = 0))
-      case Right(Invocation(verbose, all)) =>
+      case Right(Invocation(verbose, all, limit)) =>
         // ZIO.foreach is sequential and stops at the first failure: no later file is read.
         val loaded =
           for
-            first <- load(all.head, reading)
-            rest <- ZIO.foreach(all.tail)(load(_, reading))
+            first <- load(all.head, reading, limit)
+            rest <- ZIO.foreach(all.tail)(load(_, reading, limit))
           yield NonEmptyList(first, rest)
         val details =
           Map(
             "arguments" -> argumentText,
             "inputs" -> all.size.toString,
-            "verbose" -> verbose.toString
+            "verbose" -> verbose.toString,
+            "max-input-bytes" -> limit.toString
           )
         annotated(details)(ZIO.logDebug("Arguments")) *> loaded.either.map(Checker.outcome)
 
@@ -135,7 +136,8 @@ object Cli:
     */
   private def load(
       settings: Settings,
-      reading: Reading
+      reading: Reading,
+      limit: Int
   ): IO[String, (Settings, Found)] =
     ZIO
       .when(settings.inputFormat == InputFormat.Markdown)(ZIO.succeed(Markdown.parser()))
@@ -143,7 +145,7 @@ object Cli:
         annotated(Logging.inputDetails(settings) ++ Logging.parserDetails(parser)) {
           for
             _ <- ZIO.logDebug("Reading input")
-            content <- read(settings, reading)
+            content <- read(settings, reading, limit)
             found <- ZIO
               .fromEither(Checker.parse(settings, content))
               .tapError(failure =>
@@ -166,14 +168,24 @@ object Cli:
         }
       )
 
-  /** The input's text, or the message for standard error; the error itself is logged first. */
-  private def read(settings: Settings, reading: Reading): IO[String, String] =
+  /** The input's text, or the message for standard error; the error itself is logged first. At most
+    * the limit and one more byte is read: the extra byte tells an input of exactly the limit from a
+    * larger one, without holding the larger one whole or waiting for a stream that never ends.
+    */
+  private def read(settings: Settings, reading: Reading, limit: Int): IO[String, String] =
     settings.file
-      .fold(reading.standardInput)(reading.file)
+      .fold(reading.standardInput(limit + 1))(reading.file(_, limit + 1))
+      .mapError(error => ReadFailure.Unreadable -> error)
+      .flatMap(bytes =>
+        ZIO
+          .fromEither(Bounded.decode(bytes, limit))
+          .mapError(failure => failure -> failure.decodingError)
+      )
       .tapError((failure, error) =>
         val details = failure match
           case ReadFailure.NotUtf8(line, column) => Map("position" -> s"$line:$column")
           case ReadFailure.OtherEncoding(name)   => Map("encoding" -> name)
+          case ReadFailure.TooLarge(largest)     => Map("limit" -> largest.toString)
           case ReadFailure.Unreadable            => Map.empty
         annotated(Map("error" -> error, "exit" -> "2") ++ details)(
           ZIO.logError("Cannot read input")

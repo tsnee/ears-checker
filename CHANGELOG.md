@@ -10,6 +10,7 @@ Every release of ears-checker, newest first. Each change adds its lines under Un
 - Markdown tables are read as GitHub reads them, each cell on its own: every requirement in a table is checked, on its row's line, the same on the JVM, Node, and Scala Native.
 - Warnings, beside the findings, for problems in the input that aren't a requirement's: a `file:line: warning: …` line in text output, and a `warnings` array in JSON output (still format version 1). The first is `table-extra-cells`, a table row with more cells than its header, which GitHub doesn't show. Warnings don't change the exit status.
 - cmark-gfm's license notices: in the jar (`META-INF/cmark-gfm/COPYING`), in the CLI's npm package (`cmark-gfm/COPYING`), and as `THIRD-PARTY-NOTICES.txt` in each GitHub Release.
+- A size limit on each input, 10 MiB by default, set with `--max-input-bytes <bytes>` from 1 byte to 100 MiB: no build reads more of a file or standard input than the limit and one byte, so a large untrusted input, or a standard input that never ends, stops there with exit status 2 and `Cannot read <input>: more than <limit> bytes; --max-input-bytes raises the limit`.
 
 ### Changed
 

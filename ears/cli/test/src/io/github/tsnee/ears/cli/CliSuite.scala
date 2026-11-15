@@ -1,5 +1,6 @@
 package io.github.tsnee.ears.cli
 
+import java.nio.charset.StandardCharsets
 import java.time.Instant
 import scala.collection.mutable.ListBuffer
 
@@ -14,23 +15,41 @@ object CliSuite extends ZIOSpecDefault:
   private val passing = "The scheduler shall list upcoming events.\n"
   private val failing = "The scheduler lists events.\n"
 
-  /** A `Reading` over named files; any other name can't be read. Standard input isn't expected. */
-  private def reading(files: Map[String, IO[(ReadFailure, String), String]]): Reading =
+  private def utf8(text: String): Array[Byte] = text.getBytes(StandardCharsets.UTF_8)
+
+  /** A `Reading` over named files' text, read as UTF-8; any other name can't be read. Standard
+    * input isn't expected.
+    */
+  private def reading(files: Map[String, IO[String, String]]): Reading =
     Reading(
-      name => files.getOrElse(name, unreadable("ENOENT")),
-      unreadable("standard input not expected")
+      (name, _) => files.getOrElse(name, ZIO.fail("ENOENT")).map(utf8),
+      _ => unreadable("standard input not expected")
     )
 
-  private def unreadable(error: String): IO[(ReadFailure, String), String] =
-    ZIO.fail(ReadFailure.Unreadable -> error)
+  private def unreadable(error: String): IO[String, Array[Byte]] = ZIO.fail(error)
 
-  private def run(files: Map[String, IO[(ReadFailure, String), String]], arguments: String*) =
+  private def run(files: Map[String, IO[String, String]], arguments: String*) =
     Cli.program(arguments.toList, reading(files))
+
+  /** A `Reading` whose every input holds more bytes than are asked for: whatever the limit, over
+    * it.
+    */
+  private val overLimit: Reading =
+    Reading(
+      (_, most) => ZIO.succeed(Array.fill(most)('a'.toByte)),
+      most => ZIO.succeed(Array.fill(most)('a'.toByte))
+    )
 
   def spec = suite("ears-check, shared")(
     suite("read-failure messages")(
       test("an input that can't be read: only its name, the same on every platform"):
         assertTrue(ReadFailure.Unreadable.describe("notes.md") == "Cannot read notes.md")
+      ,
+      test("an input over the size limit: the limit, and how to raise it"):
+        assertTrue(
+          ReadFailure.TooLarge(1000).describe("notes.md") ==
+            "Cannot read notes.md: more than 1000 bytes; --max-input-bytes raises the limit"
+        )
       ,
       test("an input that isn't UTF-8: where"):
         assertTrue(
@@ -59,7 +78,7 @@ object CliSuite extends ZIOSpecDefault:
       ,
       test("standard input is read when no file is given"):
         Cli
-          .program(Nil, Reading(_ => unreadable("ENOENT"), ZIO.succeed(passing)))
+          .program(Nil, Reading((_, _) => unreadable("ENOENT"), _ => ZIO.succeed(utf8(passing))))
           .map(outcome => assertTrue(outcome.exitCode == 0, outcome.stdout.isEmpty))
       ,
       test("a file that can't be read: status 2 and its name"):
@@ -82,7 +101,7 @@ object CliSuite extends ZIOSpecDefault:
         Cli
           .program(
             List("--format", "y\nforged"),
-            Reading(_ => unreadable("ENOENT"), unreadable(""))
+            Reading((_, _) => unreadable("ENOENT"), _ => unreadable(""))
           )
           .map(outcome =>
             assertTrue(
@@ -96,7 +115,7 @@ object CliSuite extends ZIOSpecDefault:
         Cli
           .program(
             List("--format", "y\u001b[2Kaml"),
-            Reading(_ => unreadable("ENOENT"), unreadable(""))
+            Reading((_, _) => unreadable("ENOENT"), _ => unreadable(""))
           )
           .map(outcome =>
             assertTrue(
@@ -107,7 +126,10 @@ object CliSuite extends ZIOSpecDefault:
           )
       ,
       test("a file that isn't UTF-8: status 2, its name, and where"):
-        run(Map("notes.txt" -> ZIO.fail(ReadFailure.NotUtf8(3, 1) -> "invalid UTF-8")), "notes.txt")
+        // "a", "b", then 0xff, never valid in UTF-8, at line 3, column 1.
+        val bytes = utf8("a\nb\n") ++ Array(0xff.toByte)
+        Cli
+          .program(List("notes.txt"), Reading((_, _) => ZIO.succeed(bytes), _ => unreadable("")))
           .map(outcome =>
             assertTrue(
               outcome.exitCode == 2,
@@ -116,10 +138,10 @@ object CliSuite extends ZIOSpecDefault:
           )
       ,
       test("a file in UTF-16: status 2, its name, and the encoding"):
-        run(
-          Map("notes.txt" -> ZIO.fail(ReadFailure.OtherEncoding("UTF-16") -> "UTF-16")),
-          "notes.txt"
-        )
+        // UTF-16's little-endian byte-order mark, then "a".
+        val bytes = Array(0xff, 0xfe, 'a'.toInt, 0).map(_.toByte)
+        Cli
+          .program(List("notes.txt"), Reading((_, _) => ZIO.succeed(bytes), _ => unreadable("")))
           .map(outcome =>
             assertTrue(
               outcome.exitCode == 2,
@@ -127,9 +149,49 @@ object CliSuite extends ZIOSpecDefault:
             )
           )
       ,
+      test("the limit from --max-input-bytes, or 10 MiB, reaches every read"):
+        for
+          limits <- Ref.make(List.empty[Int])
+          recording = Reading(
+            (_, most) => limits.update(_ :+ most).as(utf8(passing)),
+            most => limits.update(_ :+ most).as(utf8(passing))
+          )
+          _ <- Cli.program(List("--max-input-bytes", "1000", "a.txt", "b.txt"), recording)
+          _ <- Cli.program(Nil, recording)
+          seen <- limits.get
+        yield assertTrue(seen == List(1001, 1001, 10485761))
+      ,
+      test("an input over the limit: status 2, the message, and nothing on standard output"):
+        Cli
+          .program(List("--max-input-bytes", "1000", "notes.md"), overLimit)
+          .map(outcome =>
+            assertTrue(
+              outcome.exitCode == 2,
+              outcome.stdout.isEmpty,
+              outcome.stderr ==
+                "Cannot read notes.md: more than 1000 bytes; --max-input-bytes raises the limit\n"
+            )
+          )
+      ,
+      test("an input over the limit is logged with the limit"):
+        val noon = Instant.parse("2026-11-04T12:00:00Z")
+        val lines = ListBuffer.empty[String]
+        ZIO
+          .withLogger(Cli.logger(LogLevel.Warning, line => lines += line, () => noon))(
+            Cli.program(List("--max-input-bytes", "1000", "notes.md"), overLimit)
+          )
+          .as(
+            assertTrue(
+              lines.toList.exists(line =>
+                line.contains(" ERROR Cannot read input ") && line.contains(" limit=1000") &&
+                  line.contains(" exit=2")
+              )
+            )
+          )
+      ,
       test("standard input that fails: status 2, naming standard input"):
         Cli
-          .program(Nil, Reading(_ => unreadable("ENOENT"), unreadable("Stream closed")))
+          .program(Nil, Reading((_, _) => unreadable("ENOENT"), _ => unreadable("Stream closed")))
           .map(outcome =>
             assertTrue(outcome.exitCode == 2, outcome.stderr == "Cannot read standard input\n")
           )
@@ -138,10 +200,10 @@ object CliSuite extends ZIOSpecDefault:
         for
           names <- Ref.make(List.empty[String])
           logged = Reading(
-            name =>
+            (name, _) =>
               names.update(_ :+ name) *>
-                (if name == "absent.txt" then unreadable("ENOENT") else ZIO.succeed(passing)),
-            unreadable("standard input not expected")
+                (if name == "absent.txt" then unreadable("ENOENT") else ZIO.succeed(utf8(passing))),
+            _ => unreadable("standard input not expected")
           )
           outcome <- Cli.program(List("a.txt", "absent.txt", "c.txt"), logged)
           read <- names.get
@@ -166,7 +228,10 @@ object CliSuite extends ZIOSpecDefault:
     suite("console")(
       test("a passing requirement: exit code 0 and nothing written"):
         for
-          code <- Cli.cli(Nil, Reading(_ => unreadable("ENOENT"), ZIO.succeed(passing)))
+          code <- Cli.cli(
+            Nil,
+            Reading((_, _) => unreadable("ENOENT"), _ => ZIO.succeed(utf8(passing)))
+          )
           out <- TestConsole.output
           err <- TestConsole.outputErr
         yield assertTrue(code.code == 0, out.mkString.isEmpty, err.mkString.isEmpty)
