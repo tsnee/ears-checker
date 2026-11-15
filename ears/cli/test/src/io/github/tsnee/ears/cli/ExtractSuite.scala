@@ -89,5 +89,22 @@ object ExtractSuite extends ZIOSpecDefault:
       ,
       test("malformed JSON is an error"):
         assertTrue(Candidate.fromOpenSpec("{not json").isLeft)
+      ,
+      test("the error is the JSON parser's account alone, for the caller to word"):
+        assertTrue(Candidate.fromOpenSpec("{not json") == Left("(expected '\"' got 'n')"))
+      ,
+      test("a broken change is reported as a change, by its deltas"):
+        val missingOperation =
+          """{"id": "add-reminders", "deltas": [
+            |  {"spec": "reminders", "requirement": {"name": "Upcoming", "text": "The scheduler SHALL list events."}}
+            |]}""".stripMargin
+        assertTrue(
+          Candidate.fromOpenSpec(missingOperation) == Left(".deltas[0].operation(missing)")
+        )
+      ,
+      test("a broken spec is reported as a spec"):
+        val missingName =
+          """{"id": "reminders", "requirements": [{"text": "The scheduler SHALL list events."}]}"""
+        assertTrue(Candidate.fromOpenSpec(missingName) == Left(".requirements[0].name(missing)"))
     )
   )

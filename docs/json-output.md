@@ -1,8 +1,10 @@
 # JSON output
 
-`ears-check --output json` writes one JSON document to standard output for the whole run, every input together, for programs to read: CI annotations, editors, scripts. This page is the document's reference, for format version 1. For input that is valid Unicode it's the same on the JVM, on Node, and from the native binary.
+`ears-check --output json` writes one JSON document to standard output for the whole run, every input together, for programs to read: CI annotations, editors, scripts. This page is the document's reference, for format version 1. It's the same on the JVM, on Node, and from the native binary.
 
-The document is one line of UTF-8, followed by one line break. Non-ASCII characters aren't escaped.
+The document is one line of UTF-8, followed by one line break. A string holds the English character set as it is: printable ASCII, U+00A0 to U+00FF other than the soft hyphen (U+00AD), the combining accents (U+0300 to U+036F), U+2010 to U+2022 (hyphens, dashes, curly quotes, daggers, the bullet), the ellipsis (U+2026), per mille (U+2030), primes (U+2032, U+2033), single angle quotes (U+2039, U+203A), the euro sign (U+20AC), and the trade mark sign (U+2122). Every other UTF-16 code unit is a `\u` escape in four lowercase hexadecimal digits: the control characters (a line feed, tab, and the like as `\n`, `\t`, and so on), the line and paragraph separators (`\u2028`, `\u2029`), bidirectional and other invisible format characters (`\u202e`, the right-to-left override; `\u200b`, the zero-width space), other scripts (`\u0430`, the Cyrillic small letter a), an emoji as its two units (`\ud83d\ude00`), and a lone surrogate, which an OpenSpec requirement can hold through a JSON escape such as `\ud83d`. The first of two number signs side by side is `\u0023` too, so the document never holds a CI system's command marker such as GitHub Actions' `##[`. Each escape decodes to the same character, so a JSON parser reads the same text.
+
+The strings repeat the input's text, escaped for terminals and CI logs but not for HTML or Markdown: a program that shows them in a web page, a pull-request comment, or another Markdown document escapes them itself.
 
 `requirement` is the text as the checker read it, which isn't always the file's text: a plain-text line has the whitespace around it removed; a Markdown requirement has its markup removed, entities decoded, line breaks turned into spaces, and inline code written as a backtick span; an OpenSpec requirement's text is used as it is, so a line break in it is written as `\n`.
 
@@ -219,6 +221,6 @@ ears-checker is at 0.x, so its other interfaces can change in any minor release;
 
 - **An input can't be read or parsed** (a missing file, invalid UTF-8, JSON that isn't OpenSpec's, or Markdown given to the native binary with no cmark installed): exit status 2, a message on standard error, and nothing on standard output, even if other inputs were fine.
 - **Invalid arguments**: exit status 2, the reason and the usage text on standard error.
-- **`--help`** (as the first argument): the usage text, not JSON, on standard output, with exit status 0.
+- **`--help`** (anywhere among the options, with no input file): the usage text, not JSON, on standard output, with exit status 0.
 
 Otherwise the exit status is 0 when `findings` is empty and 1 when it isn't, whatever `warnings` holds. Empty input, or input with no requirements, gives `{"version":1,"checker":"0.3.0","checked":0,"findings":[],"warnings":[]}` and status 0.

@@ -64,15 +64,23 @@ object Checker:
           warnings = checked.map(_.warnings.size).sum
         )
 
-  /** The requirements in one input's content and its reader's warnings, or why the content can't be
-    * parsed. Only Markdown has warnings.
+  /** The requirements in one input's content and its reader's warnings, or the message for standard
+    * error saying why the content can't be parsed. Only Markdown has warnings.
     */
   def read(settings: Settings, content: String): Either[String, Found] =
+    parse(settings, content).left.map(_.describe(settings.messageName))
+
+  /** The requirements in one input's content and its reader's warnings, or why the content can't be
+    * parsed.
+    */
+  def parse(settings: Settings, content: String): Either[ParseFailure, Found] =
     settings.inputFormat match
       case InputFormat.PlainText =>
         Right(Found(Candidate.fromPlainText(settings.sourceName, content), Nil))
-      case InputFormat.Markdown     => MarkdownInput.read(settings.sourceName, content)
-      case InputFormat.OpenSpecJson => Candidate.fromOpenSpec(content).map(Found(_, Nil))
+      case InputFormat.Markdown =>
+        MarkdownInput.read(settings.sourceName, content).left.map(ParseFailure.UnreadMarkdown(_))
+      case InputFormat.OpenSpecJson =>
+        Candidate.fromOpenSpec(content).left.map(ParseFailure.NotOpenSpec(_)).map(Found(_, Nil))
 
   /** One input's findings and warnings, each in the input's order. */
   private final case class Checked(findings: List[Finding], warnings: List[Warning])
@@ -92,10 +100,12 @@ object Checker:
       s"$change/$capability/\"$requirement\""
     case Location.SpecRequirement(spec, requirement) => s"$spec/\"$requirement\""
 
-  /** Text output keeps one line per finding: text taken from the input (a corrected sentence, a
-    * file or requirement name) has each whitespace run, line breaks included, shown as one space,
-    * and any other character a terminal would act on shown as `\uXXXX` (`Visible`). JSON output
-    * keeps the exact text.
+  /** Text output keeps one line per finding: a corrected sentence has each whitespace run, line
+    * breaks included, shown as one space, leading and trailing ones dropped, and every other
+    * character `Visible` escapes (everything outside the English character set, and the first `#`
+    * of two) shown as `\uXXXX`. A location (a file or requirement name) isn't changed this way: it
+    * names something, so it's only escaped, its spaces kept (`lineStart`). JSON output keeps the
+    * text, writing those characters as JSON escapes.
     */
   private def singleLine(text: String): String =
     Visible.escape(
@@ -121,7 +131,9 @@ object Checker:
           "findings" -> Json.Arr(inputs.flatMap(_.findings).map(findingJson)*),
           "warnings" -> Json.Arr(inputs.flatMap(_.warnings).map(warningJson)*)
         )
-        s"${document.toJson}\n"
+        // Each control, separator, bidirectional formatting character, and lone surrogate in a
+        // string as a JSON escape (`Visible`).
+        s"${Visible.escape(document.toJson)}\n"
 
   /** One input's text output: its findings and warnings in the order of their lines, a finding
     * first on a tie. The sort is stable, so findings keep their order among themselves, as do
@@ -141,12 +153,23 @@ object Checker:
 
   private def findingText(finding: Finding): String =
     val fix = finding.fixed.fold("")(sentence => s" Fix: \"${singleLine(sentence)}\"")
-    val location = singleLine(locationText(finding.location))
+    val location = lineStart(Visible.escape(locationText(finding.location)))
     s"$location: ${kindName(finding)}: ${Visible.escape(finding.diagnostic.message)}$fix\n"
 
   private def warningText(warning: Warning): String =
-    val location = singleLine(locationText(warning.location))
+    val location = lineStart(Visible.escape(locationText(warning.location)))
     s"$location: warning: ${warning.kind.name}: ${Visible.escape(warning.kind.message)}\n"
+
+  /** A text-output line starts with its location, which comes from the input, escaped as it is. A
+    * file named with a leading space would otherwise look like another file, and GitHub Actions
+    * reads a line that starts with `::`, after any white space, as a workflow command; so a first
+    * character that's a space, a no-break space (the white space the English character set keeps),
+    * or a colon is written as `\uXXXX`.
+    */
+  private def lineStart(location: String): String =
+    location.headOption match
+      case Some(c) if c == ' ' || c.toInt == 0xa0 || c == ':' => Visible.code(c) + location.drop(1)
+      case _                                                  => location
 
   private def locationJson(location: Location): Json = location match
     case Location.Line(file, line) =>

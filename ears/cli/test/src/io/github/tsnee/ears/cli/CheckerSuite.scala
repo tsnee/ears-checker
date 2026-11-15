@@ -4,6 +4,8 @@ import cats.data.NonEmptyList
 import io.github.tsnee.ears.Profile
 import io.github.tsnee.ears.cli.TerminalText.acted
 import io.github.tsnee.ears.cli.TerminalText.controls
+import zio.json.*
+import zio.json.ast.Json
 import zio.test.*
 
 object CheckerSuite extends ZIOSpecDefault:
@@ -90,6 +92,27 @@ object CheckerSuite extends ZIOSpecDefault:
   private val extraCells =
     "This table row has 4 cells and its header 2, so GitHub doesn't show the last 2."
 
+  /** An OpenSpec spec whose one requirement is `text`, given as JSON escapes where it holds
+    * characters JSON source can't show (a lone surrogate among them).
+    */
+  private def escapedSpec(text: String): String =
+    "{\"id\": \"reminders\", \"requirements\": [{\"name\": \"Upcoming\", \"text\": \"" + text + "\"}]}"
+
+  /** A UTF-16 code unit that is half of a surrogate pair. */
+  private def surrogate(c: Char): Boolean = Character.isSurrogate(c)
+
+  /** The `requirement` of each finding in a JSON document, as a JSON parser reads it. */
+  private def requirementsIn(document: String): List[String] =
+    document.fromJson[Json.Obj].toOption.toList.flatMap(_.get("findings")).flatMap {
+      case Json.Arr(findings) =>
+        findings.toList.flatMap {
+          case finding: Json.Obj =>
+            finding.get("requirement").toList.collect { case Json.Str(t) => t }
+          case _ => Nil
+        }
+      case _ => Nil
+    }
+
   def spec = suite("EARS checker")(
     test("standard input: each line is checked and located as <stdin>"):
       val outcome = Checker.outcome(
@@ -169,10 +192,39 @@ object CheckerSuite extends ZIOSpecDefault:
           .outcome(settings(None, Some(InputFormat.OpenSpecJson), None, None), Right("{not json"))
       assertTrue(
         outcome.exitCode == 2,
-        outcome.stderr.startsWith("Not OpenSpec change or spec JSON:"),
+        outcome.stderr.startsWith("Cannot parse standard input: not OpenSpec change or spec JSON:"),
         outcome.stdout.isEmpty
       )
     ,
+    suite("an input that isn't OpenSpec JSON is named in the message")(
+      test("a file, by its name"):
+        assertTrue(
+          Checker.read(file("notes.json", None), "{not json") ==
+            Left(
+              "Cannot parse notes.json: not OpenSpec change or spec JSON: (expected '\"' got 'n')"
+            )
+        )
+      ,
+      test("standard input, as standard input"):
+        assertTrue(
+          Checker.read(settings(None, Some(InputFormat.OpenSpecJson), None, None), "{not json") ==
+            Left(
+              "Cannot parse standard input: not OpenSpec change or spec JSON: " +
+                "(expected '\"' got 'n')"
+            )
+        )
+      ,
+      test("the second of two files: only it"):
+        val outcome = combined(
+          file("change.json", None) -> changeMissingModal,
+          file("notes.json", None) -> "{not json"
+        )
+        assertTrue(
+          outcome.exitCode == 2,
+          outcome.stderr.startsWith("Cannot parse notes.json: "),
+          !outcome.stderr.contains("change.json")
+        )
+    ),
     suite("characters a terminal acts on")(
       test("an escape sequence in a requirement shows as \\u001b in its fix"):
         val outcome = Checker.outcome(
@@ -200,6 +252,170 @@ object CheckerSuite extends ZIOSpecDefault:
       test("a message from an unreadable input shows its control characters as \\uXXXX"):
         val outcome = Checker.outcome(plain, Left("Cannot read mis\u001b[1Asing.txt"))
         assertTrue(outcome.stderr == "Cannot read mis\\u001b[1Asing.txt\n")
+      ,
+      test(
+        "JSON output shows a C1 control, DEL, a line separator, and a lone surrogate as escapes"
+      ):
+        val outcome = Checker.outcome(
+          settings(None, Some(InputFormat.OpenSpecJson), None, Some(OutputFormat.Json)),
+          Right(escapedSpec("The scheduler lists [\\ud83d] [\\u009b] [\\u007f] [\\u2028] events."))
+        )
+        assertTrue(
+          outcome.stdout.contains(
+            "\"requirement\":\"The scheduler lists [\\ud83d] [\\u009b] [\\u007f] [\\u2028] events.\""
+          ),
+          !outcome.stdout.filterNot(_ == '\n').exists(c => acted(c) || surrogate(c)),
+          outcome.stdout.count(_ == '\n') == 1
+        )
+      ,
+      test("JSON output parses back to the requirement as it was read"):
+        val text = "The scheduler lists [\ud83d] [\u009b] [\u007f] [\u2028] events."
+        val outcome = Checker.outcome(
+          settings(None, Some(InputFormat.OpenSpecJson), None, Some(OutputFormat.Json)),
+          Right(escapedSpec("The scheduler lists [\\ud83d] [\\u009b] [\\u007f] [\\u2028] events."))
+        )
+        assertTrue(requirementsIn(outcome.stdout) == List(text))
+      ,
+      test("a lone surrogate in a fix shows as \\ud83d"):
+        val outcome = Checker.outcome(
+          settings(None, Some(InputFormat.OpenSpecJson), Some(Profile.OpenSpec), None),
+          Right(escapedSpec("The scheduler shall list [\\ud83d] events."))
+        )
+        assertTrue(
+          outcome.stdout.contains("Fix: \"The scheduler SHALL list [\\ud83d] events.\""),
+          !outcome.stdout.exists(surrogate)
+        )
+      ,
+      test("a right-to-left override in a fix shows as \\u202e"):
+        val rlo = 0x202e.toChar
+        val outcome = Checker.outcome(
+          plain,
+          Right("When an order arrives the scheduler shall list " + rlo.toString + "events.")
+        )
+        assertTrue(
+          outcome.stdout.contains(
+            "Fix: \"When an order arrives, the scheduler shall list " +
+              "\\u202eevents.\""
+          ),
+          !outcome.stdout.contains(rlo)
+        )
+      ,
+      test("a missing file's name with a right-to-left override shows it as \\u202e"):
+        val rlo = 0x202e.toChar
+        val outcome = Checker.outcome(plain, Left("Cannot read mis" + rlo.toString + "sing.txt"))
+        assertTrue(
+          outcome.stderr == "Cannot read mis\\u202esing.txt\n",
+          !outcome.stderr.contains(rlo)
+        )
+      ,
+      test("JSON output shows a right-to-left isolate in a requirement as \\u2067"):
+        val rli = 0x2067.toChar
+        val outcome = Checker.outcome(
+          settings(None, None, None, Some(OutputFormat.Json)),
+          Right("When an order arrives the scheduler shall list [" + rli.toString + "] events.")
+        )
+        assertTrue(
+          outcome.stdout.contains(
+            "\"requirement\":\"When an order arrives the scheduler shall list [\\u2067] events.\""
+          ),
+          !outcome.stdout.contains(rli)
+        )
+      ,
+      test("accented letters and typographic punctuation in a fix are left as they are"):
+        val quoted = 0x201c.toChar.toString + "events" + 0x201d.toChar.toString
+        val dash = 0x2014.toChar.toString
+        val outcome = Checker.outcome(
+          plain,
+          Right("When an order arrives the scheduler shall list " + quoted + " " + dash + " café.")
+        )
+        assertTrue(
+          outcome.stdout.contains("shall list " + quoted + " " + dash + " café.\""),
+          !outcome.stdout.contains("\\u")
+        )
+      ,
+      test("an emoji, a zero-width space, a Cyrillic a, and ## in a fix are escaped"):
+        val emoji = Character.toChars(0x1f600).mkString
+        val text = "When an order arrives the scheduler shall list " + emoji + " ev" +
+          0x200b.toChar.toString + "ents for d" + 0x0430.toChar.toString + "ys ##[error] now."
+        val outcome = Checker.outcome(plain, Right(text))
+        assertTrue(
+          outcome.stdout.contains(
+            "shall list \\ud83d\\ude00 ev\\u200bents for d\\u0430ys \\u0023#[error] now.\""
+          ),
+          !outcome.stdout.contains("##")
+        )
+      ,
+      test("a missing file's name with a zero-width space shows it as \\u200b"):
+        val outcome =
+          Checker.outcome(plain, Left("Cannot read mis" + 0x200b.toChar.toString + "sing.txt"))
+        assertTrue(outcome.stderr == "Cannot read mis\\u200bsing.txt\n")
+      ,
+      test("JSON output shows an emoji and ## in a requirement as escapes"):
+        val emoji = Character.toChars(0x1f600).mkString
+        val outcome = Checker.outcome(
+          settings(None, None, None, Some(OutputFormat.Json)),
+          Right(
+            "When an order arrives the scheduler shall list [" + emoji +
+              "] ##[set-output name=ok]true events."
+          )
+        )
+        assertTrue(
+          outcome.stdout.contains(
+            "list [\\ud83d\\ude00] \\u0023#[set-output name=ok]true events.\""
+          ),
+          !outcome.stdout.contains("##")
+        )
+      ,
+      test("a spec id that is a workflow command starts its line with \\u003a"):
+        val outcome = Checker.outcome(
+          settings(None, Some(InputFormat.OpenSpecJson), None, None),
+          Right(
+            """{"id": "::error::forged", "requirements": [
+              |  {"name": "Upcoming", "text": "The scheduler lists upcoming events."}
+              |]}""".stripMargin
+          )
+        )
+        assertTrue(outcome.stdout.startsWith("\\u003a:error::forged/"))
+      ,
+      test("a file name that starts with a no-break space starts its line with \\u00a0"):
+        val outcome = Checker.outcome(
+          file(0xa0.toChar.toString + "notes.txt", None),
+          Right("The scheduler lists upcoming events.")
+        )
+        assertTrue(outcome.stdout.startsWith("\\u00a0notes.txt:1:"))
+      ,
+      test("a file name that starts with a space starts its line with \\u0020"):
+        val outcome =
+          Checker.outcome(file(" notes.txt", None), Right("The scheduler lists upcoming events."))
+        assertTrue(outcome.stdout.startsWith("\\u0020notes.txt:1:"))
+      ,
+      test("a tab in a file name is escaped, not turned into a space"):
+        val outcome =
+          Checker.outcome(file("notes\t.txt", None), Right("The scheduler lists upcoming events."))
+        assertTrue(outcome.stdout.startsWith("notes\\u0009.txt:1:"))
+      ,
+      test("a decomposed accent in a file name is left as it is"):
+        val name = "cafe" + 0x301.toChar.toString + ".txt"
+        val outcome =
+          Checker.outcome(file(name, None), Right("The scheduler lists upcoming events."))
+        assertTrue(outcome.stdout.startsWith(name + ":1:"))
+      ,
+      test("no line of text output starts with white space or a colon"):
+        val starts = Gen.elements(' ', ':', 0xa0.toChar, '\t', 'a', '#')
+        check(Gen.listOfBounded(0, 3)(starts).map(_.mkString)) { prefix =>
+          val outcome = Checker.outcome(
+            file(prefix + "notes.txt", None),
+            Right("The scheduler lists upcoming events.")
+          )
+          assertTrue(
+            lines(outcome.stdout).forall(line =>
+              !line.headOption.exists(c =>
+                Character.isWhitespace(c) || Character.isSpaceChar(c) ||
+                  c == ':'
+              )
+            )
+          )
+        }
       ,
       test("backslashes in a fix are left as they are"):
         val outcome = Checker.outcome(

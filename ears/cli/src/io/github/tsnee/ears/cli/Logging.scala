@@ -16,9 +16,11 @@ private[cli] object Logging:
     if verbose then LogLevel.Debug else LogLevel.Warning
 
   /** One entry as one line: timestamp, level, message, and the details as `key=value` pairs sorted
-    * by key. Backslashes, line breaks, and every other control or line-separator character are
-    * escaped, so no entry can span or forge another line or send a terminal escape sequence; a
-    * value that is empty or holds a space, `=`, or `"` is quoted.
+    * by key. Backslashes, line breaks, and every other character `Visible` escapes (everything
+    * outside the English character set, and the first `#` of two) are escaped, so no entry can span
+    * or forge another line, send a terminal escape sequence, show in another order, hide text, or
+    * hold a CI system's command marker; a value that is empty or holds a space, `=`, or `"` is
+    * quoted.
     */
   def line(
       timestamp: Instant,
@@ -55,19 +57,18 @@ private[cli] object Logging:
   /** The command line exactly, as a JSON array, so arguments with spaces keep their boundaries. */
   def argumentsDetail(arguments: List[String]): String = arguments.toJson
 
-  private def escape(text: String): String = text.flatMap {
-    case '\\'                           => "\\\\"
-    case '\n'                           => "\\n"
-    case '\r'                           => "\\r"
-    case c if separatesLines(c)         => f"\\u${c.toInt}%04x"
-    case c if Character.isISOControl(c) => f"\\u${c.toInt}%04x"
-    case c                              => c.toString
-  }
-
-  /** Unicode's line and paragraph separators, which some tools treat as line breaks. (U+0085, the
-    * other one, is an ISO control character.)
+  /** The characters `Visible` escapes, by position (it looks one unit ahead for `##`), as `\uXXXX`;
+    * backslashes, line feeds, and carriage returns in their short forms.
     */
-  private def separatesLines(c: Char): Boolean = c.toInt == 0x2028 || c.toInt == 0x2029
+  private def escape(text: String): String =
+    text.indices.map { i =>
+      text(i) match
+        case '\\'                          => "\\\\"
+        case '\n'                          => "\\n"
+        case '\r'                          => "\\r"
+        case c if Visible.escaped(text, i) => Visible.code(c)
+        case c                             => c.toString
+    }.mkString
 
   private def quote(value: String): String =
     val escaped = escape(value)

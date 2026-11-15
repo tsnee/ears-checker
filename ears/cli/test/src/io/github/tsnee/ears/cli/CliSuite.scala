@@ -178,6 +178,30 @@ object CliSuite extends ZIOSpecDefault:
           err <- TestConsole.outputErr
         yield assertTrue(code.code == 0, out.mkString.contains("Usage"), err.mkString.isEmpty)
       ,
+      test("--help after an option: the usage, exit code 0, and standard input unread"):
+        // `reading` fails standard input, so reading it would write a message to standard error.
+        for
+          code <- Cli.cli(List("--output", "json", "--help"), reading(Map.empty))
+          out <- TestConsole.output
+          err <- TestConsole.outputErr
+        yield assertTrue(code.code == 0, out.mkString.contains("Usage"), err.mkString.isEmpty)
+      ,
+      test("--help with a file: the reason and the usage on standard error, exit code 2, no read"):
+        // `reading` fails every file, so reading notes.txt would say `Cannot read notes.txt`.
+        for
+          code <- Cli.cli(List("notes.txt", "--help"), reading(Map.empty))
+          out <- TestConsole.output
+          err <- TestConsole.outputErr
+        yield assertTrue(
+          code.code == 2,
+          out.mkString.isEmpty,
+          err.mkString.contains(
+            "--help can't be given with input files: leave out --help, or name a file called --help after --."
+          ),
+          err.mkString.contains("Usage"),
+          !err.mkString.contains("Cannot read")
+        )
+      ,
       test("bad arguments: exit code 2 and the usage text on standard error"):
         for
           code <- Cli.cli(List("--format", "yaml"), reading(Map.empty))

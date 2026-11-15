@@ -8,7 +8,71 @@ object SettingsSuite extends ZIOSpecDefault:
 
   private def file(name: String): Settings = Settings(Some(name), None, None, None)
 
+  /** Whether the arguments ask for help: the usage, requested, with no reasons to reject them. */
+  private def asksForHelp(arguments: String*): Boolean =
+    Settings.parseInvocation(arguments.toList) match
+      case Left(usage) => usage.requested && usage.reasons.isEmpty
+      case Right(_)    => false
+
+  /** The reasons the arguments were rejected, or None when they weren't. */
+  private def rejection(arguments: String*): Option[List[String]] =
+    Settings.parseInvocation(arguments.toList) match
+      case Left(usage) if !usage.requested => Some(usage.reasons)
+      case _                               => None
+
+  private val helpWithFiles =
+    "--help can't be given with input files: leave out --help, or name a file called --help after --."
+
   def spec = suite("Settings")(
+    suite("--help among the options")(
+      test("alone"):
+        assertTrue(asksForHelp("--help"))
+      ,
+      test("after an option"):
+        assertTrue(asksForHelp("--output", "json", "--help"))
+      ,
+      test("before an option"):
+        assertTrue(asksForHelp("--help", "--verbose"))
+      ,
+      test("after a file: rejected, saying how to name such a file"):
+        assertTrue(rejection("notes.txt", "--help") == Some(List(helpWithFiles)))
+      ,
+      test("before a file, as a glob orders a file named --help: rejected"):
+        assertTrue(rejection("--help", "notes.txt") == Some(List(helpWithFiles)))
+      ,
+      test("as an option's value: that option's value, so an invalid format"):
+        assertTrue(rejection("--format", "--help").exists(_.exists(_.contains("--help"))))
+      ,
+      test("after --, it's a file name"):
+        assertTrue(
+          Settings.parseInvocation(List("--", "--help")) ==
+            Right(Invocation(verbose = false, NonEmptyList.one(file("--help"))))
+        )
+      ,
+      test("--verbose counts with --help, for the log"):
+        assertTrue(
+          Settings.verbose(List("--verbose", "--help")),
+          !Settings.verbose(List("--help"))
+        )
+      ,
+      test("the usage text lists --help"):
+        assertTrue(
+          Settings.parseInvocation(List("--help")).left.map(_.text.contains("--help")) ==
+            Left(true)
+        )
+      ,
+      test("the usage line is as before: --help among the options, not in the line"):
+        assertTrue(
+          Settings.parseInvocation(List("--help")).left.map(_.text.linesIterator.next()) ==
+            Left(
+              "Usage: ears-check [--format <string>] [--profile <string>] [--output <string>] " +
+                "[--verbose] [<file>...]"
+            )
+        )
+      ,
+      test("beside an invalid option: rejected for that option, not shown as help"):
+        assertTrue(rejection("--help", "--format", "yaml").exists(_.exists(_.contains("yaml"))))
+    ),
     suite("parsing")(
       test("format option and file argument"):
         assertTrue(

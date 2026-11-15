@@ -120,7 +120,7 @@ object MainSuite extends ZIOSpecDefault:
         outcome <- run(path.toString, "absent.txt")
       yield assertTrue(
         outcome.exitCode == 2,
-        outcome.stderr.startsWith("Not OpenSpec change or spec JSON:"),
+        outcome.stderr.startsWith(s"Cannot parse $path: not OpenSpec change or spec JSON:"),
         !outcome.stderr.contains("absent.txt")
       )
     ,
