@@ -21,8 +21,8 @@ All work is on branch `batch-cli-messages`, the "CLI messages and output" theme 
 - [x] 3.1 Run the gate (CLAUDE.md's list) and report coverage from `scripts/coverage-records`; add a dated line to `docs/worklog.md` (run before the log-line tasks; run again in 3.3)
 - [x] 3.2 Run `/code-review` in a subagent on this change; the owner chooses which findings to fix
 - [x] 3.3 After the log-line tasks: the gate again, coverage recorded, the work log, and `/code-review` again on the log-line part; the owner chooses which findings to fix
-- [ ] 3.4 Commit the plan and the implementation together, then the archive; the owner pushes to PR #27. Report the CI run's result and minutes from the records
-- [ ] 3.5 Run `/openspec-verify-change` and report it before archiving
+- [x] 3.4 Commit the plan and the implementation together, then the archive; the owner pushes to PR #27. Report the CI run's result and minutes from the records
+- [x] 3.5 Run `/openspec-verify-change` and report it before archiving
 
 ## Workflow follow-up
 
