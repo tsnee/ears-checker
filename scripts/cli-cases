@@ -309,3 +309,38 @@ printf '%s\n' 'The scheduler shall list upcoming events.' 'The scheduler lists e
   >"$inputs/piped.txt"
 stdin="$inputs/piped.txt"
 compare standard-input 1
+# The input size limit, at 1000 bytes: a file and standard input of exactly 1000 bytes are checked
+# (the last line, cut short, may have a finding), and of 1001 bytes are too large; invalid limits
+# reject the arguments. Built from a 1008-byte file with head, so no pipeline is cut short.
+awk 'BEGIN { for (i = 0; i < 24; i++) print "The scheduler shall list upcoming events." }' \
+  >"$inputs/requirements.txt"
+head -c 1000 "$inputs/requirements.txt" >"$inputs/at-limit.txt"
+head -c 1001 "$inputs/requirements.txt" >"$inputs/over-limit.txt"
+compare file-at-limit "0 1" --max-input-bytes 1000 "$inputs/at-limit.txt"
+compare file-over-limit 2 --max-input-bytes 1000 "$inputs/over-limit.txt"
+if ! grep -qF 'more than 1000 bytes; --max-input-bytes raises the limit' \
+  "$tmp/$subject/file-over-limit.err"; then
+  echo "$check: case file-over-limit: the message doesn't give the limit" >&2
+  exit 1
+fi
+stdin="$inputs/at-limit.txt"
+compare standard-input-at-limit "0 1" --max-input-bytes 1000
+stdin="$inputs/over-limit.txt"
+compare standard-input-over-limit 2 --max-input-bytes 1000
+compare limit-zero 2 --max-input-bytes 0 "$inputs/at-limit.txt"
+compare limit-too-large 2 --max-input-bytes 104857601 "$inputs/at-limit.txt"
+compare limit-with-unit 2 --max-input-bytes 10M "$inputs/at-limit.txt"
+# A standard input that never ends: every build stops at the limit, with status 2 and the same
+# message, rather than reading until memory runs out. Outside `compare`, which pipes a file.
+for who in "$subject" jvm; do
+  status=0
+  yes | "${who}_cli" --max-input-bytes 1000 >"$tmp/$who/endless.out" 2>"$tmp/$who/endless.log" ||
+    status=$?
+  if [ "$status" -ne 2 ] ||
+    ! grep -qF 'Cannot read standard input: more than 1000 bytes' "$tmp/$who/endless.log"; then
+    echo "$check: case endless-standard-input: $who exited with $status" >&2
+    cat "$tmp/$who/endless.log" >&2
+    exit 1
+  fi
+done
+echo "$check: endless-standard-input: the same (exit status 2)"

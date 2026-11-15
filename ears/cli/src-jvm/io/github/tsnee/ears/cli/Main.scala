@@ -32,32 +32,30 @@ object Main extends ZIOAppDefault:
       .succeed(
         utf8Console(FileOutputStream(FileDescriptor.out), FileOutputStream(FileDescriptor.err))
       )
-      .flatMap(console => ZIO.withConsole(console)(Cli.run(reading(readAll(java.lang.System.in)))))
+      .flatMap(console => ZIO.withConsole(console)(Cli.run(reading(readUpTo(java.lang.System.in)))))
       .flatMap(exit)
 
-  /** Files by path, decoded strictly as UTF-8 (see `Utf8`), and `standardInput`'s text (see
-    * `readAll`). The JVM's exceptions aren't interpreted (see `ReadFailure`): each is logged whole.
+  /** Files by path, and `standardInput` (see `readUpTo`), at most a given number of bytes of each.
+    * The JVM's exceptions aren't interpreted (see `ReadFailure`): each is logged whole.
     */
-  def reading(standardInput: Task[String]): Reading =
+  def reading(standardInput: Int => Task[Array[Byte]]): Reading =
     Reading(
-      name =>
+      (name, most) =>
         ZIO
-          .attemptBlocking(Files.readAllBytes(Paths.get(name)))
-          .mapError(error => ReadFailure.Unreadable -> error.toString)
-          .flatMap(bytes =>
-            ZIO.fromEither(Utf8.decode(bytes)).mapError(failure => failure -> failure.decodingError)
-          ),
-      standardInput.mapError {
-        case Undecodable(failure) => failure -> failure.decodingError
-        case error                => ReadFailure.Unreadable -> error.toString
-      }
+          .acquireReleaseWith(ZIO.attemptBlocking(Files.newInputStream(Paths.get(name))))(in =>
+            ZIO
+              .attemptBlocking(in.close())
+              .catchAll(error =>
+                ZIO.logAnnotate("error", error.toString)(ZIO.logWarning("Cannot close input"))
+              )
+          )(in => readUpTo(in)(most))
+          .mapError(_.toString),
+      most => standardInput(most).mapError(_.toString)
     )
 
-  /** Reads a whole stream, decoded strictly as UTF-8 (see `Utf8`). */
-  def readAll(in: InputStream): Task[String] =
-    ZIO
-      .attemptBlocking(in.readAllBytes())
-      .flatMap(bytes => ZIO.fromEither(Utf8.decode(bytes)).mapError(Undecodable(_)))
+  /** At most `most` bytes of a stream: no more is read, so a stream that never ends stops there. */
+  def readUpTo(in: InputStream): Int => Task[Array[Byte]] =
+    most => ZIO.attemptBlocking(in.readNBytes(most))
 
   /** A console that writes `out` and `err` as UTF-8, and reads as ZIO's own does. */
   def utf8Console(out: OutputStream, err: OutputStream): Console =
@@ -76,7 +74,3 @@ object Main extends ZIOAppDefault:
 
   private def utf8(stream: OutputStream): PrintStream =
     PrintStream(stream, true, StandardCharsets.UTF_8)
-
-  /** Standard input that isn't UTF-8, through `readAll`'s `Task`. */
-  private final case class Undecodable(failure: ReadFailure)
-      extends IOException(failure.describe("standard input"))

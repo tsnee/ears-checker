@@ -26,8 +26,11 @@ final case class Settings(
     outputOption: Option[OutputFormat]
 ) derives CanEqual
 
-/** The whole command line: the run-wide options and one settings per input. */
-final case class Invocation(verbose: Boolean, inputs: NonEmptyList[Settings]) derives CanEqual
+/** The whole command line: the run-wide options and one settings per input. `maxInputBytes` is the
+  * most bytes any one input may hold.
+  */
+final case class Invocation(verbose: Boolean, inputs: NonEmptyList[Settings], maxInputBytes: Int)
+    derives CanEqual
 
 /** Usage text instead of settings: either the user asked for help, or the arguments were invalid.
   */
@@ -155,6 +158,32 @@ object Settings:
       .map(_.map(Option(_)))
       .withDefault(NonEmptyList.one(None))
 
+  private val defaultInputLimit = 10 * 1024 * 1024
+
+  private val largestInputLimit = 100 * 1024 * 1024
+
+  /** The most bytes one input may hold: 10 MiB unless given, up to 100 MiB. Requirement documents
+    * are kilobytes, so the default stops a hostile input long before memory matters, and the upper
+    * bound keeps every size the reading and parsing compute (the limit and one byte, the Markdown
+    * parser's offsets) far from `Int`'s range. Bytes only, so there's one unit to read.
+    */
+  private val maxInputBytesOpt =
+    Opts
+      .option[String](
+        "max-input-bytes",
+        s"Most bytes an input may hold, 1 to $largestInputLimit (default $defaultInputLimit).",
+        metavar = "bytes"
+      )
+      .mapValidated(value =>
+        Validated
+          .fromOption(
+            value.toIntOption.filter(n => n >= 1 && n <= largestInputLimit),
+            s"--max-input-bytes takes a whole number from 1 to $largestInputLimit, not \"$value\"."
+          )
+          .toValidatedNel
+      )
+      .withDefault(defaultInputLimit)
+
   private val verboseOpt =
     Opts.flag("verbose", "Log every step to standard error, not only warnings and errors.").orFalse
 
@@ -167,8 +196,11 @@ object Settings:
 
   private val command =
     Command("ears-check", "Check requirements against the EARS templates.", helpFlag = false)(
-      (helpOpt, filesOpt, formatOpt, profileOpt, outputOpt, verboseOpt).mapN {
-        (help, files, format, profile, output, verbose) =>
-          Request(help, Invocation(verbose, files.map(Settings(_, format, profile, output))))
+      (helpOpt, filesOpt, formatOpt, profileOpt, outputOpt, verboseOpt, maxInputBytesOpt).mapN {
+        (help, files, format, profile, output, verbose, maxInputBytes) =>
+          Request(
+            help,
+            Invocation(verbose, files.map(Settings(_, format, profile, output)), maxInputBytes)
+          )
       }
     )

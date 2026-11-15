@@ -18,12 +18,13 @@ $ echo $?
 1
 ```
 
-`ears-check [--format <string>] [--profile <string>] [--output <string>] [--verbose] [<file>...]` reads each file, or standard input when none is given:
+`ears-check [--format <string>] [--profile <string>] [--output <string>] [--verbose] [--max-input-bytes <bytes>] [<file>...]` reads each file, or standard input when none is given:
 
 - `--format`: `text` (one requirement per line), `markdown`, or `openspec` (JSON from `openspec show --json`). By default `.md` files are Markdown, `.json` files are OpenSpec, and everything else is text.
 - `--profile`: `classic` (lowercase `shall`) or `openspec` (uppercase `SHALL`, which OpenSpec's validator requires). OpenSpec input defaults to `openspec`, other input to `classic`.
 - `--output`: `text` (one line per finding) or `json` (one document, described in [JSON output](https://github.com/tsnee/ears-checker/blob/main/docs/json-output.md)).
 - `--verbose`: log every step to standard error, not only warnings and errors.
+- `--max-input-bytes`: the most bytes any one input may hold, from 1 to 104857600 (100 MiB); 10485760 (10 MiB) when it isn't given. No build reads more of an input than that and one byte, so an input over the limit, or a standard input that never ends, stops there with exit status 2 and `Cannot read <input>: more than <limit> bytes; --max-input-bytes raises the limit`.
 - `--help`: print the usage and these options, and read no input, wherever it comes among the options. With an input file it's invalid arguments (exit status 2), so a glob that picks up a file named `--help` fails rather than checking nothing; to check such a file, name it after `--`, which ends the options (`ears-check -- *` checks every file a glob finds).
 - Inline code: in every format, text between backticks is quoted, as in Markdown; its periods, commas, and words don't count.
 - Encoding: input is read as UTF-8 whatever the locale, and an input that isn't valid UTF-8 is an error giving the line and column of the first bad byte; a leading UTF-8 byte-order mark is ignored, and UTF-16 or UTF-32 input is named by its byte-order mark. Output is written as UTF-8.

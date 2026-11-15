@@ -1,0 +1,23 @@
+# Tasks
+
+All work is on branch `batch-input-limits`, the "Input limits" theme (roadmap item 9); its draft PR is opened when the first commit is pushed. The owner pushes from their own shell; Claude reads runs with `gh`. Test-first: each behavior's test is written and seen failing before the code that makes it pass. Editing, deleting, skipping, or loosening an existing test is asked of the owner first, with the requirement it covers. After each task, every changed file is scanned for raw control, format, and separator characters by general category.
+
+## 1. The limit
+
+- [x] 1.1 Ask the owner about `CliSuite`'s seven fake `Reading`s (design, Context), which cover "Unreadable input message", "Unreadable input status", and "Unreadable input entry": the proposed edit gives each function the limit parameter and changes nothing else (`_ => …` becomes `(_, _) => …`, and standard input `x` becomes `_ => x`). Edit only what the owner approves
+- [x] 1.2 Tests first, in `ears/cli/test/src` (every platform): `Bounded.decode` (exactly the limit decodes; one byte more is `TooLarge(limit)`; invalid UTF-8 within the limit is still `NotUtf8` at its line and column; an empty input); `ReadFailure.TooLarge`'s message; `SettingsSuite`, the option (10,485,760 when absent; 1 and 104,857,600 accepted; 0, 104,857,601, `10M`, and `-5` rejected with a reason naming `--max-input-bytes`; one value for every input); `CliSuite`, the parsed limit reaching `Reading`, and a `TooLarge` read giving the message, status 2, and a log entry with `limit`. In `ears/cli/test/src-jvm`, `Main.reading` with a standard input that never ends returns `TooLarge` (a stream of endless bytes, read without hanging). Seen failing on the JVM and Node
+- [x] 1.3 The code (decisions 1 to 3): `Reading`'s functions take the limit; `Main` reads with `readNBytes(limit + 1)`, `NodeMain` with a bounded `fs.readSync` loop (both closing what they open); `Bounded.decode` and `ReadFailure.TooLarge` in shared code; `Settings` parses `--max-input-bytes` into the invocation; `Cli` passes it to `Reading` and logs `limit`. Comments say why the limit and the one extra byte. Verify `./mill ears.cli.test ears.cli.js.test` pass and `ears.cli`'s coverage minimums hold
+- [x] 1.4 Cases in `scripts/cli-cases`: a file at the limit and one byte over it (with `--max-input-bytes 1000`), the same through standard input, `--max-input-bytes 0`, `104857601`, and `10M`, each compared across the jar, Node, and the native binary; and a standard input that never ends (`yes`), run on each build outside `compare`, which pipes a file, each exiting with status 2 and the same message; verify `scripts/check-npm-cli`, `scripts/check-native-cli`, and `scripts/check-coursier-app` pass
+- [x] 1.5 Docs: README (the option among the others, and the limit where it says how input is read), SECURITY.md (the limit in place of "reads each input whole", and its stale lines on cmark and on escaping brought up to date), CHANGELOG (Added), and roadmap item 9 (in progress, theme "Input limits"; the double parse left as decision 4 says). Verify `prettier --check '**/*.md'` and `./mill ears.releaseNotes.run check CHANGELOG.md`
+- [x] 1.6 The code review's fixes the owner chose (2026-11-15): a platform's `Reading` only reads at most the bytes asked for, and `Cli` adds the one byte, checks the limit, and decodes (design decision 1); Node reads in 64 KiB chunks and takes an `EOF` error as the end of input; a failed close is logged as a warning on both platforms; `CliSuite`'s over-limit fixture is shared. Existing tests reshaped with the owner's approval: `CliSuite`'s fakes return bytes and its two decoding tests feed real bytes; `MainSuite`'s stubs return bytes; `JvmReadingSuite` checks bytes and the JVM's errors, and its two decoding tests are dropped (covered by `BoundedSuite` and `CliSuite`); a new `MainSuite` test runs a standard input that never ends end to end. Verify the tests on the JVM and Node, the coverage minimums, and the three CLI comparison scripts
+
+## 2. Checks, review, commits
+
+- [x] 2.1 Run the gate (CLAUDE.md's list) and report coverage from `scripts/coverage-records`; add a dated line to `docs/worklog.md`
+- [x] 2.2 Run `/code-review` in a subagent on this change; the owner chooses which findings to fix
+- [x] 2.3 Commit the plan and the implementation together (with c862e71's CI-run record), then the archive; the owner pushes and opens the theme's draft PR. Report the CI run's result and minutes from the records
+- [x] 2.4 Run `/openspec-verify-change` and report it before archiving
+
+## Workflow follow-up
+
+- Archive the change (syncing `ears-cli`); the theme's security review in a subagent before its PR merges.

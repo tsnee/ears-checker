@@ -3,6 +3,7 @@ package io.github.tsnee.ears.cli
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.InputStream
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.LinkedBlockingQueue
@@ -22,10 +23,13 @@ object MainSuite extends ZIOSpecDefault:
       path
     }
 
-  private val noStdin: Task[String] = ZIO.fail(new IllegalStateException("stdin not expected"))
+  private val noStdin: Task[Nothing] = ZIO.fail(new IllegalStateException("stdin not expected"))
+
+  /** The default input size limit, 10 MiB. */
+  private val limit = 10485760
 
   private def run(arguments: String*): UIO[Outcome] =
-    Cli.program(arguments.toList, Main.reading(noStdin))
+    Cli.program(arguments.toList, Main.reading(_ => noStdin))
 
   /** Runs `cli` with the logger the application would build for these arguments, writing to
     * `writeLog` instead of standard error.
@@ -42,7 +46,7 @@ object MainSuite extends ZIOSpecDefault:
     for
       lines <- ZIO.succeed(LinkedBlockingQueue[String]())
       _ <- withRunLogger(arguments, line => lines.put(line))(
-        Cli.cli(arguments, Main.reading(stdin))
+        Cli.cli(arguments, Main.reading(_ => stdin.map(_.getBytes(StandardCharsets.UTF_8))))
       )
     yield lines.asScala.toList
 
@@ -141,7 +145,10 @@ object MainSuite extends ZIOSpecDefault:
             outBefore <- TestConsole.output
             errBefore <- TestConsole.outputErr
             code <- withRunLogger(arguments, _ => ())(
-              Cli.cli(arguments, Main.reading(ZIO.succeed(input)))
+              Cli.cli(
+                arguments,
+                Main.reading(_ => ZIO.succeed(input.getBytes(StandardCharsets.UTF_8)))
+              )
             )
             out <- TestConsole.output
             err <- TestConsole.outputErr
@@ -217,7 +224,7 @@ object MainSuite extends ZIOSpecDefault:
       test("standard input that fails: status 2 and standard input named on standard error"):
         for
           stream <- closedStream
-          outcome <- Cli.program(Nil, Main.reading(Main.readAll(stream)))
+          outcome <- Cli.program(Nil, Main.reading(Main.readUpTo(stream)))
         yield assertTrue(
           outcome.exitCode == 2,
           outcome.stdout.isEmpty,
@@ -225,16 +232,28 @@ object MainSuite extends ZIOSpecDefault:
         )
       ,
       test("an error with no message: status 2, standard input named, and the error carried"):
-        val reading = Main.reading(ZIO.fail(IllegalStateException()))
+        val reading = Main.reading(_ => ZIO.fail(IllegalStateException()))
         for
           outcome <- Cli.program(Nil, reading)
-          failed <- reading.standardInput.fold(Some(_), _ => None)
+          failed <- reading.standardInput(limit).fold(Some(_), _ => None)
         yield assertTrue(
           outcome.exitCode == 2,
           outcome.stderr == "Cannot read standard input\n",
-          failed.map(_._1).contains(ReadFailure.Unreadable),
-          failed.map(_._2).contains("java.lang.IllegalStateException")
+          failed.contains("java.lang.IllegalStateException")
         )
+      ,
+      test("a standard input that never ends: status 2 and the limit, without waiting for an end"):
+        val endless = new InputStream:
+          def read(): Int = 'y'.toInt
+        Cli
+          .program(List("--max-input-bytes", "1000"), Main.reading(Main.readUpTo(endless)))
+          .map(outcome =>
+            assertTrue(
+              outcome.exitCode == 2,
+              outcome.stderr == "Cannot read standard input: more than 1000 bytes; " +
+                "--max-input-bytes raises the limit\n"
+            )
+          )
       ,
       test("a directory given as a file: status 2 and its name"):
         for
