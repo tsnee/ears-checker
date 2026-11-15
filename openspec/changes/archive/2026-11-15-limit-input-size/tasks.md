@@ -15,8 +15,8 @@ All work is on branch `batch-input-limits`, the "Input limits" theme (roadmap it
 
 - [x] 2.1 Run the gate (CLAUDE.md's list) and report coverage from `scripts/coverage-records`; add a dated line to `docs/worklog.md`
 - [x] 2.2 Run `/code-review` in a subagent on this change; the owner chooses which findings to fix
-- [ ] 2.3 Commit the plan and the implementation together (with c862e71's CI-run record), then the archive; the owner pushes and opens the theme's draft PR. Report the CI run's result and minutes from the records
-- [ ] 2.4 Run `/openspec-verify-change` and report it before archiving
+- [x] 2.3 Commit the plan and the implementation together (with c862e71's CI-run record), then the archive; the owner pushes and opens the theme's draft PR. Report the CI run's result and minutes from the records
+- [x] 2.4 Run `/openspec-verify-change` and report it before archiving
 
 ## Workflow follow-up
 
