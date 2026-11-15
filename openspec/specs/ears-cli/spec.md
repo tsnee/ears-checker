@@ -534,7 +534,7 @@ Where JSON output is selected, when a diagnostic has no fix, the EARS checker SH
 
 ### Requirement: Control characters in text output
 
-Where text output is selected, the EARS checker SHALL write each ISO control character, U+2028, and U+2029 that a finding takes from the input, other than a run of spaces, tabs, line feeds, vertical tabs, form feeds, and carriage returns shown as one space, as a backslash, `u`, and its code in four lowercase hexadecimal digits.
+Where text output is selected, the EARS checker SHALL write each ISO control character, U+2028, U+2029, and lone surrogate that a finding takes from the input, other than a run of spaces, tabs, line feeds, vertical tabs, form feeds, and carriage returns shown as one space, as a backslash, `u`, and its code in four lowercase hexadecimal digits.
 
 #### Scenario: An escape sequence in a requirement
 
@@ -551,9 +551,14 @@ Where text output is selected, the EARS checker SHALL write each ISO control cha
 - **WHEN** a plain-text requirement with a missing comma contains a vertical tab between two words
 - **THEN** its finding's `Fix:` sentence shows one space there, on the JVM, on Node, and natively
 
+#### Scenario: A lone surrogate in a fix
+
+- **WHEN** an OpenSpec requirement written in classic case contains the lone surrogate `\ud83d`, checked with the OpenSpec profile
+- **THEN** its finding's `Fix:` sentence shows `\ud83d`, the same bytes on the JVM, on Node, and natively
+
 ### Requirement: Control characters in messages
 
-The EARS checker SHALL write each ISO control character, U+2028, and U+2029 in a message on standard error that isn't a log entry, other than the line breaks of its own usage text, as a backslash, `u`, and its code in four lowercase hexadecimal digits.
+The EARS checker SHALL write each ISO control character, U+2028, U+2029, and lone surrogate in a message on standard error that isn't a log entry, other than the line breaks of its own usage text, as a backslash, `u`, and its code in four lowercase hexadecimal digits.
 
 #### Scenario: A file name with an escape sequence
 
@@ -674,3 +679,22 @@ When `--help` follows `--` in the arguments, the EARS checker SHALL read it as a
 
 - **WHEN** the checker is run with `-- --help`, and no file "--help" exists
 - **THEN** it writes `Cannot read --help` to standard error and exits with status 2
+
+### Requirement: Control characters in JSON output
+
+Where JSON output is selected, the EARS checker SHALL write each ISO control character, U+2028, U+2029, and lone surrogate in the document's strings as a JSON escape.
+
+#### Scenario: A C1 control in a requirement
+
+- **WHEN** an OpenSpec requirement with a finding contains U+009B, with JSON output selected
+- **THEN** the finding's `requirement` shows `\u009b`, and standard output contains no U+009B
+
+#### Scenario: A line separator in a requirement
+
+- **WHEN** an OpenSpec requirement with a finding contains U+2028, with JSON output selected
+- **THEN** the finding's `requirement` shows `\u2028`, and the document is one line
+
+#### Scenario: A lone surrogate in a requirement
+
+- **WHEN** an OpenSpec requirement with a finding contains the lone surrogate `\ud83d`, with JSON output selected
+- **THEN** the finding's `requirement` shows `\ud83d`, the same bytes on the JVM, on Node, and natively
