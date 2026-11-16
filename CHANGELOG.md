@@ -11,6 +11,7 @@ Every release of ears-checker, newest first. Each change adds its lines under Un
 - Warnings, beside the findings, for problems in the input that aren't a requirement's: a `file:line: warning: …` line in text output, and a `warnings` array in JSON output (still format version 1). The first is `table-extra-cells`, a table row with more cells than its header, which GitHub doesn't show. Warnings don't change the exit status.
 - cmark-gfm's license notices: in the jar (`META-INF/cmark-gfm/COPYING`), in the CLI's npm package (`cmark-gfm/COPYING`), and as `THIRD-PARTY-NOTICES.txt` in each GitHub Release.
 - A size limit on each input, 10 MiB by default, set with `--max-input-bytes <bytes>` from 1 byte to 100 MiB: no build reads more of a file or standard input than the limit and one byte, so a large untrusted input, or a standard input that never ends, stops there with exit status 2 and `Cannot read <input>: more than <limit> bytes; --max-input-bytes raises the limit`.
+- Directories as input: `ears-check docs` checks every `.md` (Markdown) and `.txt` (plain text) file under `docs`, in its subdirectories too, in name order by character code, the same on every build. Hidden entries, symbolic links found inside, anything that isn't a file or a directory, and other files are left alone. A directory with no such file is an error (exit status 2, `Cannot check docs: it holds no .md or .txt files`), where a directory was always `Cannot read docs` before.
 
 ### Changed
 

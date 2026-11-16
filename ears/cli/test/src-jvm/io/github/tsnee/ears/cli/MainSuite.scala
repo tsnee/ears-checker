@@ -6,6 +6,7 @@ import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.LinkedBlockingQueue
 import scala.jdk.CollectionConverters.*
 
@@ -182,7 +183,7 @@ object MainSuite extends ZIOSpecDefault:
             path.toFile.deleteOnExit()
             path
           }
-          lines <- logged(List(directory.toString), noStdin)
+          lines <- logged(List(directory.resolve("missing.txt").toString), noStdin)
         yield assertTrue(lines.size == 1)
       ,
       test("the application's logger takes its level from the command line"):
@@ -258,7 +259,10 @@ object MainSuite extends ZIOSpecDefault:
       test("a directory given as a file: status 2 and its name"):
         for
           directory <- ZIO.attemptBlocking {
-            val path = Files.createTempDirectory("ears-check")
+            val path = Files.createTempDirectory(
+              "ears-check",
+              PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("---------"))
+            )
             path.toFile.deleteOnExit()
             path
           }
@@ -268,5 +272,7 @@ object MainSuite extends ZIOSpecDefault:
           outcome.stdout.isEmpty,
           outcome.stderr == s"Cannot read $directory\n"
         )
+      // Root lists any directory whatever its mode.
+      @@ TestAspect.ifProp("user.name")(_ != "root")
     ) @@ TestAspect.silent
   )

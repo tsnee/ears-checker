@@ -118,9 +118,9 @@ object Cli:
         // ZIO.foreach is sequential and stops at the first failure: no later file is read.
         val loaded =
           for
-            first <- load(all.head, reading, limit)
-            rest <- ZIO.foreach(all.tail)(load(_, reading, limit))
-          yield NonEmptyList(first, rest)
+            first <- input(all.head, reading, limit)
+            rest <- ZIO.foreach(all.tail)(input(_, reading, limit))
+          yield first ++ rest.flatMap(_.toList)
         val details =
           Map(
             "arguments" -> argumentText,
@@ -128,7 +128,81 @@ object Cli:
             "verbose" -> verbose.toString,
             "max-input-bytes" -> limit.toString
           )
-        annotated(details)(ZIO.logDebug("Arguments")) *> loaded.either.map(Checker.outcome)
+        // `inputs` counts the arguments; a directory stands for its files, counted once read.
+        annotated(details)(ZIO.logDebug("Arguments")) *>
+          loaded
+            .tap(found =>
+              annotated(Map("files" -> found.size.toString))(ZIO.logDebug("Read inputs"))
+            )
+            .either
+            .map(Checker.outcome)
+
+  /** One input as given: standard input or a file, loaded; or a directory, each file under it
+    * loaded in turn (`walk`), failing if it holds none to check, so a mistyped or emptied folder
+    * can't pass by checking nothing.
+    */
+  private def input(
+      settings: Settings,
+      reading: Reading,
+      limit: Int
+  ): IO[String, NonEmptyList[(Settings, Found)]] =
+    settings.file
+      .fold(ZIO.succeed(false))(reading.isDirectory)
+      .flatMap(directory =>
+        settings.file match
+          case Some(name) if directory =>
+            walk(settings, name, reading, limit).flatMap(found =>
+              ZIO
+                .fromOption(NonEmptyList.fromList(found))
+                .orElse(
+                  annotated(Map("directory" -> name, "exit" -> "2"))(
+                    ZIO.logError("Nothing to check")
+                  ) *> ZIO.fail(DirectoryWalk.nothingToCheck(name))
+                )
+            )
+          case _ => load(settings, reading, limit).map(NonEmptyList.one)
+      )
+
+  /** Every file to check under `directory`, loaded in the order `DirectoryWalk` gives, depth first:
+    * a subdirectory is listed when it's reached, so the first failure in the inputs' order is the
+    * one reported and nothing after it is read. A directory that can't be listed fails as an
+    * unreadable input.
+    */
+  private def walk(
+      settings: Settings,
+      directory: String,
+      reading: Reading,
+      limit: Int
+  ): IO[String, List[(Settings, Found)]] =
+    annotated(Map("directory" -> directory)) {
+      for
+        _ <- ZIO.logDebug("Listing directory")
+        entries <- reading
+          .entries(directory)
+          .tapError(error =>
+            annotated(Map("error" -> error, "exit" -> "2"))(ZIO.logError("Cannot read input"))
+          )
+          .mapError(_ => ReadFailure.Unreadable.describe(directory))
+        steps = DirectoryWalk.steps(directory, entries)
+        listing = DirectoryWalk.summary(steps)
+        _ <- annotated(
+          Map(
+            "files" -> listing.files.toString,
+            "subdirectories" -> listing.subdirectories.toString,
+            "skipped" -> listing.skipped.toString
+          )
+        )(ZIO.logDebug("Listed directory"))
+        _ <- ZIO.foreachDiscard(listing.noted)((path, reason) =>
+          annotated(Map("entry" -> path, "reason" -> reason))(ZIO.logDebug("Skipped entry"))
+        )
+        found <- ZIO.foreach(steps) {
+          case Step.Check(path) =>
+            load(settings.copy(file = Some(path)), reading, limit).map(List(_))
+          case Step.Enter(path) => walk(settings, path, reading, limit)
+          case Step.Skip(_, _)  => ZIO.succeed(Nil)
+        }
+      yield found.flatten
+    }
 
   /** One input read and split into requirements and its reader's warnings, each warning logged at
     * WARN, with its details on every entry it logs: for Markdown, those include the parser, or the

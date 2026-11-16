@@ -278,6 +278,75 @@ for who in "$subject" jvm; do
   done
 done
 compare directory 2 "$inputs/notes"
+# A tree: Markdown and plain text checked in name order, a subdirectory's files where its name
+# sorts; hidden entries, links (one leading out, one looping, one broken), and other files left
+# alone. Any of those read would add findings or fail (`package.json` isn't JSON, `logo.png` isn't
+# UTF-8).
+docs="$inputs/docs"
+mkdir -p "$docs/billing" "$docs/.github"
+printf '%s\n' 'The scheduler SHALL list upcoming events.' >"$docs/scheduling.md"
+printf '%s\n' 'When an invoice is paid the billing service SHALL email a receipt.' \
+  >"$docs/B.md"
+printf '%s\n' 'The billing service SHALL issue an invoice each month.' >"$docs/billing/invoices.md"
+printf '%s\n' 'The billing service lists invoices.' >"$docs/billing.txt"
+printf '%s\n' 'The template SHALL be ignored.' >"$docs/.github/template.md"
+printf '%s\n' 'The draft SHALL be ignored.' >"$docs/.draft.md"
+printf '%s\n' '{not json' >"$docs/package.json"
+printf '\211PNG\r\n\032\n' >"$docs/logo.png"
+ln -s ../plain.txt "$docs/keys.md"
+ln -s . "$docs/loop"
+ln -s nowhere.md "$docs/old.md"
+compare directory-tree 1 "$docs"
+compare directory-slash 1 "$docs/"
+compare directory-json 1 --output json "$docs"
+compare directory-among-files 1 "$inputs/plain.txt" "$docs" "$inputs/passing.txt"
+for who in "$subject" jvm; do
+  if ! grep -qF 'Cannot check' "$tmp/$who/directory.err" ||
+    grep -qE 'template|draft|keys|loop|old\.md|plain\.txt' "$tmp/$who/directory-tree.out"; then
+    echo "$check: case directory or directory-tree: $who checked what it shouldn't" >&2
+    exit 1
+  fi
+done
+# A subdirectory that can't be listed, and one that can be listed but not searched (its entries'
+# kinds can't be read, so its file is read and fails). Each runs in a subshell, since compare exits
+# on a difference: the modes are restored either way, so the temporary directory can be removed.
+if [ "$(id -u)" -ne 0 ]; then
+  mkdir -p "$inputs/locked/private" "$inputs/unsearchable/sub"
+  printf '%s\n' 'The scheduler SHALL list upcoming events.' >"$inputs/locked/billing.md"
+  printf '%s\n' 'The scheduler SHALL list upcoming events.' \
+    >"$inputs/unsearchable/sub/scheduling.md"
+  chmod 000 "$inputs/locked/private"
+  chmod 444 "$inputs/unsearchable/sub"
+  failed=0
+  (compare directory-unlistable 2 "$inputs/locked") || failed=1
+  [ "$failed" -ne 0 ] || (compare directory-unsearchable 2 "$inputs/unsearchable") || failed=1
+  chmod 755 "$inputs/locked/private" "$inputs/unsearchable/sub"
+  [ "$failed" -eq 0 ] || exit 1
+else
+  echo "$check: directory-unlistable, directory-unsearchable: skipped, since root reads any directory"
+fi
+# A named pipe in a directory is skipped: reading one would block. A writer keeps opening it, so a
+# build that read it would get an empty input instead of hanging, and its log would show the read.
+# The case runs in a subshell, since compare exits on a difference: the writer is stopped either way.
+if command -v mkfifo >/dev/null 2>&1; then
+  mkdir -p "$inputs/piped"
+  printf '%s\n' 'The scheduler SHALL list upcoming events.' >"$inputs/piped/scheduling.md"
+  mkfifo "$inputs/piped/feed.md"
+  (while :; do : >"$inputs/piped/feed.md"; done) &
+  writer=$!
+  failed=0
+  (compare directory-pipe 1 --verbose "$inputs/piped") || failed=1
+  kill "$writer" 2>/dev/null || true
+  [ "$failed" -eq 0 ] || exit 1
+  for who in "$subject" jvm; do
+    if grep -E ' DEBUG Reading input ' "$tmp/$who/directory-pipe.log" | grep -qF 'feed.md'; then
+      echo "$check: case directory-pipe: $who read the named pipe" >&2
+      exit 1
+    fi
+  done
+else
+  echo "$check: directory-pipe: skipped, since mkfifo is missing"
+fi
 if [ "$(id -u)" -ne 0 ]; then
   compare unreadable 2 "$inputs/secret.txt"
 else
