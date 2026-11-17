@@ -111,7 +111,7 @@ For each requirement that doesn't fit, the checker reports what's wrong, and a c
 
 `ears-check [--format <string>] [--profile <string>] [--output <string>] [--verbose] [--max-input-bytes <bytes>] [<file>...]`
 
-It reads each file, or standard input when none is given, and reports every requirement that doesn't fit a template, with a suggested fix where one exists:
+It reads each file, or standard input when none is given, and reports every requirement that doesn't fit a template, with a suggested fix where one exists. A directory stands for the files under it (see [Directories](#directories)):
 
 ```text
 $ cat reqs.txt
@@ -125,22 +125,44 @@ $ echo $?
 1
 ```
 
-- `--format`: `text` (one requirement per line), `markdown`, or `openspec` (JSON from `openspec show --json`). By default `.md` files are Markdown, `.json` files are OpenSpec, and everything else is text.
+- `--format`: `text` (one requirement per line), `markdown`, `openspec` (JSON from `openspec show --json`), or `openspec-markdown` (an OpenSpec spec's Markdown; see [OpenSpec](#openspec)). By default an OpenSpec spec file (`openspec/specs/…/spec.md`, or a change's) is `openspec-markdown`, other `.md` files are Markdown, `.json` files are OpenSpec JSON, and everything else is text.
 - `--profile`: `classic` (lowercase `shall`) or `openspec` (uppercase `SHALL`, which OpenSpec's validator requires). OpenSpec input defaults to `openspec`, other input to `classic`.
 - `--output`: `text` (one line per finding) or `json` (one document; see [JSON output](#json-output)).
 - `--verbose`: log every step to standard error (the arguments, each input read, and the outcome), not only warnings and errors.
 - `--max-input-bytes`: the most bytes any one input may hold, from 1 to 104857600 (100 MiB); 10485760 (10 MiB) when it isn't given. No build reads more of an input than that and one byte, so an input over the limit, or a standard input that never ends, stops there with exit status 2 and `Cannot read <input>: more than <limit> bytes; --max-input-bytes raises the limit`.
 - `--help`: print the usage and these options, and read no input, wherever it comes among the options. With an input file it's invalid arguments (exit status 2), so a glob that picks up a file named `--help` fails rather than checking nothing; to check such a file, name it after `--`, which ends the options (`ears-check -- *` checks every file a glob finds).
-- Exit status: 0 when every requirement passes, or for `--help`; 1 when any finding is reported; 2 when the arguments are invalid or an input can't be read or parsed.
+- Exit status: 0 when every requirement passes, or for `--help`; 1 when any finding is reported; 2 when the arguments are invalid, an input can't be read or parsed, or a directory holds nothing to check.
 - Standard output carries only the findings or the usage text. Standard error carries error messages and log entries, one line each: a timestamp, the level, the message, and details as `key=value` pairs. Without `--verbose`, only failures are logged, each with its input, the error's type and message, and the exit status.
 - Text taken from the input (a fix, a file name, an OpenSpec id) is escaped in every output: each character outside printable ASCII, Latin-1, the combining accents, and the typographic punctuation word processors insert (dashes, curly quotes, the ellipsis, and the like) is written as `\uXXXX`, and so is the first of two number signs (`##`); a text-output line that would start with a colon, a space, or a no-break space (from a file name or an OpenSpec id) starts with that character escaped. A location is written as it is, its spaces kept. So no input can drive a terminal, hide or disguise text, or send a CI system such as GitHub Actions a command. It isn't escaped for HTML or Markdown: a program that renders the output does that.
 - Inline code: in every format, text between backticks is quoted, as in Markdown (a run of backticks up to the next run of the same length; `` \` `` is a plain backtick and `\\` a plain backslash). Its periods, commas, and words don't count, so `` `Cannot read notes.txt. Check the path.` `` is one quoted word, and a requirement whose only `shall` is quoted still lacks one.
 - Encoding: input is read as UTF-8 whatever the locale, and an input that isn't valid UTF-8 is an error giving the line and column of the first bad byte; a leading UTF-8 byte-order mark is ignored, and UTF-16 or UTF-32 input is named by its byte-order mark. Output is written as UTF-8. On Linux, the JVM decodes file names on the command line with the locale's charset, so under the C locale (common in Docker images) it can't open a file whose name isn't ASCII; run it under a UTF-8 locale, such as `LC_ALL=C.UTF-8`. The Node build and the native binary open such a file under any locale.
 - The Markdown parser: every build reads Markdown with cmark-gfm 0.29.0.gfm.13 and its table extension, built from the same source: compiled into the native binary, and as a WebAssembly module in the jar and the npm package. Nothing needs installing, and the native binary loads no library beyond the system's. cmark-gfm's license notices are in the jar (`META-INF/cmark-gfm/COPYING`), the npm package (`cmark-gfm/COPYING`), and each release (`THIRD-PARTY-NOTICES.txt`).
 
+### Directories
+
+`ears-check docs` checks every file under `docs` whose name ends in `.md` (as Markdown) or `.txt` (as plain text), in its subdirectories too, as if each were named on the command line; `--format`, `--profile`, and `--max-input-bytes` apply to each.
+
+- Left alone: entries whose names start with a period (`.git`, `.github`), symbolic links (so a walk can't loop or be led out of the directory; a link named on the command line is followed), anything that isn't a file or a directory (a named pipe), and other files (`package.json`, images). In a directory named `openspec` and below its `specs` and `changes`, only OpenSpec's spec files are read (see [OpenSpec](#openspec)).
+- Order: each directory's entries by name, compared by character code (so `B.md` comes before `a.md`), with a subdirectory's files where its name sorts; the same on every build and file system. A directory takes its place among the inputs.
+- Names: the directory as given, a slash, and the path below it (`docs/billing/invoices.md`).
+- A directory that holds no `.md` or `.txt` file is an error (exit status 2, `Cannot check docs: it holds no .md or .txt files`), so a mistyped or emptied folder can't pass by checking nothing; one that can't be listed is an unreadable input (`Cannot read docs/private`).
+- Give the folder of requirements rather than a project's root: under the root, a license or Python's `requirements.txt` is plain text with a finding on most lines, and `node_modules` holds every package's README.
+
 ### OpenSpec
 
-Check an OpenSpec change or spec through the JSON the OpenSpec CLI prints; OpenSpec input uses the `openspec` profile (uppercase `SHALL`) unless `--profile` says otherwise. `--type` and `--json` below are options of `openspec show`; `ears-check` needs only the file, or `--format openspec` for standard input:
+Check an OpenSpec project's specs and changes from their Markdown, as OpenSpec reads them, with no OpenSpec CLI needed:
+
+```sh
+ears-check openspec
+```
+
+- What's read: in a spec (`openspec/specs/<capability>/spec.md`), each requirement in its `Requirements` section; in a change's delta spec (`openspec/changes/<change>/specs/<capability>/spec.md`), each requirement under `## ADDED Requirements` and `## MODIFIED Requirements`. A requirement's text is what OpenSpec takes as its text, the lines between its heading and the next heading without blank lines, fenced code, or `**Label**:` lines, so exactly what `openspec show --json` gives; it's checked as one requirement and located at the line it starts on. Scenarios, purposes, and removed or renamed requirements aren't checked.
+- How it's recognized: by the path, a `spec.md` below the `specs` directory of a directory named `openspec` or of one of its changes (archived ones too). `--format openspec-markdown` reads any file so. From inside `openspec/` (`cd openspec && ears-check specs`) the path doesn't show it; check from the project's root.
+- In a directory: in a directory named `openspec` and below its `specs` and `changes`, only those spec files are checked (not proposals, designs, task lists, or `config.yaml`), and the archive of past changes is skipped unless it's given itself. Other directories in one named `openspec` are read as any others. An `openspec` directory with no spec file is an error, `Cannot check openspec: it holds no OpenSpec spec files`.
+
+OpenSpec input, Markdown or JSON, uses the `openspec` profile (uppercase `SHALL`) unless `--profile` says otherwise.
+
+Or check a change or spec through the JSON the OpenSpec CLI prints. `--type` and `--json` below are options of `openspec show`; `ears-check` needs only the file, or `--format openspec` for standard input:
 
 ```sh
 openspec show add-reminders --type change --json > add-reminders.json

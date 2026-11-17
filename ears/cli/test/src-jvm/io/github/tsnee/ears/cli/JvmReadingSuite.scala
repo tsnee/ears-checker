@@ -3,6 +3,9 @@ package io.github.tsnee.ears.cli
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.net.StandardProtocolFamily
+import java.net.UnixDomainSocketAddress
+import java.nio.channels.ServerSocketChannel
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -118,6 +121,82 @@ object JvmReadingSuite extends ZIOSpecDefault:
         .standardInput(1001)
         .mapError(Exception(_))
         .map(read => assertTrue(read.length == 1001))
+    ,
+    test("a directory's entries and their kinds, with no link followed"):
+      for
+        root <- temporary(Files.createTempDirectory("ears-check"))
+        scheduling <- temporary(Files.writeString(root.resolve("scheduling.md"), "x"))
+        _ <- temporary(Files.createDirectory(root.resolve("billing")))
+        _ <- temporary(Files.writeString(root.resolve(".draft.md"), "x"))
+        _ <- temporary(Files.createSymbolicLink(root.resolve("keys.md"), scheduling))
+        _ <- temporary(Files.createSymbolicLink(root.resolve("loop"), root))
+        _ <- temporary(Files.createSymbolicLink(root.resolve("old.md"), root.resolve("none.md")))
+        entries <- Main.reading(_ => noStdin).entries(root.toString).mapError(Exception(_))
+      yield assertTrue(
+        entries.sortBy(_.name) == List(
+          Entry(".draft.md", EntryKind.File),
+          Entry("billing", EntryKind.Directory),
+          Entry("keys.md", EntryKind.Link),
+          Entry("loop", EntryKind.Link),
+          Entry("old.md", EntryKind.Link),
+          Entry("scheduling.md", EntryKind.File)
+        )
+      )
+    ,
+    test("a directory the user may not list: the JVM's error, for the log"):
+      for
+        locked <- temporary(
+          Files.createTempDirectory(
+            "ears-check",
+            PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("---------"))
+          )
+        )
+        found <- Main.reading(_ => noStdin).entries(locked.toString).fold(Some(_), _ => None)
+      yield assertTrue(found.exists(_.contains("AccessDeniedException")))
+    // Root lists any directory whatever its mode.
+    @@ TestAspect.ifProp("user.name")(_ != "root"),
+    test("an entry that's neither a file, a directory, nor a link: other"):
+      for
+        root <- temporary(Files.createTempDirectory("ears-check"))
+        socket = root.resolve("feed.md")
+        entries <- ZIO.scoped(
+          ZIO
+            .fromAutoCloseable(
+              ZIO.attemptBlocking(ServerSocketChannel.open(StandardProtocolFamily.UNIX))
+            )
+            .tap(channel => ZIO.attemptBlocking(channel.bind(UnixDomainSocketAddress.of(socket))))
+            .zipRight(Main.reading(_ => noStdin).entries(root.toString).mapError(Exception(_)))
+        )
+        _ <- ZIO.attemptBlocking(Files.deleteIfExists(socket))
+      yield assertTrue(entries == List(Entry("feed.md", EntryKind.Other)))
+    ,
+    test("an entry whose kind can't be read is a file, so reading it reports it"):
+      for
+        root <- temporary(Files.createTempDirectory("ears-check"))
+        sub <- temporary(Files.createDirectory(root.resolve("sub")))
+        _ <- temporary(Files.writeString(sub.resolve("scheduling.md"), "x"))
+        // Listable but not searchable: the names can be read, their attributes can't.
+        _ <- ZIO.attemptBlocking(
+          Files.setPosixFilePermissions(sub, PosixFilePermissions.fromString("r--------"))
+        )
+        entries <- Main.reading(_ => noStdin).entries(sub.toString).mapError(Exception(_))
+        _ <- ZIO.attemptBlocking(
+          Files.setPosixFilePermissions(sub, PosixFilePermissions.fromString("rwx------"))
+        )
+      yield assertTrue(entries == List(Entry("scheduling.md", EntryKind.File)))
+    // Root reads any entry's attributes whatever the directory's mode.
+    @@ TestAspect.ifProp("user.name")(_ != "root"),
+    test("a path given is a directory, through a link too, and nothing else is"):
+      val reading = Main.reading(_ => noStdin)
+      for
+        root <- temporary(Files.createTempDirectory("ears-check"))
+        file <- temporary(Files.writeString(root.resolve("scheduling.md"), "x"))
+        link <- temporary(Files.createSymbolicLink(root.resolve("current"), root))
+        directory <- reading.isDirectory(root.toString)
+        linked <- reading.isDirectory(link.toString)
+        notFile <- reading.isDirectory(file.toString)
+        notMissing <- reading.isDirectory(root.resolve("missing").toString)
+      yield assertTrue(directory, linked, !notFile, !notMissing)
     ,
     test("a file: no more than asked for is read"):
       for

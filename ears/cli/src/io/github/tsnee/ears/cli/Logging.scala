@@ -77,9 +77,10 @@ private[cli] object Logging:
     else escaped
 
   private def formatName(format: InputFormat): String = format match
-    case InputFormat.PlainText    => "text"
-    case InputFormat.Markdown     => "markdown"
-    case InputFormat.OpenSpecJson => "openspec"
+    case InputFormat.PlainText        => "text"
+    case InputFormat.Markdown         => "markdown"
+    case InputFormat.OpenSpecJson     => "openspec"
+    case InputFormat.OpenSpecMarkdown => "openspec-markdown"
 
   private def profileName(profile: Profile): String = profile match
     case Profile.Classic  => "classic"

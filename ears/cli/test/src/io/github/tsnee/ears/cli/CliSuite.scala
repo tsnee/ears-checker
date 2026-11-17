@@ -15,18 +15,61 @@ object CliSuite extends ZIOSpecDefault:
   private val passing = "The scheduler shall list upcoming events.\n"
   private val failing = "The scheduler lists events.\n"
 
+  /** A requirement with a finding in Markdown, which reads only sentences with a modal keyword. */
+  private val failingMarkdown = "The scheduler SHALL list upcoming events.\n"
+
   private def utf8(text: String): Array[Byte] = text.getBytes(StandardCharsets.UTF_8)
+
+  /** A `Reading` of files and standard input where nothing is a directory. */
+  private def readingOf(
+      file: (String, Int) => IO[String, Array[Byte]],
+      standardInput: Int => IO[String, Array[Byte]]
+  ): Reading =
+    Reading(file, standardInput, _ => ZIO.succeed(false), _ => ZIO.fail("ENOTDIR"))
 
   /** A `Reading` over named files' text, read as UTF-8; any other name can't be read. Standard
     * input isn't expected.
     */
   private def reading(files: Map[String, IO[String, String]]): Reading =
-    Reading(
+    readingOf(
       (name, _) => files.getOrElse(name, ZIO.fail("ENOENT")).map(utf8),
       _ => unreadable("standard input not expected")
     )
 
   private def unreadable(error: String): IO[String, Array[Byte]] = ZIO.fail(error)
+
+  private def file(name: String) = Entry(name, EntryKind.File)
+
+  private def directory(name: String) = Entry(name, EntryKind.Directory)
+
+  /** The platform's error listing a directory the fake tree doesn't hold. */
+  private val unlistable = "EACCES: permission denied"
+
+  /** A `Reading` over a tree: each directory's entries by its path, and each file's text by its
+    * path, read as UTF-8; anything else can't be read or listed. Standard input isn't expected.
+    */
+  private def tree(directories: Map[String, List[Entry]], texts: Map[String, String]): Reading =
+    recordedTree(directories, texts, _ => ZIO.unit, _ => ZIO.unit)
+
+  /** `tree`, giving each file read to `opened`, and the bytes each read asks for to `asked`. */
+  private def recordedTree(
+      directories: Map[String, List[Entry]],
+      texts: Map[String, String],
+      opened: String => UIO[Unit],
+      asked: Int => UIO[Unit]
+  ): Reading =
+    Reading(
+      (name, most) =>
+        opened(name) *> asked(most) *>
+          texts.get(name).fold(unreadable("ENOENT"))(text => ZIO.succeed(utf8(text))),
+      _ => unreadable("standard input not expected"),
+      name => ZIO.succeed(directories.contains(name)),
+      name => directories.get(name).fold(ZIO.fail(unlistable))(ZIO.succeed(_))
+    )
+
+  /** The file each finding on standard output is located in, in order. */
+  private def located(outcome: Outcome): List[String] =
+    Predef.augmentString(outcome.stdout).linesIterator.toList.map(_.takeWhile(_ != ':'))
 
   private def run(files: Map[String, IO[String, String]], arguments: String*) =
     Cli.program(arguments.toList, reading(files))
@@ -35,7 +78,7 @@ object CliSuite extends ZIOSpecDefault:
     * it.
     */
   private val overLimit: Reading =
-    Reading(
+    readingOf(
       (_, most) => ZIO.succeed(Array.fill(most)('a'.toByte)),
       most => ZIO.succeed(Array.fill(most)('a'.toByte))
     )
@@ -78,7 +121,7 @@ object CliSuite extends ZIOSpecDefault:
       ,
       test("standard input is read when no file is given"):
         Cli
-          .program(Nil, Reading((_, _) => unreadable("ENOENT"), _ => ZIO.succeed(utf8(passing))))
+          .program(Nil, readingOf((_, _) => unreadable("ENOENT"), _ => ZIO.succeed(utf8(passing))))
           .map(outcome => assertTrue(outcome.exitCode == 0, outcome.stdout.isEmpty))
       ,
       test("a file that can't be read: status 2 and its name"):
@@ -101,7 +144,7 @@ object CliSuite extends ZIOSpecDefault:
         Cli
           .program(
             List("--format", "y\nforged"),
-            Reading((_, _) => unreadable("ENOENT"), _ => unreadable(""))
+            readingOf((_, _) => unreadable("ENOENT"), _ => unreadable(""))
           )
           .map(outcome =>
             assertTrue(
@@ -115,7 +158,7 @@ object CliSuite extends ZIOSpecDefault:
         Cli
           .program(
             List("--format", "y\u001b[2Kaml"),
-            Reading((_, _) => unreadable("ENOENT"), _ => unreadable(""))
+            readingOf((_, _) => unreadable("ENOENT"), _ => unreadable(""))
           )
           .map(outcome =>
             assertTrue(
@@ -129,7 +172,7 @@ object CliSuite extends ZIOSpecDefault:
         // "a", "b", then 0xff, never valid in UTF-8, at line 3, column 1.
         val bytes = utf8("a\nb\n") ++ Array(0xff.toByte)
         Cli
-          .program(List("notes.txt"), Reading((_, _) => ZIO.succeed(bytes), _ => unreadable("")))
+          .program(List("notes.txt"), readingOf((_, _) => ZIO.succeed(bytes), _ => unreadable("")))
           .map(outcome =>
             assertTrue(
               outcome.exitCode == 2,
@@ -141,7 +184,7 @@ object CliSuite extends ZIOSpecDefault:
         // UTF-16's little-endian byte-order mark, then "a".
         val bytes = Array(0xff, 0xfe, 'a'.toInt, 0).map(_.toByte)
         Cli
-          .program(List("notes.txt"), Reading((_, _) => ZIO.succeed(bytes), _ => unreadable("")))
+          .program(List("notes.txt"), readingOf((_, _) => ZIO.succeed(bytes), _ => unreadable("")))
           .map(outcome =>
             assertTrue(
               outcome.exitCode == 2,
@@ -152,7 +195,7 @@ object CliSuite extends ZIOSpecDefault:
       test("the limit from --max-input-bytes, or 10 MiB, reaches every read"):
         for
           limits <- Ref.make(List.empty[Int])
-          recording = Reading(
+          recording = readingOf(
             (_, most) => limits.update(_ :+ most).as(utf8(passing)),
             most => limits.update(_ :+ most).as(utf8(passing))
           )
@@ -191,7 +234,7 @@ object CliSuite extends ZIOSpecDefault:
       ,
       test("standard input that fails: status 2, naming standard input"):
         Cli
-          .program(Nil, Reading((_, _) => unreadable("ENOENT"), _ => unreadable("Stream closed")))
+          .program(Nil, readingOf((_, _) => unreadable("ENOENT"), _ => unreadable("Stream closed")))
           .map(outcome =>
             assertTrue(outcome.exitCode == 2, outcome.stderr == "Cannot read standard input\n")
           )
@@ -199,7 +242,7 @@ object CliSuite extends ZIOSpecDefault:
       test("several files are read in order, up to the first that fails"):
         for
           names <- Ref.make(List.empty[String])
-          logged = Reading(
+          logged = readingOf(
             (name, _) =>
               names.update(_ :+ name) *>
                 (if name == "absent.txt" then unreadable("ENOENT") else ZIO.succeed(utf8(passing))),
@@ -218,6 +261,350 @@ object CliSuite extends ZIOSpecDefault:
           assertTrue(outcome.exitCode == 2, outcome.stdout.isEmpty)
         )
     ),
+    suite("OpenSpec Markdown")(
+      test("a spec: each requirement's text, with the OpenSpec profile, at the line it starts"):
+        val spec = List(
+          "## Purpose",
+          "The scheduler shall be ignored here.",
+          "## Requirements",
+          "### Requirement: Upcoming",
+          "",
+          "The scheduler shall list upcoming events.",
+          "#### Scenario: One",
+          "- **WHEN** the scheduler shall start",
+          "- **THEN** it shall list events"
+        ).mkString("", "\n", "\n")
+        val path = "openspec/specs/scheduling/spec.md"
+        Cli
+          .program(List(path), tree(Map.empty, Map(path -> spec)))
+          .map(outcome =>
+            assertTrue(
+              outcome.exitCode == 1,
+              Predef.augmentString(outcome.stdout).linesIterator.toList.map(_.take(40)) ==
+                List(s"$path:6: wrong-case".take(40))
+            )
+          )
+      ,
+      test("a delta spec: the added and modified requirements only"):
+        val delta = List(
+          "## ADDED Requirements",
+          "### Requirement: Upcoming",
+          "The scheduler shall list upcoming events.",
+          "## REMOVED Requirements",
+          "### Requirement: Reminders",
+          "**Reason**: The scheduler shall be replaced.",
+          "## MODIFIED Requirements",
+          "### Requirement: Past",
+          "The scheduler SHALL hide past events."
+        ).mkString("", "\n", "\n")
+        val path = "openspec/changes/add-reminders/specs/scheduling/spec.md"
+        Cli
+          .program(List(path), tree(Map.empty, Map(path -> delta)))
+          .map(outcome =>
+            assertTrue(located(outcome) == List(path), outcome.stdout.contains(":3: "))
+          )
+      ,
+      test("a walk inside openspec reads its spec files and nothing else, the archive skipped"):
+        val failingSpec = "## Requirements\n### Requirement: Upcoming\nThe scheduler shall list.\n"
+        val directories = Map(
+          "project" -> List(file("README.md"), directory("openspec")),
+          "project/openspec" -> List(file("config.yaml"), directory("specs"), directory("changes")),
+          "project/openspec/specs" -> List(directory("scheduling")),
+          "project/openspec/specs/scheduling" -> List(file("spec.md")),
+          "project/openspec/changes" -> List(directory("add"), directory("archive")),
+          "project/openspec/changes/add" -> List(file("proposal.md"), directory("specs")),
+          "project/openspec/changes/add/specs" -> List(directory("scheduling")),
+          "project/openspec/changes/add/specs/scheduling" -> List(file("spec.md")),
+          "project/openspec/changes/archive" -> List(file("old.md"))
+        )
+        for
+          names <- Ref.make(List.empty[String])
+          docs = recordedTree(
+            directories,
+            Map(
+              "project/README.md" -> passing,
+              "project/openspec/specs/scheduling/spec.md" -> failingSpec,
+              "project/openspec/changes/add/specs/scheduling/spec.md" ->
+                "## ADDED Requirements\n### Requirement: Later\nThe scheduler shall list later.\n"
+            ),
+            name => names.update(_ :+ name),
+            _ => ZIO.unit
+          )
+          outcome <- Cli.program(List("project"), docs)
+          read <- names.get
+        yield assertTrue(
+          read == List(
+            "project/README.md",
+            "project/openspec/changes/add/specs/scheduling/spec.md",
+            "project/openspec/specs/scheduling/spec.md"
+          ),
+          located(outcome) == List(
+            "project/openspec/changes/add/specs/scheduling/spec.md",
+            "project/openspec/specs/scheduling/spec.md"
+          )
+        )
+      ,
+      test("a walk through openspec that finds nothing: the message names both kinds of file"):
+        val directories = Map(
+          "project" -> List(file("package.json"), directory("openspec")),
+          "project/openspec" -> List(directory("changes")),
+          "project/openspec/changes" -> List(directory("add")),
+          "project/openspec/changes/add" -> List(file("proposal.md"))
+        )
+        Cli
+          .program(List("project"), tree(directories, Map.empty))
+          .map(outcome =>
+            assertTrue(
+              outcome.exitCode == 2,
+              outcome.stderr == "Cannot check project: it holds no .md or .txt files outside " +
+                "openspec, and no OpenSpec spec files\n"
+            )
+          )
+      ,
+      test("an openspec directory with no spec file: the message names OpenSpec spec files"):
+        Cli
+          .program(
+            List("openspec"),
+            tree(Map("openspec" -> List(file("config.yaml"), file("AGENTS.md"))), Map.empty)
+          )
+          .map(outcome =>
+            assertTrue(
+              outcome.exitCode == 2,
+              outcome.stderr == "Cannot check openspec: it holds no OpenSpec spec files\n"
+            )
+          )
+    ),
+    suite("directories")(
+      test("the files under a directory, in name order, a subdirectory's where its name sorts"):
+        val docs = Map(
+          "docs" -> List(file("b.md"), file("a.md"), file("B.md"), directory("b")),
+          "docs/b" -> List(file("c.md"))
+        )
+        val texts = List("docs/b.md", "docs/a.md", "docs/B.md", "docs/b/c.md")
+          .map(_ -> failingMarkdown)
+          .toMap
+        Cli
+          .program(List("docs"), tree(docs, texts))
+          .map(outcome =>
+            assertTrue(
+              outcome.exitCode == 1,
+              located(outcome) == List("docs/B.md", "docs/a.md", "docs/b/c.md", "docs/b.md")
+            )
+          )
+      ,
+      test("a directory among files: its files in its place"):
+        val texts = List("z.md", "docs/scheduling.md", "a.md").map(_ -> failingMarkdown).toMap
+        Cli
+          .program(
+            List("z.md", "docs", "a.md"),
+            tree(Map("docs" -> List(file("scheduling.md"))), texts)
+          )
+          .map(outcome =>
+            assertTrue(located(outcome) == List("z.md", "docs/scheduling.md", "a.md"))
+          )
+      ,
+      test("a directory given with a trailing slash: no second slash in the names"):
+        Cli
+          .program(
+            List("docs/"),
+            tree(
+              Map("docs/" -> List(file("scheduling.md"))),
+              Map("docs/scheduling.md" -> failingMarkdown)
+            )
+          )
+          .map(outcome => assertTrue(outcome.stdout.startsWith("docs/scheduling.md:1: ")))
+      ,
+      test("a directory given whose name starts with a period is checked"):
+        Cli
+          .program(
+            List(".notes"),
+            tree(
+              Map(".notes" -> List(file("scheduling.md"))),
+              Map(".notes/scheduling.md" -> failingMarkdown)
+            )
+          )
+          .map(outcome =>
+            assertTrue(outcome.exitCode == 1, outcome.stdout.startsWith(".notes/scheduling.md:1: "))
+          )
+      ,
+      test(".md read as Markdown and .txt as plain text"):
+        // A requirement in a code block: Markdown skips it, plain text checks the line.
+        val fenced = "```\nThe scheduler lists events.\n```\n"
+        Cli
+          .program(
+            List("docs"),
+            tree(
+              Map("docs" -> List(file("billing.txt"), file("scheduling.md"))),
+              Map("docs/billing.txt" -> fenced, "docs/scheduling.md" -> fenced)
+            )
+          )
+          .map(outcome =>
+            assertTrue(outcome.exitCode == 1, located(outcome).distinct == List("docs/billing.txt"))
+          )
+      ,
+      test("hidden entries, links, other entries, and other files are left alone"):
+        val entries = List(
+          file("scheduling.md"),
+          file(".draft.md"),
+          directory(".github"),
+          Entry("keys.md", EntryKind.Link),
+          Entry("feed.md", EntryKind.Other),
+          file("package.json")
+        )
+        val unexpected = List(
+          "docs/.draft.md",
+          "docs/.github/template.md",
+          "docs/keys.md",
+          "docs/feed.md",
+          "docs/package.json"
+        )
+        for
+          names <- Ref.make(List.empty[String])
+          docs = recordedTree(
+            Map("docs" -> entries, "docs/.github" -> List(file("template.md"))),
+            (("docs/scheduling.md" -> passing) :: unexpected.map(_ -> "{not json")).toMap,
+            name => names.update(_ :+ name),
+            _ => ZIO.unit
+          )
+          outcome <- Cli.program(List("docs"), docs)
+          read <- names.get
+        yield assertTrue(outcome.exitCode == 0, read == List("docs/scheduling.md"))
+      ,
+      test("the options apply to every file found"):
+        for
+          limits <- Ref.make(List.empty[Int])
+          docs = recordedTree(
+            Map("docs" -> List(file("scheduling.md"))),
+            Map("docs/scheduling.md" -> passing),
+            _ => ZIO.unit,
+            most => limits.update(_ :+ most)
+          )
+          outcome <- Cli.program(
+            List("--profile", "openspec", "--max-input-bytes", "1000", "docs"),
+            docs
+          )
+          seen <- limits.get
+        yield assertTrue(
+          outcome.exitCode == 1,
+          outcome.stdout.contains("wrong-case"),
+          seen == List(1001)
+        )
+      ,
+      test("a directory with nothing to check: status 2, the message, and nothing later read"):
+        for
+          names <- Ref.make(List.empty[String])
+          docs = recordedTree(
+            Map(
+              "notes" -> List(file("package.json"), directory(".github")),
+              "notes/.github" -> List(file("template.md"))
+            ),
+            Map("later.md" -> failingMarkdown),
+            name => names.update(_ :+ name),
+            _ => ZIO.unit
+          )
+          outcome <- Cli.program(List("notes", "later.md"), docs)
+          read <- names.get
+        yield assertTrue(
+          outcome.exitCode == 2,
+          outcome.stdout.isEmpty,
+          outcome.stderr == "Cannot check notes: it holds no .md or .txt files\n",
+          read.isEmpty
+        )
+      ,
+      test("a subdirectory with nothing to check is no failure"):
+        Cli
+          .program(
+            List("docs"),
+            tree(
+              Map("docs" -> List(file("scheduling.md"), directory("images")), "docs/images" -> Nil),
+              Map("docs/scheduling.md" -> passing)
+            )
+          )
+          .map(outcome => assertTrue(outcome.exitCode == 0, outcome.stderr.isEmpty))
+      ,
+      test("a subdirectory that can't be listed: status 2, its name, and nothing later read"):
+        for
+          names <- Ref.make(List.empty[String])
+          docs = recordedTree(
+            Map("docs" -> List(file("billing.md"), directory("private"))),
+            Map("docs/billing.md" -> failingMarkdown, "later.md" -> failingMarkdown),
+            name => names.update(_ :+ name),
+            _ => ZIO.unit
+          )
+          outcome <- Cli.program(List("docs", "later.md"), docs)
+          read <- names.get
+        yield assertTrue(
+          outcome.exitCode == 2,
+          outcome.stdout.isEmpty,
+          outcome.stderr == "Cannot read docs/private\n",
+          read == List("docs/billing.md")
+        )
+      ,
+      test("a subdirectory that can't be listed is logged with the platform's error"):
+        val noon = Instant.parse("2026-11-04T12:00:00Z")
+        val lines = ListBuffer.empty[String]
+        ZIO
+          .withLogger(Cli.logger(LogLevel.Warning, line => lines += line, () => noon))(
+            Cli.program(List("docs"), tree(Map("docs" -> List(directory("private"))), Map.empty))
+          )
+          .as(
+            assertTrue(
+              lines.toList.exists(line =>
+                line.contains(" ERROR Cannot read input ") && line.contains(unlistable) &&
+                  line.contains(" exit=2")
+              )
+            )
+          )
+      ,
+      test("a directory that can't be listed is logged with its input's name, format, and profile"):
+        val noon = Instant.parse("2026-11-04T12:00:00Z")
+        def errors(arguments: List[String], docs: Reading) =
+          val lines = ListBuffer.empty[String]
+          ZIO
+            .withLogger(Cli.logger(LogLevel.Warning, line => lines += line, () => noon))(
+              Cli.program(arguments, docs)
+            )
+            .as(lines.toList.filter(_.contains(" ERROR Cannot read input ")))
+        val input = List(" format=text", " profile=classic", unlistable, " exit=2")
+        for
+          // A directory that exists but can't be listed: no entries to give.
+          named <- errors(
+            List("notes"),
+            tree(Map.empty, Map.empty).copy(isDirectory = _ => ZIO.succeed(true))
+          )
+          sub <- errors(
+            List("docs"),
+            tree(Map("docs" -> List(directory("private"))), Map.empty)
+          )
+        yield assertTrue(
+          named.size == 1,
+          (" file=notes" :: input).forall(named.mkString.contains),
+          sub.size == 1,
+          (" file=docs" :: " directory=docs/private" :: input).forall(sub.mkString.contains)
+        )
+      ,
+      test("a directory with nothing to check is logged"):
+        val noon = Instant.parse("2026-11-04T12:00:00Z")
+        val lines = ListBuffer.empty[String]
+        ZIO
+          .withLogger(Cli.logger(LogLevel.Warning, line => lines += line, () => noon))(
+            Cli.program(List("notes"), tree(Map("notes" -> Nil), Map.empty))
+          )
+          .as(
+            assertTrue(
+              lines.toList.exists(line =>
+                line.contains(" ERROR Nothing to check ") && line.contains(" exit=2")
+              )
+            )
+          )
+      ,
+      test("a file found that can't be read: status 2 and its name"):
+        Cli
+          .program(List("docs"), tree(Map("docs" -> List(file("secret.md"))), Map.empty))
+          .map(outcome =>
+            assertTrue(outcome.exitCode == 2, outcome.stderr == "Cannot read docs/secret.md\n")
+          )
+    ),
     suite("the application")(
       test("run takes its arguments from the command line"):
         Cli
@@ -230,7 +617,7 @@ object CliSuite extends ZIOSpecDefault:
         for
           code <- Cli.cli(
             Nil,
-            Reading((_, _) => unreadable("ENOENT"), _ => ZIO.succeed(utf8(passing)))
+            readingOf((_, _) => unreadable("ENOENT"), _ => ZIO.succeed(utf8(passing)))
           )
           out <- TestConsole.output
           err <- TestConsole.outputErr

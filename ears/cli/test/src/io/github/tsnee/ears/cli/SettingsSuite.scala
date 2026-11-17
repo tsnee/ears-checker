@@ -222,10 +222,35 @@ object SettingsSuite extends ZIOSpecDefault:
           Settings(Some("reqs.md"), Some(InputFormat.PlainText), None, None).inputFormat ==
             InputFormat.PlainText
         )
+      ,
+      test("OpenSpec Markdown is inferred from an OpenSpec spec file's path"):
+        assertTrue(
+          file("openspec/specs/scheduling/spec.md").inputFormat == InputFormat.OpenSpecMarkdown,
+          file("openspec/changes/add-reminders/specs/scheduling/spec.md").inputFormat ==
+            InputFormat.OpenSpecMarkdown,
+          file("openspec/changes/add-reminders/proposal.md").inputFormat == InputFormat.Markdown
+        )
+      ,
+      test("--format openspec-markdown selects OpenSpec Markdown; --format markdown, Markdown"):
+        val markdown = Settings.parse(List("--format", "openspec-markdown", "scheduling.md"))
+        val plain = Settings.parse(List("--format", "markdown", "openspec/specs/x/spec.md"))
+        assertTrue(
+          markdown.map(_.head.inputFormat) == Right(InputFormat.OpenSpecMarkdown),
+          plain.map(_.head.inputFormat) == Right(InputFormat.Markdown)
+        )
+      ,
+      test("the usage text lists openspec-markdown"):
+        assertTrue(
+          Settings.parseInvocation(List("--help")).left.map(_.text.contains("openspec-markdown")) ==
+            Left(true)
+        )
     ),
     suite("profile")(
       test("OpenSpec JSON defaults to the OpenSpec profile"):
         assertTrue(file("change.json").profile == Profile.OpenSpec)
+      ,
+      test("OpenSpec Markdown defaults to the OpenSpec profile"):
+        assertTrue(file("openspec/specs/scheduling/spec.md").profile == Profile.OpenSpec)
       ,
       test("plain text and Markdown default to the classic profile"):
         assertTrue(

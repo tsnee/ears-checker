@@ -38,8 +38,27 @@ object NodeApp extends ZIOAppDefault:
               )
           )(upTo(_, most))
           .mapError(_.toString),
-      most => upTo(0, most).mapError(_.toString)
+      most => upTo(0, most).mapError(_.toString),
+      name =>
+        ZIO
+          .attempt(NodeFs.statSync(name, js.Dynamic.literal(throwIfNoEntry = false)))
+          .map(_.exists(_.isDirectory()))
+          .orElseSucceed(false),
+      name =>
+        ZIO
+          .attempt(NodeFs.readdirSync(name, js.Dynamic.literal(withFileTypes = true)).toList)
+          .map(_.map(entry))
+          .mapError(_.toString)
     )
+
+  /** An entry as `readdirSync` describes it, which doesn't follow a link (see `EntryKind`). */
+  private def entry(dirent: NodeDirent): Entry =
+    val kind =
+      if dirent.isSymbolicLink() then EntryKind.Link
+      else if dirent.isDirectory() then EntryKind.Directory
+      else if dirent.isFile() then EntryKind.File
+      else EntryKind.Other
+    Entry(dirent.name, kind)
 
   /** At most `most` bytes of a descriptor, read in chunks of 64 KiB until there are `most` or the
     * input ends, so memory follows what the input holds rather than the limit.
@@ -84,6 +103,26 @@ private object NodeFs extends js.Object:
     js.native
 
   def closeSync(descriptor: Int): Unit = js.native
+
+  /** What the path names, following a link; undefined when nothing does (`throwIfNoEntry: false`).
+    */
+  def statSync(path: String, options: js.Object): js.UndefOr[NodeStats] = js.native
+
+  /** A directory's entries (`withFileTypes: true`), in the file system's order. */
+  def readdirSync(path: String, options: js.Object): js.Array[NodeDirent] = js.native
+
+/** What the CLI uses of `fs.Stats`. */
+@js.native
+private trait NodeStats extends js.Object:
+  def isDirectory(): Boolean = js.native
+
+/** What the CLI uses of `fs.Dirent`: its name and, without following a link, its kind. */
+@js.native
+private trait NodeDirent extends js.Object:
+  val name: String = js.native
+  def isFile(): Boolean = js.native
+  def isDirectory(): Boolean = js.native
+  def isSymbolicLink(): Boolean = js.native
 
 /** What the CLI uses of `node:process`. */
 @js.native

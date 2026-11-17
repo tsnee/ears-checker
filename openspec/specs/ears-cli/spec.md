@@ -44,12 +44,17 @@ When the EARS checker reads the JSON that OpenSpec prints for a spec, the EARS c
 
 ### Requirement: Markdown inferred from file name
 
-While no input format is selected, when the input file name ends in .md, the EARS checker SHALL read the input as Markdown.
+While no input format is selected, when the input file name ends in .md and its path isn't an OpenSpec Markdown spec file, the EARS checker SHALL read the input as Markdown.
 
 #### Scenario: Markdown file name
 
 - **WHEN** the checker is given the file "requirements.md" with no format option
 - **THEN** it reads the file as Markdown
+
+#### Scenario: An OpenSpec spec's path
+
+- **WHEN** the checker is given "openspec/specs/scheduling/spec.md" with no format option
+- **THEN** it reads the file as OpenSpec Markdown, not as Markdown
 
 ### Requirement: OpenSpec JSON inferred from file name
 
@@ -80,11 +85,16 @@ When no input file is given, the EARS checker SHALL read standard input.
 
 ### Requirement: Default profile for OpenSpec input
 
-While no profile is selected, when the EARS checker reads OpenSpec JSON, the EARS checker SHALL use the OpenSpec profile.
+While no profile is selected, when the EARS checker reads OpenSpec JSON or OpenSpec Markdown, the EARS checker SHALL use the OpenSpec profile.
 
 #### Scenario: Uppercase keyword passes by default
 
 - **WHEN** the checker reads OpenSpec JSON whose only requirement is "The scheduler SHALL list upcoming events." with no profile option
+- **THEN** it reports no findings
+
+#### Scenario: OpenSpec Markdown
+
+- **WHEN** the checker reads OpenSpec Markdown whose only requirement is "The scheduler SHALL list upcoming events." with no profile option
 - **THEN** it reports no findings
 
 ### Requirement: Default profile for other input
@@ -183,14 +193,24 @@ If any input cannot be read or parsed in its format, then the EARS checker SHALL
 - **WHEN** the checker is given no file and reading standard input fails
 - **THEN** it exits with status 2
 
-#### Scenario: Directory given as a file
+#### Scenario: Directory that can't be listed
 
-- **WHEN** the checker is given "notes", which is a directory
+- **WHEN** the checker is given "notes", a directory that the user may not list
 - **THEN** it exits with status 2
 
 #### Scenario: A file over the size limit
 
 - **WHEN** the checker is given a file that holds more bytes than the input size limit
+- **THEN** it exits with status 2
+
+#### Scenario: An unlistable subdirectory
+
+- **WHEN** the checker is given "docs", which holds "scheduling.md" and a subdirectory "private" that the user may not list
+- **THEN** it exits with status 2
+
+#### Scenario: A file found in a directory that can't be read
+
+- **WHEN** the checker is given "docs", which holds "secret.md", a file that the user may not read
 - **THEN** it exits with status 2
 
 ### Requirement: Unreadable input message
@@ -207,9 +227,9 @@ If an input cannot be read or parsed in its format, then the EARS checker SHALL 
 - **WHEN** the checker is given no file and reading standard input fails with the error "Stream closed"
 - **THEN** it writes `Cannot read standard input`, and an error log entry containing "Stream closed", to standard error
 
-#### Scenario: Directory given as a file
+#### Scenario: Directory that can't be listed
 
-- **WHEN** the checker is given "notes", which is a directory
+- **WHEN** the checker is given "notes", a directory that the user may not list
 - **THEN** it writes `Cannot read notes`, and an error log entry with the platform's description of the error, to standard error
 
 #### Scenario: File the user may not read
@@ -231,6 +251,11 @@ If an input cannot be read or parsed in its format, then the EARS checker SHALL 
 
 - **WHEN** the checker is given "change.json", which is OpenSpec change JSON, and "notes.json", which contains `{not json`
 - **THEN** its message on standard error names `notes.json` and not `change.json`
+
+#### Scenario: An unlistable subdirectory
+
+- **WHEN** the checker is given "docs", which holds a subdirectory "private" that the user may not list
+- **THEN** it writes `Cannot read docs/private`, and an error log entry with the platform's description of the error, to standard error
 
 ### Requirement: Several input files
 
@@ -326,10 +351,15 @@ While `--verbose` is given, when the run ends, the EARS checker SHALL log an ent
 
 If an input cannot be read or parsed in its format, then the EARS checker SHALL log an error entry with the input's name, format, and profile, the error's type and message, and the exit status.
 
-#### Scenario: Directory given as a file
+#### Scenario: Directory that can't be listed
 
-- **WHEN** the checker is given "notes", which is a directory, without `--verbose`
+- **WHEN** the checker is given "notes", a directory that the user may not list, without `--verbose`
 - **THEN** standard error has the existing message and an error entry naming "notes", the plain-text format, the classic profile, the error's type, the operating system's reason, and exit status 2
+
+#### Scenario: An unlistable subdirectory
+
+- **WHEN** the checker is given "docs", which holds a subdirectory "private" that the user may not list, without `--verbose`
+- **THEN** standard error has an error entry naming "docs" as the input and "docs/private" as the directory, with the input's format and profile, the operating system's reason, and exit status 2
 
 ### Requirement: Invalid arguments entry
 
@@ -886,3 +916,319 @@ If `--max-input-bytes` is given with anything other than a whole number from 1 t
 
 - **WHEN** the checker is run with `--max-input-bytes 10M`
 - **THEN** it writes the usage text with a reason naming `--max-input-bytes` to standard error and exits with status 2
+
+### Requirement: Directory input
+
+When the EARS checker is given a directory, the EARS checker SHALL check every file whose name ends in .md or .txt in the directory and in its subdirectories, other than those in a directory named openspec or below its specs or changes directory.
+
+#### Scenario: Files in a subdirectory
+
+- **WHEN** the checker is given "docs", which holds "scheduling.md" and a subdirectory "billing" that holds "invoices.md"
+- **THEN** it checks the requirements in both files
+
+#### Scenario: Markdown and plain text
+
+- **WHEN** the checker is given "docs", which holds "scheduling.md" and "billing.txt", with no format option
+- **THEN** it reads "scheduling.md" as Markdown and "billing.txt" as plain text
+
+#### Scenario: Other files left alone
+
+- **WHEN** the checker is given "docs", which holds "scheduling.md", "logo.png", and "package.json"
+- **THEN** it reads "scheduling.md" and neither of the others
+
+#### Scenario: A directory whose name starts with a period
+
+- **WHEN** the checker is given ".notes", a directory that holds "scheduling.md"
+- **THEN** it checks the requirements in "scheduling.md"
+
+### Requirement: Hidden entries in a directory
+
+When the EARS checker finds an entry whose name starts with a period in a directory, the EARS checker SHALL skip the entry.
+
+#### Scenario: A hidden subdirectory
+
+- **WHEN** the checker is given "docs", which holds "scheduling.md" and a subdirectory ".github" that holds "template.md"
+- **THEN** it checks "scheduling.md" and doesn't read "template.md"
+
+#### Scenario: A hidden file
+
+- **WHEN** the checker is given "docs", which holds "scheduling.md" and ".draft.md"
+- **THEN** it checks "scheduling.md" and doesn't read ".draft.md"
+
+### Requirement: Links in a directory
+
+When the EARS checker finds a symbolic link in a directory, the EARS checker SHALL skip the link.
+
+#### Scenario: A link back to its own directory
+
+- **WHEN** the checker is given "docs", which holds "scheduling.md" and "loop", a symbolic link to "docs"
+- **THEN** it checks "scheduling.md" once and finishes
+
+#### Scenario: A link to a file outside the directory
+
+- **WHEN** the checker is given "docs", which holds "scheduling.md" and "keys.md", a symbolic link to a file outside "docs"
+- **THEN** it checks "scheduling.md" and doesn't read the file that "keys.md" names
+
+#### Scenario: A broken link
+
+- **WHEN** the checker is given "docs", which holds "scheduling.md" and "old.md", a symbolic link to a file that doesn't exist
+- **THEN** it checks "scheduling.md" and reports nothing about "old.md"
+
+#### Scenario: A link given by name
+
+- **WHEN** the checker is given "current", a symbolic link to a directory that holds "scheduling.md"
+- **THEN** it checks the requirements in "scheduling.md", naming the file "current/scheduling.md"
+
+### Requirement: Other entries in a directory
+
+When the EARS checker finds an entry in a directory that is neither a file, a directory, nor a symbolic link, the EARS checker SHALL skip the entry.
+
+#### Scenario: A named pipe
+
+- **WHEN** the checker is given "docs", which holds "scheduling.md" and "feed.md", a named pipe
+- **THEN** it checks "scheduling.md" and doesn't read "feed.md"
+
+### Requirement: Files in a directory in name order
+
+When the EARS checker checks the files in a directory, the EARS checker SHALL check them in order of their names, compared character by character by code, with the files in a subdirectory in the place of the subdirectory's name.
+
+#### Scenario: Names that sort by code
+
+- **WHEN** the checker is given "docs", which holds "b.md", "a.md", "B.md", and a subdirectory "b" that holds "c.md", each with one requirement that lacks the modal keyword
+- **THEN** it reports the findings for "docs/B.md", "docs/a.md", "docs/b/c.md", and "docs/b.md", in that order
+
+### Requirement: Directory among the inputs
+
+When the EARS checker is given a directory among several inputs, the EARS checker SHALL check the files found in the directory in the directory's place among the inputs.
+
+#### Scenario: A directory between two files
+
+- **WHEN** the checker is given "z.md", then "docs", which holds "scheduling.md", then "a.md", each file with one requirement that lacks the modal keyword
+- **THEN** it reports the findings for "z.md", "docs/scheduling.md", and "a.md", in that order
+
+### Requirement: Names of files found in a directory
+
+When the EARS checker reports on a file found in a directory, the EARS checker SHALL name the file by the directory as given, a slash, and the file's path below the directory.
+
+#### Scenario: A file in a subdirectory
+
+- **WHEN** the checker is given "docs", and "docs/billing/invoices.md" has a requirement that lacks the modal keyword on line 3
+- **THEN** it reports the finding at "docs/billing/invoices.md:3"
+
+#### Scenario: A directory given with a trailing slash
+
+- **WHEN** the checker is given "docs/", and "docs/scheduling.md" has a requirement that lacks the modal keyword on line 1
+- **THEN** it reports the finding at "docs/scheduling.md:1"
+
+### Requirement: Directory with nothing to check status
+
+If a directory that the EARS checker is given holds no file to check, then the EARS checker SHALL exit with status 2.
+
+#### Scenario: An empty directory
+
+- **WHEN** the checker is given "notes", an empty directory
+- **THEN** it exits with status 2
+
+#### Scenario: A directory of other files
+
+- **WHEN** the checker is given "notes", which holds only "package.json" and a subdirectory ".github" that holds "template.md"
+- **THEN** it exits with status 2
+
+### Requirement: Directory with nothing to check message
+
+If a directory that the EARS checker is given holds no file to check, then the EARS checker SHALL write a message naming the directory, and saying what files it looked for, to standard error.
+
+#### Scenario: An empty directory
+
+- **WHEN** the checker is given "notes", an empty directory
+- **THEN** it writes `Cannot check notes: it holds no .md or .txt files` to standard error
+
+#### Scenario: An openspec directory with no spec
+
+- **WHEN** the checker is given "openspec", which holds only "config.yaml" and "changes/add-reminders/proposal.md"
+- **THEN** it writes `Cannot check openspec: it holds no OpenSpec spec files` to standard error
+
+#### Scenario: A walk through an openspec directory
+
+- **WHEN** the checker is given "project", which holds only "package.json" and an "openspec" directory whose only Markdown is "changes/add-reminders/proposal.md"
+- **THEN** it writes `Cannot check project: it holds no .md or .txt files outside openspec, and no OpenSpec spec files` to standard error
+
+### Requirement: Directory with nothing to check stops the run
+
+If a directory that the EARS checker is given holds no file to check, then the EARS checker SHALL stop without reading any later input.
+
+#### Scenario: An empty directory before a failing file
+
+- **WHEN** the checker is given "notes", an empty directory, and then "later.md", which has a requirement that lacks the modal keyword
+- **THEN** it writes nothing to standard output and nothing naming "later.md" to standard error
+
+### Requirement: Unlistable directory stops the run
+
+If the EARS checker cannot list a directory or subdirectory that it is to check, then the EARS checker SHALL stop without reading any later input.
+
+#### Scenario: An unlistable subdirectory before a failing file
+
+- **WHEN** the checker is given "docs", which holds a subdirectory "private" that the user may not list, and then "later.md", which has a requirement that lacks the modal keyword
+- **THEN** it writes nothing to standard output and nothing naming "later.md" to standard error
+
+### Requirement: OpenSpec Markdown inferred from the path
+
+While no input format is selected, when the input's path is a file named spec.md below the specs directory of a directory named openspec or of a change in that directory's changes, the EARS checker SHALL read the input as OpenSpec Markdown.
+
+#### Scenario: A spec
+
+- **WHEN** the checker is given "openspec/specs/scheduling/spec.md" with no format option
+- **THEN** it reads the file as OpenSpec Markdown
+
+#### Scenario: A change's delta spec
+
+- **WHEN** the checker is given "openspec/changes/add-reminders/specs/scheduling/spec.md" with no format option
+- **THEN** it reads the file as OpenSpec Markdown
+
+#### Scenario: An archived change's delta spec
+
+- **WHEN** the checker is given "openspec/changes/archive/2026-11-17-add-reminders/specs/scheduling/spec.md" with no format option
+- **THEN** it reads the file as OpenSpec Markdown
+
+#### Scenario: A nested capability
+
+- **WHEN** the checker is given "project/openspec/specs/billing/invoices/spec.md" with no format option
+- **THEN** it reads the file as OpenSpec Markdown
+
+#### Scenario: A change's proposal
+
+- **WHEN** the checker is given "openspec/changes/add-reminders/proposal.md" with no format option
+- **THEN** it reads the file as Markdown
+
+#### Scenario: A spec.md outside OpenSpec
+
+- **WHEN** the checker is given "docs/specs/scheduling/spec.md" with no format option
+- **THEN** it reads the file as Markdown
+
+### Requirement: OpenSpec Markdown format option
+
+When the input format openspec-markdown is selected, the EARS checker SHALL read the input as OpenSpec Markdown.
+
+#### Scenario: A spec outside its layout
+
+- **WHEN** the checker is given "scheduling.md" with the option `--format openspec-markdown`
+- **THEN** it reads the file as OpenSpec Markdown
+
+### Requirement: Requirements in OpenSpec Markdown
+
+When the EARS checker reads OpenSpec Markdown, the EARS checker SHALL check the text of each requirement in the Requirements section and in the ADDED Requirements and MODIFIED Requirements sections, as one requirement each.
+
+#### Scenario: A spec's requirements
+
+- **WHEN** the checker reads OpenSpec Markdown whose Requirements section holds two requirements
+- **THEN** it checks two requirements
+
+#### Scenario: A delta spec's sections
+
+- **WHEN** the checker reads OpenSpec Markdown with one requirement under ADDED Requirements, one under MODIFIED Requirements, one under REMOVED Requirements, and a rename under RENAMED Requirements
+- **THEN** it checks the added and the modified requirement, and nothing else
+
+#### Scenario: Section headings in any case
+
+- **WHEN** the checker reads OpenSpec Markdown with a requirement under `## Added Requirements`
+- **THEN** it checks that requirement
+
+### Requirement: Text of a requirement in OpenSpec Markdown
+
+When the EARS checker reads a requirement in OpenSpec Markdown, the EARS checker SHALL take as its text the nonblank lines between its heading and the next heading, outside fenced code blocks and other than lines that start with a bold label, each trimmed and joined by line breaks.
+
+#### Scenario: A statement on two lines
+
+- **WHEN** a requirement's heading is followed by "The scheduler SHALL list" and "upcoming events." on two lines, then a scenario heading
+- **THEN** the checker checks "The scheduler SHALL list" and "upcoming events." joined by a line break as one requirement
+
+#### Scenario: A fenced example
+
+- **WHEN** a requirement's statement is followed by a fenced code block before its first scenario
+- **THEN** the checker checks the statement without the code block's lines
+
+#### Scenario: A label line
+
+- **WHEN** a requirement's statement is followed by the line `**ID**: SCHED-1`
+- **THEN** the checker checks the statement without that line
+
+#### Scenario: Only label lines
+
+- **WHEN** a requirement's only text is the line `**Constraint**: The scheduler SHALL list upcoming events.`
+- **THEN** the checker checks that line as the requirement
+
+#### Scenario: No text under the heading
+
+- **WHEN** a spec's requirement heading is `### The scheduler SHALL list upcoming events.` with only scenarios under it
+- **THEN** the checker checks the heading's title as the requirement
+
+#### Scenario: No text under a requirement heading
+
+- **WHEN** an added requirement's heading is `### Requirement: The scheduler SHALL list events` with only scenarios under it
+- **THEN** the checker checks "Requirement: The scheduler SHALL list events" as the requirement, as OpenSpec's JSON gives it
+
+### Requirement: Text outside the requirements in OpenSpec Markdown
+
+When the EARS checker reads OpenSpec Markdown, the EARS checker SHALL check no text other than its requirements' text.
+
+#### Scenario: Scenarios
+
+- **WHEN** the checker reads OpenSpec Markdown whose only requirement passes and whose scenario says "**WHEN** the scheduler starts"
+- **THEN** it reports no findings
+
+#### Scenario: A purpose
+
+- **WHEN** the checker reads OpenSpec Markdown whose Purpose section says "The scheduler lists events."
+- **THEN** it reports no finding for that sentence
+
+#### Scenario: A removed requirement's reason
+
+- **WHEN** the checker reads OpenSpec Markdown whose REMOVED Requirements section gives a requirement the reason "Replaced by reminders."
+- **THEN** it reports no finding for that reason
+
+### Requirement: Locations in OpenSpec Markdown
+
+When the EARS checker reports a finding for a requirement in OpenSpec Markdown, the EARS checker SHALL locate the finding at the line where the requirement's text starts.
+
+#### Scenario: Text after a blank line
+
+- **WHEN** a requirement's heading is on line 10 of "spec.md", line 11 is blank, and its failing statement is on line 12
+- **THEN** the finding is located at "spec.md:12"
+
+#### Scenario: The heading as the text
+
+- **WHEN** a spec's requirement heading on line 10 of "spec.md" is a failing statement with only scenarios under it
+- **THEN** the finding is located at "spec.md:10"
+
+### Requirement: Files in an openspec directory
+
+When the EARS checker checks a directory named openspec, or a directory below its specs or changes directory, the EARS checker SHALL check only the OpenSpec Markdown spec files in it.
+
+#### Scenario: A project's openspec directory
+
+- **WHEN** the checker is given "project", which holds "README.md" and an "openspec" directory with "config.yaml", "specs/scheduling/spec.md", and a change "add-reminders" with "proposal.md", "design.md", "tasks.md", and "specs/scheduling/spec.md"
+- **THEN** it checks "project/README.md" as Markdown and the two spec.md files as OpenSpec Markdown, and reads nothing else
+
+#### Scenario: A change's directory
+
+- **WHEN** the checker is given "openspec/changes/add-reminders", which holds "proposal.md" and "specs/scheduling/spec.md"
+- **THEN** it checks the spec.md file and doesn't read "proposal.md"
+
+#### Scenario: Another directory below one named openspec
+
+- **WHEN** the checker is given "src/openspec/docs", which holds "guide.md"
+- **THEN** it checks "guide.md" as Markdown
+
+### Requirement: Archived changes in a directory walk
+
+When the EARS checker finds the archive directory of an openspec directory's changes in a directory, the EARS checker SHALL skip the archive directory.
+
+#### Scenario: A walk over openspec
+
+- **WHEN** the checker is given "openspec", which holds "specs/scheduling/spec.md" and "changes/archive/2026-11-17-add-reminders/specs/scheduling/spec.md"
+- **THEN** it checks "openspec/specs/scheduling/spec.md" and not the archived one
+
+#### Scenario: The archive given itself
+
+- **WHEN** the checker is given "openspec/changes/archive", which holds "2026-11-17-add-reminders/specs/scheduling/spec.md"
+- **THEN** it checks that spec.md file as OpenSpec Markdown
