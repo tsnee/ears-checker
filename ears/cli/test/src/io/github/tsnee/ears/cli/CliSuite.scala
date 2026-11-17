@@ -301,6 +301,19 @@ object CliSuite extends ZIOSpecDefault:
           )
           .map(outcome => assertTrue(outcome.stdout.startsWith("docs/scheduling.md:1: ")))
       ,
+      test("a directory given whose name starts with a period is checked"):
+        Cli
+          .program(
+            List(".notes"),
+            tree(
+              Map(".notes" -> List(file("scheduling.md"))),
+              Map(".notes/scheduling.md" -> failingMarkdown)
+            )
+          )
+          .map(outcome =>
+            assertTrue(outcome.exitCode == 1, outcome.stdout.startsWith(".notes/scheduling.md:1: "))
+          )
+      ,
       test(".md read as Markdown and .txt as plain text"):
         // A requirement in a code block: Markdown skips it, plain text checks the line.
         val fenced = "```\nThe scheduler lists events.\n```\n"
@@ -429,6 +442,33 @@ object CliSuite extends ZIOSpecDefault:
               )
             )
           )
+      ,
+      test("a directory that can't be listed is logged with its input's name, format, and profile"):
+        val noon = Instant.parse("2026-11-04T12:00:00Z")
+        def errors(arguments: List[String], docs: Reading) =
+          val lines = ListBuffer.empty[String]
+          ZIO
+            .withLogger(Cli.logger(LogLevel.Warning, line => lines += line, () => noon))(
+              Cli.program(arguments, docs)
+            )
+            .as(lines.toList.filter(_.contains(" ERROR Cannot read input ")))
+        val input = List(" format=text", " profile=classic", unlistable, " exit=2")
+        for
+          // A directory that exists but can't be listed: no entries to give.
+          named <- errors(
+            List("notes"),
+            tree(Map.empty, Map.empty).copy(isDirectory = _ => ZIO.succeed(true))
+          )
+          sub <- errors(
+            List("docs"),
+            tree(Map("docs" -> List(directory("private"))), Map.empty)
+          )
+        yield assertTrue(
+          named.size == 1,
+          (" file=notes" :: input).forall(named.mkString.contains),
+          sub.size == 1,
+          (" file=docs" :: " directory=docs/private" :: input).forall(sub.mkString.contains)
+        )
       ,
       test("a directory with nothing to check is logged"):
         val noon = Instant.parse("2026-11-04T12:00:00Z")

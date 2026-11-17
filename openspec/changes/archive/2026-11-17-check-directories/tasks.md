@@ -21,9 +21,10 @@ All work is on branch `batch-check-other-projects`, the "Check other projects" t
 - [x] 3.2 Run `/code-review` in a subagent on this change; the owner chooses which findings to fix
 - [x] 3.5 The code review's fixes the owner chose (2026-11-16): the JVM and Native classify each entry with one `readAttributes` call, an entry whose attributes can't be read taken as a file (`JvmReadingSuite` test, `cli-cases` `directory-unsearchable`); the counts and noted entries of a listing come from a pure `DirectoryWalk.summary` (tested); a verbose run logs the files read (`Read inputs`); `cli-cases`' unlistable and pipe cases restore modes and stop their writer even when a comparison fails; a stale comment fixed; names that aren't UTF-8 recorded as a known limitation (design, Risks); task 2.1 says what the owner approved. Verify the tests on the JVM and Node, the coverage minimums, and the three CLI comparison scripts
 - [x] 3.3 Commit the plan and the implementation together (with the CI-run records of 43765083682 and 43771798702), then the archive; the owner pushes and opens the theme's draft PR. Report each CI run's result and minutes from the records
-- [ ] 3.4 Run `/openspec-verify-change` and report it before archiving
+- [x] 3.4 Run `/openspec-verify-change` and report it before archiving
+- [x] 3.6 Found while archiving (2026-11-17; the archive undone, uncommitted, on the owner's word): "Unreadable input entry" also had a "Directory given as a file" scenario, and a directory that can't be listed logged no input name, format, or profile. The delta modifies it; a directory input's log entries carry the input's details as a file's do; a `CliSuite` test checks the entry's fields for a directory given and for a subdirectory. Verify the tests on the JVM and Node, then the gate
 
 ## Workflow follow-up
 
-- Archive the change (syncing `ears-cli`), then rename the "Directory given as a file" scenarios of "Unreadable input status" and "Unreadable input message" in the main spec to "Directory that can't be listed", rerun `scripts/check-openspec`, and commit with the archive.
+- Archive the change (syncing `ears-cli`), then rename the "Directory given as a file" scenarios of "Unreadable input status", "Unreadable input message", and "Unreadable input entry" in the main spec to "Directory that can't be listed", rerun `scripts/check-openspec`, and commit with the archive.
 - The theme's security review in a subagent before its PR merges.

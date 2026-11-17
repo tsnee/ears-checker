@@ -24,7 +24,7 @@ Roadmap item 10's first part, the first change of the "Check other projects" the
 
 ### Modified Capabilities
 
-- `ears-cli`: new requirements for directory input (which files, hidden entries, links, other entries, order, names, a directory with nothing to check, a directory that can't be listed); "Unreadable input status" and "Unreadable input message" turn their "Directory given as a file" scenarios into a directory that can't be listed (renamed after archiving, since a delta can't rename a scenario) and gain scenarios for what's found in a directory.
+- `ears-cli`: new requirements for directory input (which files, hidden entries, links, other entries, order, names, a directory with nothing to check, a directory that can't be listed); "Unreadable input status" and "Unreadable input message" turn their "Directory given as a file" scenarios into a directory that can't be listed (renamed after archiving, since a delta can't rename a scenario) and gain scenarios for what's found in a directory; "Unreadable input entry" does the same, its entry for a directory naming the input, format, and profile as a file's does.
 
 ## Impact
 

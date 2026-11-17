@@ -150,15 +150,19 @@ object Cli:
       .fold(ZIO.succeed(false))(reading.isDirectory)
       .flatMap(directory =>
         settings.file match
+          // Annotated with the input's details, as a file's entries are; each file found annotates
+          // its own name over them.
           case Some(name) if directory =>
-            walk(settings, name, reading, limit).flatMap(found =>
-              ZIO
-                .fromOption(NonEmptyList.fromList(found))
-                .orElse(
-                  annotated(Map("directory" -> name, "exit" -> "2"))(
-                    ZIO.logError("Nothing to check")
-                  ) *> ZIO.fail(DirectoryWalk.nothingToCheck(name))
-                )
+            annotated(Logging.inputDetails(settings))(
+              walk(settings, name, reading, limit).flatMap(found =>
+                ZIO
+                  .fromOption(NonEmptyList.fromList(found))
+                  .orElse(
+                    annotated(Map("directory" -> name, "exit" -> "2"))(
+                      ZIO.logError("Nothing to check")
+                    ) *> ZIO.fail(DirectoryWalk.nothingToCheck(name))
+                  )
+              )
             )
           case _ => load(settings, reading, limit).map(NonEmptyList.one)
       )

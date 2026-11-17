@@ -228,3 +228,17 @@ If an input cannot be read or parsed in its format, then the EARS checker SHALL 
 
 - **WHEN** the checker is given "docs", which holds a subdirectory "private" that the user may not list
 - **THEN** it writes `Cannot read docs/private`, and an error log entry with the platform's description of the error, to standard error
+
+### Requirement: Unreadable input entry
+
+If an input cannot be read or parsed in its format, then the EARS checker SHALL log an error entry with the input's name, format, and profile, the error's type and message, and the exit status.
+
+#### Scenario: Directory given as a file
+
+- **WHEN** the checker is given "notes", a directory that the user may not list, without `--verbose`
+- **THEN** standard error has the existing message and an error entry naming "notes", the plain-text format, the classic profile, the error's type, the operating system's reason, and exit status 2
+
+#### Scenario: An unlistable subdirectory
+
+- **WHEN** the checker is given "docs", which holds a subdirectory "private" that the user may not list, without `--verbose`
+- **THEN** standard error has an error entry naming "docs" as the input and "docs/private" as the directory, with the input's format and profile, the operating system's reason, and exit status 2
