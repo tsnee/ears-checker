@@ -20,7 +20,7 @@ $ echo $?
 
 `ears-check [--format <string>] [--profile <string>] [--output <string>] [--verbose] [--max-input-bytes <bytes>] [<file>...]` reads each file, or standard input when none is given; a directory stands for every `.md` and `.txt` file under it, as the [README](https://github.com/tsnee/ears-checker#directories) describes:
 
-- `--format`: `text` (one requirement per line), `markdown`, or `openspec` (JSON from `openspec show --json`). By default `.md` files are Markdown, `.json` files are OpenSpec, and everything else is text.
+- `--format`: `text` (one requirement per line), `markdown`, `openspec` (JSON from `openspec show --json`), or `openspec-markdown` (an OpenSpec spec's Markdown, read as OpenSpec reads it, as the [README](https://github.com/tsnee/ears-checker#openspec) describes). By default an OpenSpec spec file (`openspec/specs/…/spec.md`, or a change's) is `openspec-markdown`, other `.md` files are Markdown, `.json` files are OpenSpec JSON, and everything else is text. `ears-check openspec` checks a project's specs and changes.
 - `--profile`: `classic` (lowercase `shall`) or `openspec` (uppercase `SHALL`, which OpenSpec's validator requires). OpenSpec input defaults to `openspec`, other input to `classic`.
 - `--output`: `text` (one line per finding) or `json` (one document, described in [JSON output](https://github.com/tsnee/ears-checker/blob/main/docs/json-output.md)).
 - `--verbose`: log every step to standard error, not only warnings and errors.

@@ -81,6 +81,8 @@ object Checker:
         MarkdownInput.read(settings.sourceName, content).left.map(ParseFailure.UnreadMarkdown(_))
       case InputFormat.OpenSpecJson =>
         Candidate.fromOpenSpec(content).left.map(ParseFailure.NotOpenSpec(_)).map(Found(_, Nil))
+      case InputFormat.OpenSpecMarkdown =>
+        Right(Found(Candidate.fromOpenSpecMarkdown(settings.sourceName, content), Nil))
 
   /** One input's findings and warnings, each in the input's order. */
   private final case class Checked(findings: List[Finding], warnings: List[Warning])

@@ -125,7 +125,7 @@ $ echo $?
 1
 ```
 
-- `--format`: `text` (one requirement per line), `markdown`, or `openspec` (JSON from `openspec show --json`). By default `.md` files are Markdown, `.json` files are OpenSpec, and everything else is text.
+- `--format`: `text` (one requirement per line), `markdown`, `openspec` (JSON from `openspec show --json`), or `openspec-markdown` (an OpenSpec spec's Markdown; see [OpenSpec](#openspec)). By default an OpenSpec spec file (`openspec/specs/…/spec.md`, or a change's) is `openspec-markdown`, other `.md` files are Markdown, `.json` files are OpenSpec JSON, and everything else is text.
 - `--profile`: `classic` (lowercase `shall`) or `openspec` (uppercase `SHALL`, which OpenSpec's validator requires). OpenSpec input defaults to `openspec`, other input to `classic`.
 - `--output`: `text` (one line per finding) or `json` (one document; see [JSON output](#json-output)).
 - `--verbose`: log every step to standard error (the arguments, each input read, and the outcome), not only warnings and errors.
@@ -142,7 +142,7 @@ $ echo $?
 
 `ears-check docs` checks every file under `docs` whose name ends in `.md` (as Markdown) or `.txt` (as plain text), in its subdirectories too, as if each were named on the command line; `--format`, `--profile`, and `--max-input-bytes` apply to each.
 
-- Left alone: entries whose names start with a period (`.git`, `.github`), symbolic links (so a walk can't loop or be led out of the directory; a link named on the command line is followed), anything that isn't a file or a directory (a named pipe), and other files (`package.json`, images).
+- Left alone: entries whose names start with a period (`.git`, `.github`), symbolic links (so a walk can't loop or be led out of the directory; a link named on the command line is followed), anything that isn't a file or a directory (a named pipe), and other files (`package.json`, images). In a directory named `openspec` and below its `specs` and `changes`, only OpenSpec's spec files are read (see [OpenSpec](#openspec)).
 - Order: each directory's entries by name, compared by character code (so `B.md` comes before `a.md`), with a subdirectory's files where its name sorts; the same on every build and file system. A directory takes its place among the inputs.
 - Names: the directory as given, a slash, and the path below it (`docs/billing/invoices.md`).
 - A directory that holds no `.md` or `.txt` file is an error (exit status 2, `Cannot check docs: it holds no .md or .txt files`), so a mistyped or emptied folder can't pass by checking nothing; one that can't be listed is an unreadable input (`Cannot read docs/private`).
@@ -150,7 +150,19 @@ $ echo $?
 
 ### OpenSpec
 
-Check an OpenSpec change or spec through the JSON the OpenSpec CLI prints; OpenSpec input uses the `openspec` profile (uppercase `SHALL`) unless `--profile` says otherwise. `--type` and `--json` below are options of `openspec show`; `ears-check` needs only the file, or `--format openspec` for standard input:
+Check an OpenSpec project's specs and changes from their Markdown, as OpenSpec reads them, with no OpenSpec CLI needed:
+
+```sh
+ears-check openspec
+```
+
+- What's read: in a spec (`openspec/specs/<capability>/spec.md`), each requirement in its `Requirements` section; in a change's delta spec (`openspec/changes/<change>/specs/<capability>/spec.md`), each requirement under `## ADDED Requirements` and `## MODIFIED Requirements`. A requirement's text is what OpenSpec takes as its text, the lines between its heading and the next heading without blank lines, fenced code, or `**Label**:` lines, so exactly what `openspec show --json` gives; it's checked as one requirement and located at the line it starts on. Scenarios, purposes, and removed or renamed requirements aren't checked.
+- How it's recognized: by the path, a `spec.md` below the `specs` directory of a directory named `openspec` or of one of its changes (archived ones too). `--format openspec-markdown` reads any file so. From inside `openspec/` (`cd openspec && ears-check specs`) the path doesn't show it; check from the project's root.
+- In a directory: in a directory named `openspec` and below its `specs` and `changes`, only those spec files are checked (not proposals, designs, task lists, or `config.yaml`), and the archive of past changes is skipped unless it's given itself. Other directories in one named `openspec` are read as any others. An `openspec` directory with no spec file is an error, `Cannot check openspec: it holds no OpenSpec spec files`.
+
+OpenSpec input, Markdown or JSON, uses the `openspec` profile (uppercase `SHALL`) unless `--profile` says otherwise.
+
+Or check a change or spec through the JSON the OpenSpec CLI prints. `--type` and `--json` below are options of `openspec show`; `ears-check` needs only the file, or `--format openspec` for standard input:
 
 ```sh
 openspec show add-reminders --type change --json > add-reminders.json

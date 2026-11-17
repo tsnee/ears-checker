@@ -53,3 +53,11 @@ object Candidate:
     */
   def fromOpenSpec(content: String): Either[String, List[Candidate]] =
     OpenSpecInput.candidates(content)
+
+  /** Requirements from an OpenSpec spec's or delta spec's Markdown, each the text `openspec show
+    * --json` would give, located at the line it starts on.
+    */
+  def fromOpenSpecMarkdown(file: String, content: String): List[Candidate] =
+    OpenSpecMarkdown
+      .statements(content)
+      .map(statement => Candidate(Location.Line(file, statement.line), statement.text))

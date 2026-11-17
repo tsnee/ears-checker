@@ -261,6 +261,119 @@ object CliSuite extends ZIOSpecDefault:
           assertTrue(outcome.exitCode == 2, outcome.stdout.isEmpty)
         )
     ),
+    suite("OpenSpec Markdown")(
+      test("a spec: each requirement's text, with the OpenSpec profile, at the line it starts"):
+        val spec = List(
+          "## Purpose",
+          "The scheduler shall be ignored here.",
+          "## Requirements",
+          "### Requirement: Upcoming",
+          "",
+          "The scheduler shall list upcoming events.",
+          "#### Scenario: One",
+          "- **WHEN** the scheduler shall start",
+          "- **THEN** it shall list events"
+        ).mkString("", "\n", "\n")
+        val path = "openspec/specs/scheduling/spec.md"
+        Cli
+          .program(List(path), tree(Map.empty, Map(path -> spec)))
+          .map(outcome =>
+            assertTrue(
+              outcome.exitCode == 1,
+              Predef.augmentString(outcome.stdout).linesIterator.toList.map(_.take(40)) ==
+                List(s"$path:6: wrong-case".take(40))
+            )
+          )
+      ,
+      test("a delta spec: the added and modified requirements only"):
+        val delta = List(
+          "## ADDED Requirements",
+          "### Requirement: Upcoming",
+          "The scheduler shall list upcoming events.",
+          "## REMOVED Requirements",
+          "### Requirement: Reminders",
+          "**Reason**: The scheduler shall be replaced.",
+          "## MODIFIED Requirements",
+          "### Requirement: Past",
+          "The scheduler SHALL hide past events."
+        ).mkString("", "\n", "\n")
+        val path = "openspec/changes/add-reminders/specs/scheduling/spec.md"
+        Cli
+          .program(List(path), tree(Map.empty, Map(path -> delta)))
+          .map(outcome =>
+            assertTrue(located(outcome) == List(path), outcome.stdout.contains(":3: "))
+          )
+      ,
+      test("a walk inside openspec reads its spec files and nothing else, the archive skipped"):
+        val failingSpec = "## Requirements\n### Requirement: Upcoming\nThe scheduler shall list.\n"
+        val directories = Map(
+          "project" -> List(file("README.md"), directory("openspec")),
+          "project/openspec" -> List(file("config.yaml"), directory("specs"), directory("changes")),
+          "project/openspec/specs" -> List(directory("scheduling")),
+          "project/openspec/specs/scheduling" -> List(file("spec.md")),
+          "project/openspec/changes" -> List(directory("add"), directory("archive")),
+          "project/openspec/changes/add" -> List(file("proposal.md"), directory("specs")),
+          "project/openspec/changes/add/specs" -> List(directory("scheduling")),
+          "project/openspec/changes/add/specs/scheduling" -> List(file("spec.md")),
+          "project/openspec/changes/archive" -> List(file("old.md"))
+        )
+        for
+          names <- Ref.make(List.empty[String])
+          docs = recordedTree(
+            directories,
+            Map(
+              "project/README.md" -> passing,
+              "project/openspec/specs/scheduling/spec.md" -> failingSpec,
+              "project/openspec/changes/add/specs/scheduling/spec.md" ->
+                "## ADDED Requirements\n### Requirement: Later\nThe scheduler shall list later.\n"
+            ),
+            name => names.update(_ :+ name),
+            _ => ZIO.unit
+          )
+          outcome <- Cli.program(List("project"), docs)
+          read <- names.get
+        yield assertTrue(
+          read == List(
+            "project/README.md",
+            "project/openspec/changes/add/specs/scheduling/spec.md",
+            "project/openspec/specs/scheduling/spec.md"
+          ),
+          located(outcome) == List(
+            "project/openspec/changes/add/specs/scheduling/spec.md",
+            "project/openspec/specs/scheduling/spec.md"
+          )
+        )
+      ,
+      test("a walk through openspec that finds nothing: the message names both kinds of file"):
+        val directories = Map(
+          "project" -> List(file("package.json"), directory("openspec")),
+          "project/openspec" -> List(directory("changes")),
+          "project/openspec/changes" -> List(directory("add")),
+          "project/openspec/changes/add" -> List(file("proposal.md"))
+        )
+        Cli
+          .program(List("project"), tree(directories, Map.empty))
+          .map(outcome =>
+            assertTrue(
+              outcome.exitCode == 2,
+              outcome.stderr == "Cannot check project: it holds no .md or .txt files outside " +
+                "openspec, and no OpenSpec spec files\n"
+            )
+          )
+      ,
+      test("an openspec directory with no spec file: the message names OpenSpec spec files"):
+        Cli
+          .program(
+            List("openspec"),
+            tree(Map("openspec" -> List(file("config.yaml"), file("AGENTS.md"))), Map.empty)
+          )
+          .map(outcome =>
+            assertTrue(
+              outcome.exitCode == 2,
+              outcome.stderr == "Cannot check openspec: it holds no OpenSpec spec files\n"
+            )
+          )
+    ),
     suite("directories")(
       test("the files under a directory, in name order, a subdirectory's where its name sorts"):
         val docs = Map(

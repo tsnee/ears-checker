@@ -11,8 +11,13 @@ enum Skipped derives CanEqual:
   /** Neither a file, a directory, nor a link: reading a named pipe could block. */
   case Other
 
-  /** A file whose name ends in neither .md nor .txt. */
+  /** A file whose name ends in neither .md nor .txt; or, inside an `openspec` directory, a file
+    * other than an OpenSpec spec file (a proposal, a design, a task list, `config.yaml`).
+    */
   case NotRequirements
+
+  /** The archive of an `openspec` directory's changes: past changes, whose wording was accepted. */
+  case Archive
 
 /** What becomes of one entry of a directory, by its path: the directory as given, a slash, and the
   * entry's name.
@@ -61,7 +66,10 @@ object DirectoryWalk:
     *
     * Hidden entries, links, and anything not a file or a directory are skipped: a link could loop
     * or lead out of the directory (a repository's `notes.md -> ~/.aws/credentials` would be quoted
-    * in findings), and a named pipe could block a read.
+    * in findings), and a named pipe could block a read. Inside an `openspec` directory only
+    * OpenSpec's spec files are checked, read as OpenSpec reads them (`OpenSpecMarkdown`), and the
+    * archive of past changes isn't entered: a proposal's or design's requirement-like sentences are
+    * summaries, not requirements.
     */
   def steps(directory: String, entries: List[Entry]): List[Step] =
     entries.sortBy(_.name).map { entry =>
@@ -69,12 +77,16 @@ object DirectoryWalk:
       if entry.name.startsWith(".") then Step.Skip(path, Skipped.Hidden)
       else
         entry.kind match
-          case EntryKind.Directory => Step.Enter(path)
-          case EntryKind.Link      => Step.Skip(path, Skipped.Link)
-          case EntryKind.Other     => Step.Skip(path, Skipped.Other)
-          case EntryKind.File      =>
-            if checked.exists(entry.name.endsWith) then Step.Check(path)
-            else Step.Skip(path, Skipped.NotRequirements)
+          case EntryKind.Directory =>
+            if OpenSpecPaths.isArchive(path) then Step.Skip(path, Skipped.Archive)
+            else Step.Enter(path)
+          case EntryKind.Link  => Step.Skip(path, Skipped.Link)
+          case EntryKind.Other => Step.Skip(path, Skipped.Other)
+          case EntryKind.File  =>
+            val wanted =
+              if OpenSpecPaths.inside(directory) then OpenSpecPaths.isSpec(path)
+              else checked.exists(entry.name.endsWith)
+            if wanted then Step.Check(path) else Step.Skip(path, Skipped.NotRequirements)
     }
 
   /** The steps counted, for the log. Links and other entries each get a line: they're rare, and
@@ -93,14 +105,23 @@ object DirectoryWalk:
       },
       skipped = steps.count(_.reason.isDefined),
       noted = steps.collect {
-        case Step.Skip(path, Skipped.Link)  => path -> "link"
-        case Step.Skip(path, Skipped.Other) => path -> "not a file or directory"
+        case Step.Skip(path, Skipped.Link)    => path -> "link"
+        case Step.Skip(path, Skipped.Other)   => path -> "not a file or directory"
+        case Step.Skip(path, Skipped.Archive) => path -> "archive"
       }
     )
 
-  /** The message for a directory given that holds no file to check. */
-  def nothingToCheck(directory: String): String =
-    s"Cannot check $directory: it holds no ${checked.mkString(" or ")} files"
+  /** The message for a directory given that holds no file to check, naming what was looked for:
+    * OpenSpec spec files inside an `openspec` directory; .md and .txt files elsewhere; and both
+    * when the walk went `throughOpenSpec`, into an `openspec` directory below the one given.
+    */
+  def nothingToCheck(directory: String, throughOpenSpec: Boolean): String =
+    val files = checked.mkString(" or ")
+    val sought =
+      if OpenSpecPaths.inside(directory) then "OpenSpec spec files"
+      else if throughOpenSpec then s"$files files outside openspec, and no OpenSpec spec files"
+      else s"$files files"
+    s"Cannot check $directory: it holds no $sought"
 
   /** The path of `name` in `directory`: joined with a slash, which every platform reads as a
     * separator, so names are the same everywhere; none is added after a directory given with one.

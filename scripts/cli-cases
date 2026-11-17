@@ -347,6 +347,58 @@ if command -v mkfifo >/dev/null 2>&1; then
 else
   echo "$check: directory-pipe: skipped, since mkfifo is missing"
 fi
+# OpenSpec's Markdown: a project whose openspec directory holds a spec (one requirement with a
+# finding, one without, scenarios whose lines would have findings if read), an active change (a
+# proposal and a delta spec), an archived change, and config.yaml. A walk checks the spec and the
+# active delta only; each file can be given by name, and --format openspec-markdown reads a spec
+# outside its layout.
+# Not `project`: check-npm-cli runs its CLI from $project.
+openspec_project="$inputs/project"
+mkdir -p "$openspec_project/openspec/specs/scheduling" "$openspec_project/openspec/changes/add-reminders/specs/scheduling" \
+  "$openspec_project/openspec/changes/archive/2026-11-17-old/specs/scheduling"
+printf '%s\n' 'The scheduler SHALL list upcoming events.' >"$openspec_project/README.md"
+printf '%s\n' 'schema: spec-driven' >"$openspec_project/openspec/config.yaml"
+printf '%s\n' '# Scheduling Specification' '' '## Purpose' '' 'The scheduler lists events.' '' \
+  '## Requirements' '' '### Requirement: Upcoming' '' 'The scheduler shall list upcoming events.' '' \
+  '#### Scenario: Opening' '' '- **WHEN** the scheduler shall open' '- **THEN** it shall list events' '' \
+  '### Requirement: Past' '' 'The scheduler SHALL hide past events.' >"$openspec_project/openspec/specs/scheduling/spec.md"
+printf '%s\n' '## Why' '' 'The scheduler shall remind users.' >"$openspec_project/openspec/changes/add-reminders/proposal.md"
+printf '%s\n' '## ADDED Requirements' '' '### Requirement: Reminders' '' \
+  'When an event starts the scheduler SHALL remind its attendees.' '' \
+  '## REMOVED Requirements' '' '### Requirement: Alarms' '' '**Reason**: The alarms shall go.' \
+  >"$openspec_project/openspec/changes/add-reminders/specs/scheduling/spec.md"
+printf '%s\n' '## ADDED Requirements' '' '### Requirement: Old' '' 'The scheduler shall be old.' \
+  >"$openspec_project/openspec/changes/archive/2026-11-17-old/specs/scheduling/spec.md"
+cp "$openspec_project/openspec/specs/scheduling/spec.md" "$inputs/scheduling-spec.md"
+compare openspec-walk 1 "$openspec_project"
+compare openspec-walk-json 1 --output json "$openspec_project"
+compare openspec-spec 1 "$openspec_project/openspec/specs/scheduling/spec.md"
+compare openspec-delta 1 "$openspec_project/openspec/changes/add-reminders/specs/scheduling/spec.md"
+compare openspec-format 1 --format openspec-markdown "$inputs/scheduling-spec.md"
+for who in "$subject" jvm; do
+  if [ "$(grep -c . "$tmp/$who/openspec-walk.out")" -ne 3 ] ||
+    grep -qE 'proposal|archive|:1[5-6]: ' "$tmp/$who/openspec-walk.out"; then
+    echo "$check: case openspec-walk: $who checked other than the README, the spec's first" \
+      "requirement, and the active delta's added one:" >&2
+    cat "$tmp/$who/openspec-walk.out" >&2
+    exit 1
+  fi
+done
+# The native reading finds as many requirements in each of this repository's specs as OpenSpec's
+# own JSON holds, so an OpenSpec release that reads its Markdown differently fails here.
+for json in $specs; do
+  spec=${json#"$inputs"/spec-}
+  spec=${spec%.json}
+  theirs=$(jq '.requirements | length' "$json")
+  ours=$(jvm_cli --verbose "openspec/specs/$spec/spec.md" 2>&1 >/dev/null |
+    sed -n 's/.* INFO Read input .*requirements=\([0-9]*\).*/\1/p')
+  if [ "$ours" != "$theirs" ]; then
+    echo "$check: openspec/specs/$spec/spec.md: $ours requirements read natively," \
+      "$theirs in openspec show's JSON" >&2
+    exit 1
+  fi
+done
+echo "$check: every spec's Markdown holds as many requirements as its JSON"
 if [ "$(id -u)" -ne 0 ]; then
   compare unreadable 2 "$inputs/secret.txt"
 else

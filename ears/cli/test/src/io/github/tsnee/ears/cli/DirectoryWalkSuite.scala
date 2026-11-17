@@ -32,6 +32,7 @@ object DirectoryWalkSuite extends ZIOSpecDefault:
         DirectoryWalk.steps("docs", List(directory("billing"))) ==
           List(Step.Enter("docs/billing")),
         Step.Enter("docs/billing").path == "docs/billing",
+        Step.Check("docs/billing.md").path == "docs/billing.md",
         Step.Enter("docs/billing").reason.isEmpty
       )
     ,
@@ -106,6 +107,71 @@ object DirectoryWalkSuite extends ZIOSpecDefault:
           skipped = 4,
           noted = List("d/keys.md" -> "link", "d/feed.md" -> "not a file or directory")
         )
+      )
+    ,
+    test("inside openspec, only OpenSpec spec files are checked"):
+      assertTrue(
+        DirectoryWalk.steps(
+          "openspec",
+          List(file("config.yaml"), file("AGENTS.md"), directory("specs"), directory("changes"))
+        ) == List(
+          Step.Skip("openspec/AGENTS.md", Skipped.NotRequirements),
+          Step.Enter("openspec/changes"),
+          Step.Skip("openspec/config.yaml", Skipped.NotRequirements),
+          Step.Enter("openspec/specs")
+        ),
+        DirectoryWalk.steps("openspec/specs/scheduling", List(file("spec.md"), file("notes.md"))) ==
+          List(
+            Step.Skip("openspec/specs/scheduling/notes.md", Skipped.NotRequirements),
+            Step.Check("openspec/specs/scheduling/spec.md")
+          ),
+        DirectoryWalk.steps(
+          "project/openspec/changes/add-reminders",
+          List(file("proposal.md"), file("tasks.md"), directory("specs"))
+        ) == List(
+          Step.Skip("project/openspec/changes/add-reminders/proposal.md", Skipped.NotRequirements),
+          Step.Enter("project/openspec/changes/add-reminders/specs"),
+          Step.Skip("project/openspec/changes/add-reminders/tasks.md", Skipped.NotRequirements)
+        )
+      )
+    ,
+    test("the archive is skipped when found, and its specs checked when it's walked"):
+      assertTrue(
+        DirectoryWalk.steps("openspec/changes", List(directory("archive"), directory("add"))) ==
+          List(
+            Step.Enter("openspec/changes/add"),
+            Step.Skip("openspec/changes/archive", Skipped.Archive)
+          ),
+        DirectoryWalk.steps(
+          "openspec/changes/archive/2026-11-17-add/specs/x",
+          List(file("spec.md"))
+        ) ==
+          List(Step.Check("openspec/changes/archive/2026-11-17-add/specs/x/spec.md"))
+      )
+    ,
+    test("an archive is noted in the listing's summary"):
+      assertTrue(
+        DirectoryWalk.summary(List(Step.Skip("openspec/changes/archive", Skipped.Archive))).noted ==
+          List("openspec/changes/archive" -> "archive")
+      )
+    ,
+    test("nothing to check: the message names what was looked for"):
+      assertTrue(
+        DirectoryWalk.nothingToCheck("notes", throughOpenSpec = false) ==
+          "Cannot check notes: it holds no .md or .txt files",
+        DirectoryWalk.nothingToCheck("openspec", throughOpenSpec = true) ==
+          "Cannot check openspec: it holds no OpenSpec spec files",
+        DirectoryWalk.nothingToCheck("project/openspec/changes", throughOpenSpec = true) ==
+          "Cannot check project/openspec/changes: it holds no OpenSpec spec files",
+        DirectoryWalk.nothingToCheck("project", throughOpenSpec = true) ==
+          "Cannot check project: it holds no .md or .txt files outside openspec, " +
+          "and no OpenSpec spec files"
+      )
+    ,
+    test("a directory named openspec that isn't OpenSpec's: its files are read as any others"):
+      assertTrue(
+        DirectoryWalk.steps("src/openspec/docs", List(file("guide.md"))) ==
+          List(Step.Check("src/openspec/docs/guide.md"))
       )
     ,
     test("a child's name adds no slash after a directory given with one"):

@@ -154,13 +154,13 @@ object Cli:
           // its own name over them.
           case Some(name) if directory =>
             annotated(Logging.inputDetails(settings))(
-              walk(settings, name, reading, limit).flatMap(found =>
+              walk(settings, name, reading, limit).flatMap(walked =>
                 ZIO
-                  .fromOption(NonEmptyList.fromList(found))
+                  .fromOption(NonEmptyList.fromList(walked.found))
                   .orElse(
                     annotated(Map("directory" -> name, "exit" -> "2"))(
                       ZIO.logError("Nothing to check")
-                    ) *> ZIO.fail(DirectoryWalk.nothingToCheck(name))
+                    ) *> ZIO.fail(DirectoryWalk.nothingToCheck(name, walked.throughOpenSpec))
                   )
               )
             )
@@ -177,7 +177,7 @@ object Cli:
       directory: String,
       reading: Reading,
       limit: Int
-  ): IO[String, List[(Settings, Found)]] =
+  ): IO[String, Walked] =
     annotated(Map("directory" -> directory)) {
       for
         _ <- ZIO.logDebug("Listing directory")
@@ -199,14 +199,23 @@ object Cli:
         _ <- ZIO.foreachDiscard(listing.noted)((path, reason) =>
           annotated(Map("entry" -> path, "reason" -> reason))(ZIO.logDebug("Skipped entry"))
         )
-        found <- ZIO.foreach(steps) {
+        walked <- ZIO.foreach(steps) {
           case Step.Check(path) =>
-            load(settings.copy(file = Some(path)), reading, limit).map(List(_))
-          case Step.Enter(path) => walk(settings, path, reading, limit)
-          case Step.Skip(_, _)  => ZIO.succeed(Nil)
+            load(settings.copy(file = Some(path)), reading, limit)
+              .map(found => Walked(List(found), throughOpenSpec = false))
+          case Step.Enter(path) =>
+            walk(settings, path, reading, limit).map(below =>
+              below.copy(throughOpenSpec = below.throughOpenSpec || OpenSpecPaths.inside(path))
+            )
+          case Step.Skip(_, _) => ZIO.succeed(Walked(Nil, throughOpenSpec = false))
         }
-      yield found.flatten
+      yield Walked(walked.flatMap(_.found), walked.exists(_.throughOpenSpec))
     }
+
+  /** What a walk found, and whether it went into an `openspec` directory, for the message when it
+    * found nothing.
+    */
+  private final case class Walked(found: List[(Settings, Found)], throughOpenSpec: Boolean)
 
   /** One input read and split into requirements and its reader's warnings, each warning logged at
     * WARN, with its details on every entry it logs: for Markdown, those include the parser, or the

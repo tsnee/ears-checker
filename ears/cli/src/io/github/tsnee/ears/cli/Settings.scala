@@ -11,7 +11,7 @@ import com.monovore.decline.Visibility
 import io.github.tsnee.ears.Profile
 
 enum InputFormat derives CanEqual:
-  case PlainText, Markdown, OpenSpecJson
+  case PlainText, Markdown, OpenSpecJson, OpenSpecMarkdown
 
 enum OutputFormat derives CanEqual:
   case Text, Json
@@ -83,19 +83,23 @@ object Settings:
 
   extension (settings: Settings)
 
-    /** The selected format, or one inferred from the file name: .md is Markdown, .json is OpenSpec
-      * JSON, anything else (including standard input) is plain text.
+    /** The selected format, or one inferred from the file's path: an OpenSpec spec file
+      * (`OpenSpecPaths`) is OpenSpec Markdown, another .md is Markdown, .json is OpenSpec JSON,
+      * anything else (including standard input) is plain text.
       */
     def inputFormat: InputFormat = settings.formatOption.getOrElse(
       settings.file match
-        case Some(name) if name.endsWith(".md")   => InputFormat.Markdown
-        case Some(name) if name.endsWith(".json") => InputFormat.OpenSpecJson
-        case _                                    => InputFormat.PlainText
+        case Some(name) if OpenSpecPaths.isSpec(name) => InputFormat.OpenSpecMarkdown
+        case Some(name) if name.endsWith(".md")       => InputFormat.Markdown
+        case Some(name) if name.endsWith(".json")     => InputFormat.OpenSpecJson
+        case _                                        => InputFormat.PlainText
     )
 
-    /** The selected profile, or OpenSpec for OpenSpec JSON and classic for everything else. */
+    /** The selected profile, or OpenSpec for OpenSpec's JSON and Markdown, classic for the rest. */
     def profile: Profile = settings.profileOption.getOrElse(
-      if inputFormat == InputFormat.OpenSpecJson then Profile.OpenSpec else Profile.Classic
+      inputFormat match
+        case InputFormat.OpenSpecJson | InputFormat.OpenSpecMarkdown => Profile.OpenSpec
+        case InputFormat.PlainText | InputFormat.Markdown            => Profile.Classic
     )
 
     def output: OutputFormat = settings.outputOption.getOrElse(OutputFormat.Text)
@@ -119,7 +123,8 @@ object Settings:
   private val formatOpt = Opts
     .option[String](
       "format",
-      "Input format: text, markdown, or openspec (JSON from openspec show)."
+      "Input format: text, markdown, openspec (JSON from openspec show), or openspec-markdown " +
+        "(an OpenSpec spec's Markdown)."
     )
     .mapValidated(
       choice(
@@ -127,7 +132,8 @@ object Settings:
         Map(
           "text" -> InputFormat.PlainText,
           "markdown" -> InputFormat.Markdown,
-          "openspec" -> InputFormat.OpenSpecJson
+          "openspec" -> InputFormat.OpenSpecJson,
+          "openspec-markdown" -> InputFormat.OpenSpecMarkdown
         )
       )
     )
