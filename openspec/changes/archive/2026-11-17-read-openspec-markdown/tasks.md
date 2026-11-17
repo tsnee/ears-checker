@@ -20,7 +20,7 @@ All work is on branch `batch-check-other-projects`, the "Check other projects" t
 - [x] 3.2 Run `/code-review` in a subagent on this change; the owner chooses which findings to fix
 - [x] 3.5 The code review's fixes the owner chose (2026-11-17): JavaScript's whitespace and `.` in every pattern, as character scans; section titles compared with `equalsIgnoreCase`; delta sections from the one header list; each text's end by binary search; an OpenSpec directory is an `openspec` directory or below its `specs` or `changes`, not anything below one named so; the nothing-to-check message names both kinds of file after a walk through `openspec`. Known limitations recorded in the design (a spec with no recognized section, walking from inside `openspec/`, `--format openspec-markdown` on a directory). Tests for each, and the jar's counts against `openspec show` on all 37 archived changes again (344 requirements, no difference). Verify the tests on the JVM and Node, the coverage minimums, and the three CLI comparison scripts
 - [x] 3.3 Commit the plan and the implementation together (with the CI-run record of 44072397625); the owner pushes. Report the CI run's result and minutes from the records
-- [ ] 3.4 Run `/openspec-verify-change` and report it before archiving
+- [x] 3.4 Run `/openspec-verify-change` and report it before archiving
 
 ## Workflow follow-up
 
